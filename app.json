@@ -28,6 +28,11 @@
     },
     "plugins": [
       "expo-sqlite"
-    ]
+    ],
+    "extra": {
+      "NODE_ENV": "DEV",
+      "SERVER_BASE_URL": "http://146.190.9.120:3000/",
+      "LOCAL_BASE_URL": ""
+    }
   }
 }

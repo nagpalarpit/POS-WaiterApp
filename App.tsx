@@ -1,20 +1,24 @@
-import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View } from 'react-native';
+import './src/styles/tailwind.css';
+import React, { useEffect } from 'react';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import AppNavigator from './src/navigation/AppNavigator';
+import { setServerBaseUrlFromStorage } from './src/services/api';
+import { setLocalBaseUrlFromStorage } from './src/services/localApi';
+import { ThemeProvider } from './src/theme/ThemeProvider';
 
 export default function App() {
+  useEffect(() => {
+    // Load server and local base URLs from storage so services can use them
+    setServerBaseUrlFromStorage();
+    setLocalBaseUrlFromStorage();
+  }, []);
+
   return (
-    <View style={styles.container}>
-      <Text>Open up App.tsx to start working on your app!</Text>
-      <StatusBar style="auto" />
-    </View>
+    <ThemeProvider>
+      <SafeAreaProvider>
+        <AppNavigator />
+      </SafeAreaProvider>
+    </ThemeProvider>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});
