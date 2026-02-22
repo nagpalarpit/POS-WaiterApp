@@ -56,6 +56,9 @@ export type ThemeColors = {
   cartItemButtonHover?: string;
   cartDivider?: string;
 
+  // Overlays (modal/backdrop)
+  overlay?: string;
+
   // Typography sizes
   fontSizeXs?: string;
   fontSizeSm?: string;
@@ -138,6 +141,7 @@ export const THEMES: Record<ThemeName, ThemeColors> = {
     cartItemButtonBg: '#f3f7ff', // Button background in cart items
     cartItemButtonHover: '#e8edf6', // Button hover in cart items
     cartDivider: '#e8edf6', // Divider/border color in cart
+    overlay: 'rgba(0,0,0,0.06)',
 
     // Typography sizes
     fontSizeXs: '0.75rem', // 12px
@@ -219,6 +223,7 @@ export const THEMES: Record<ThemeName, ThemeColors> = {
     cartItemButtonBg: 'rgba(255, 255, 255, 0.1)', // Button background in cart items
     cartItemButtonHover: 'rgba(255, 255, 255, 0.2)', // Button hover in cart items
     cartDivider: 'rgba(255, 255, 255, 0.1)', // Divider/border color in cart
+    overlay: 'rgba(0,0,0,0.5)',
 
     // Typography sizes (smaller, more subtle for dark theme)
     fontSizeXs: '0.625rem', // 10px
@@ -300,6 +305,7 @@ export const THEMES: Record<ThemeName, ThemeColors> = {
     cartItemButtonBg: 'rgba(255, 255, 255, 0.12)', // Button background in cart items
     cartItemButtonHover: 'rgba(255, 255, 255, 0.2)', // Button hover in cart items
     cartDivider: 'rgba(255, 255, 255, 0.15)', // Divider/border color in cart
+    overlay: 'rgba(0,0,0,0.5)',
 
     // Typography sizes (same as dark theme for consistency)
     fontSizeXs: '0.625rem', // 10px
@@ -321,4 +327,4 @@ export const THEMES: Record<ThemeName, ThemeColors> = {
   },
 };
 
-export const DEFAULT_THEME: ThemeName = 'dim';
+export const DEFAULT_THEME: ThemeName = 'light';

@@ -1,6 +1,7 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   darkMode: 'class',
+  presets: [require('nativewind/preset')],
   content: [
     './App.{js,jsx,ts,tsx}',
     './src/**/*.{js,jsx,ts,tsx}',
@@ -9,36 +10,38 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        // Brand
-        primary: '#8024DD',
-        'primary-dark': '#6a1db8',
+        // Brand (POS_V2 light palette)
+        primary: '#604be8',
+        'primary-dark': '#4a3bb8',
         secondary: '#10ce9e',
         accent: '#ff9d00',
 
-        // Dark theme as default
-        background: '#141122',
-        'background-secondary': '#221F32',
-        'background-tertiary': '#060214',
+        // Light theme as default (POS_V2)
+        background: '#f3f7ff',
+        'background-secondary': '#ffffff',
+        'background-tertiary': '#eef2f7',
 
         // Semantic tokens (use these in components instead of hard-coded whites)
-        'search-background': '#2A2538',
-        'text-inverse': '#1D1931',
+        'search-background': '#ffffff',
+        'text-inverse': '#ffffff',
 
-        text: '#FFFFFF',
-        'text-secondary': '#B8B5C0',
-        'text-tertiary': '#8A8795',
+        text: '#232121',
+        'text-secondary': '#4a68a6',
+        'text-tertiary': '#757575',
 
-        border: '#2A2538',
-        'border-light': '#332E42',
+        border: '#d8dde6',
+        'border-light': '#e8edf6',
 
-        surface: '#221F32',
+        surface: '#ffffff',
       },
       fontSize: {
-        xs: '0.625rem',
-        sm: '0.75rem',
-        base: '0.875rem',
-        lg: '1rem',
-        xl: '1.125rem',
+        // Mobile-friendly global typography scale
+        xs: '0.75rem',   // 12
+        sm: '0.875rem',  // 14
+        base: '1rem',    // 16
+        lg: '1.125rem',  // 18
+        xl: '1.25rem',   // 20
+        '2xl': '1.5rem', // 24
       },
     },
   },
