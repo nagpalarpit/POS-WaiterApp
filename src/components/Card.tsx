@@ -4,7 +4,7 @@ import { useTheme } from '../theme/ThemeProvider';
 
 type Props = ViewProps & {
   children: React.ReactNode;
-  padding?: number | string;
+  padding?: number;
   style?: StyleProp<ViewStyle>;
   rounded?: number; // border radius
 };

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import {
   View,
   Text,
@@ -6,14 +6,16 @@ import {
   ScrollView,
   ActivityIndicator,
   Alert,
+  Animated,
+  StyleSheet,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useTheme } from '../theme/ThemeProvider';
-import orderService, { PlaceOrderItemPayload } from '../services/orderService';
-import cartService, { CartItem, AttributeValue } from '../services/cartService';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import posIdService from '../services/posIdService';
+import { useTheme } from '../theme/ThemeProvider';
+import { useOrderSubmit } from '../hooks/useOrderSubmit';
+import { useCartNotes } from '../hooks/useCartNotes';
+import cartService, { Cart, CartItem, AttributeValue } from '../services/cartService';
+import CartNoteModal from '../components/CartNoteModal';
 import {
   getAttributeValueName,
   getAttributeValuePrice,
@@ -33,149 +35,87 @@ interface CheckoutScreenProps {
   route: any;
 }
 
-const ORDER_STATUS_PENDING = 1;
-
-const getOrderType = (deliveryType: number): string => {
-  if (deliveryType === 1) return 'delivery';
-  if (deliveryType === 2) return 'pickup';
-  if (deliveryType === 3) return 'kiosk';
-  return 'table';
-};
-
-const getPosV2DiscountType = (discountType?: string): number => {
-  return discountType === 'PERCENTAGE' ? 1 : 0;
+const getServiceTypeLabel = (deliveryType: number, tableNo: number | null) => {
+  if (tableNo) return `Table ${tableNo}`;
+  if (deliveryType === 1) return 'Delivery';
+  if (deliveryType === 2) return 'Pickup';
+  if (deliveryType === 3) return 'Kiosk';
+  return 'Walk-in';
 };
 
 export default function CheckoutScreen({ navigation, route }: CheckoutScreenProps) {
   const { colors } = useTheme();
-  const { cart = { items: [] }, tableNo = null, deliveryType = 0 } = route.params || {};
-  const orderNote = cart.orderNote || '';
-  const appliedDiscount = cart.discount || null;
+  const insets = useSafeAreaInsets();
 
-  // State
-  const [loading, setLoading] = useState(false);
+  const incomingCart = (route.params?.cart || { items: [], orderNote: '', discount: null }) as Cart;
+  const tableNo = route.params?.tableNo ?? null;
+  const deliveryType = route.params?.deliveryType ?? 0;
+
+  const [checkoutCart, setCheckoutCart] = useState<Cart>(incomingCart);
   const [tax, setTax] = useState(0);
 
-  /**
-   * Calculate subtotal including variants, attributes, and attribute values
-   */
-  const calculateSubtotal = (): number => {
-    return getCartSubtotal(cart);
-  };
+  const orderSubmit = useOrderSubmit(checkoutCart, tableNo, deliveryType);
+  const cartNotes = useCartNotes(
+    checkoutCart,
+    cartService.updateItemNote,
+    cartService.updateDiscount
+  );
 
-  /**
-   * Calculate tax (from first item's tax or 0%)
-   */
+  const placeAnim = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    setCheckoutCart((route.params?.cart || { items: [], orderNote: '', discount: null }) as Cart);
+  }, [route.params?.cart]);
+
   const calculateTax = (subtotal: number): number => {
-    const firstItemTax = cart.items[0]?.tax;
-    if (firstItemTax) {
-      if (firstItemTax.percentage) {
-        return (subtotal * firstItemTax.percentage) / 100;
-      } else if (firstItemTax.flatAmount) {
-        return firstItemTax.flatAmount;
-      }
-    }
+    const firstItemTax = checkoutCart.items[0]?.tax;
+    if (firstItemTax?.percentage) return (subtotal * firstItemTax.percentage) / 100;
+    if (firstItemTax?.flatAmount) return firstItemTax.flatAmount;
     return 0;
   };
 
-  const calculateDiscount = (): number => {
-    return getDiscountAmount(calculateSubtotal(), appliedDiscount);
-  };
-
-  /**
-   * Calculate total
-   */
-  const calculateTotal = (): number => {
-    const subtotal = calculateSubtotal();
-    const taxAmount = calculateTax(subtotal);
-    return subtotal + taxAmount - calculateDiscount();
-  };
+  const subtotal = getCartSubtotal(checkoutCart);
+  const discountAmount = getDiscountAmount(subtotal, checkoutCart.discount || null);
+  const total = subtotal + tax - discountAmount;
+  const totalItems = checkoutCart.items.reduce(
+    (sum, item) => sum + getCartItemQuantity(item),
+    0
+  );
 
   useEffect(() => {
-    const subtotal = calculateSubtotal();
     setTax(calculateTax(subtotal));
-  }, [cart]);
+  }, [checkoutCart, subtotal]);
 
-  const prepareOrderItems = (companyId: number): PlaceOrderItemPayload[] => {
-    return cart.items.map((item: CartItem) => {
-      const orderItem: PlaceOrderItemPayload = {
-        companyId,
-        discountId: null,
-        categoryId: item.categoryId,
-        cartId: item.cartId,
-        categoryName: item.categoryName,
-        menuItemId: item.itemId,
-        itemName: item.itemName,
-        quantity: item.quantity,
-        unitPrice: `${item.itemPrice || 0}`,
-        orderItemNote: item.orderItemNote || '',
-        groupType: item.groupType,
-        groupLabel: item.groupLabel,
-        customId: item.customId,
-        tax: item.tax,
-        splitPaidQuantity: 0,
-      };
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerTitle: getServiceTypeLabel(deliveryType, tableNo),
+      headerStyle: { backgroundColor: colors.background },
+      headerTintColor: colors.text,
+      headerTitleStyle: { fontWeight: '700' },
+      headerRight: () => null,
+    });
+  }, [navigation, colors.background, colors.text]);
 
-      if (item.variantId) {
-        orderItem.orderItemVariant = {
-          menuItemVariantId: item.variantId,
-          description: '',
-          name: item.variantName || '',
-          quantity: 1,
-          unitPrice: `${item.variantPrice || 0}`,
-          discountedPrice: 0,
-          discountId: null,
-        };
-
-        if (item.attributeId) {
-          orderItem.orderItemVariant.orderItemVariantAttributes = [
-            {
-              menuItemVariantAttributeId: item.attributeId,
-              description: '',
-              name: item.attributeName || '',
-              quantity: 1,
-              unitPrice: `${item.attributePrice || 0}`,
-              discountedPrice: 0,
-              discountId: null,
-              orderItemVariantAttributeValues: (item.attributeValues || []).map(
-                (attributeValue: any) => ({
-                  description: attributeValue.attributeValueDescription || '',
-                  menuItemVariantAttributeId: item.attributeId,
-                  menuItemVariantAttributeValueId:
-                    attributeValue.attributeValueId || attributeValue.id || null,
-                  name:
-                    attributeValue.attributeValueName ||
-                    attributeValue.name ||
-                    '',
-                  quantity:
-                    attributeValue.attributeValueQuantity ||
-                    attributeValue.quantity ||
-                    1,
-                  unitPrice: `${
-                    attributeValue.attributeValuePrice ||
-                    attributeValue.price ||
-                    attributeValue.unitPrice ||
-                    0
-                  }`,
-                  discountedPrice: 0,
-                  discountId: null,
-                })
-              ),
-            },
-          ];
-        }
+  const handleSaveCartNote = async (note: string, discount: any) => {
+    try {
+      await cartService.updateOrderNote(note || '');
+      if (discount) {
+        await cartService.updateDiscount(discount);
+      } else {
+        await cartService.updateDiscount(null);
       }
 
-      return orderItem;
-    });
+      const refreshedCart = await cartService.loadCart();
+      setCheckoutCart(refreshedCart);
+      cartNotes.setShowCartNoteModal(false);
+    } catch (err) {
+      Alert.alert('Error', 'Failed to save cart note');
+    }
   };
 
-  /**
-   * Place order
-   */
-  const placeOrder = async () => {
+  const handlePlaceOrder = async () => {
     try {
-      if (!cart.items?.length) {
+      if (!checkoutCart.items?.length) {
         Alert.alert('Error', 'Please add items before placing order');
         return;
       }
@@ -185,127 +125,30 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
         return;
       }
 
-      setLoading(true);
+      Animated.sequence([
+        Animated.timing(placeAnim, { toValue: 0.96, duration: 90, useNativeDriver: true }),
+        Animated.timing(placeAnim, { toValue: 1, duration: 250, useNativeDriver: true }),
+      ]).start();
 
-      const userDataStr = await AsyncStorage.getItem('userData');
-      const userData = userDataStr ? JSON.parse(userDataStr) : null;
-      const companyId = Number(userData?.companyId || 0);
+      await orderSubmit.submitOrder(tax);
 
-      if (!companyId) {
-        Alert.alert('Error', 'Company ID missing. Please login again.');
-        return;
-      }
-
-      const subtotal = calculateSubtotal();
-      const taxAmount = tax;
-      const discountAmount = calculateDiscount();
-      const total = calculateTotal();
-      const normalizedDiscount = appliedDiscount
-        ? {
-            ...appliedDiscount,
-            discountType: getPosV2DiscountType(appliedDiscount.discountType),
-          }
-        : undefined;
-      const now = new Date().toISOString();
-      const orderItems = prepareOrderItems(companyId);
-
-      const orderDetails: any = {
-        companyId,
-        customerId: userData?.customerId || null,
-        userEmail: userData?.email || '',
-        userFirstName: userData?.firstName || userData?.username || '',
-        userLastName: userData?.lastName || '',
-        userMobile: userData?.mobileNo || userData?.mobile || null,
-        addresses: userData?.addresses || [],
-        isCallerId: false,
-        customerCompanyName: userData?.customerCompanyName,
-        steuerId: userData?.steuerId,
-        isDebitor: !!userData?.isDebitor,
-        currency: userData?.currency || 'INR',
-        isPickup: deliveryType === 2,
-        pickupDateTime: null,
-        familyName: '',
-        orderType: getOrderType(deliveryType),
-        isSandbox: false,
-        isPriceIncludingTax: false,
-        orderTaxTotal: taxAmount,
-        orderCartTaxAndChargesTotal: 0,
-        orderDeliveryTypeId: deliveryType, // 0=dine-in, 1=delivery, 2=pickup
-        orderPromoCodeDiscountTotal: 0,
-        countryCode: 'IN',
-        customerAddressId: userData?.customerAddressId || null,
-        orderNotes: orderNote || '',
-        orderDiscountTotal: discountAmount,
-        orderItem: orderItems,
-        orderStatusId: ORDER_STATUS_PENDING,
-        orderSubTotal: subtotal,
-        orderTotal: total,
-        createdAt: now,
-        count: 1,
-        discountId: normalizedDiscount?.id,
-        discount: normalizedDiscount,
-        user: userData || null,
-        addedBy: Number(userData?.id || 0) || null,
-        posId: posIdService.getPosId() || '',
-        onHold: false,
-        holdingName: '',
-        isSplitOrder: false,
-      };
-
-      if (deliveryType === 0) {
-        orderDetails.tableNo = tableNo;
-        orderDetails.tableArea = null;
-      }
-
-      const settleInfo = {
-        ...orderDetails,
-        orderStatusId: ORDER_STATUS_PENDING,
-        orderDetails,
-        companyId,
-      };
-
-      const orderData = {
-        orderStatusId: ORDER_STATUS_PENDING,
-        orderDetails,
-        companyId,
-        settleInfo,
-      };
-
-      // Create order using OrderService
-      const result = await orderService.createOrder(orderData);
-
-      if (result) {
-        // Clear cart after successful order
-        await cartService.clearCart();
-
-        Alert.alert('Success', 'Order placed successfully', [
-          {
-            text: 'OK',
-            onPress: () => {
-              // Navigate back to dashboard
-              navigation.navigate('Dashboard');
-            },
-          },
-        ]);
-      } else {
-        Alert.alert('Error', 'Failed to place order');
-      }
+      Alert.alert('Success', 'Order placed successfully', [
+        {
+          text: 'OK',
+          onPress: () => navigation.navigate('Dashboard'),
+        },
+      ]);
     } catch (error) {
-      console.error('Error placing order:', error);
       const message =
         (error as any)?.response?.data?.message ||
         (error as any)?.message ||
         'Failed to place order';
-      Alert.alert('Error', `Failed to place order: ${message}`);
-    } finally {
-      setLoading(false);
+      Alert.alert('Error', `${message}`);
+      console.error('Error placing order:', error);
     }
   };
 
-  /**
-   * Render order item
-   */
-  const renderOrderItem = (item: CartItem) => {
+  const renderOrderItem = (item: CartItem, index: number) => {
     const quantity = getCartItemQuantity(item);
     const itemUnitTotal = getItemUnitTotal(item);
     const itemLineTotal = getItemLineTotal(item);
@@ -313,186 +156,349 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
 
     return (
       <View
-        key={item.cartId}
-        className="py-3 border-b flex-row justify-between"
-        style={{ borderColor: colors.border }}
+        key={item.cartId || `${item.itemId}-${index}`}
+        style={[
+          styles.itemCard,
+          {
+            backgroundColor: colors.surface,
+            borderColor: colors.border,
+          },
+        ]}
       >
-        <View className="flex-1 pr-3">
-          <Text className="font-semibold text-sm" style={{ color: colors.text }}>
-            {item.customId ? `${item.customId}. ` : ''}{item.itemName}
-          </Text>
-
-          {!!optionsSummary && (
-            <Text className="text-xs mt-1" style={{ color: colors.textSecondary }}>
-              {optionsSummary}
+        <View style={styles.itemHeaderRow}>
+          <View style={{ flex: 1, paddingRight: 12 }}>
+            <Text style={[styles.itemName, { color: colors.text }]}>
+              {item.customId ? `${item.customId}. ` : ''}
+              {item.itemName}
             </Text>
-          )}
+            {!!optionsSummary && (
+              <Text style={[styles.optionText, { color: colors.textSecondary }]}>
+                {optionsSummary}
+              </Text>
+            )}
+          </View>
 
-          {item.attributeValues && item.attributeValues.length > 0 && (
-            <View className="mt-1">
-              {item.attributeValues.map((attributeValue: AttributeValue, idx: number) => {
-                const name = getAttributeValueName(attributeValue);
-                const valueQuantity = getAttributeValueQuantity(attributeValue);
-                const valuePrice = getAttributeValuePrice(attributeValue);
-                if (!name) return null;
-
-                return (
-                  <Text key={idx} className="text-xs" style={{ color: colors.textSecondary }}>
-                    • {valueQuantity} x @{name}
-                    {valuePrice > 0 ? ` (+₹${valuePrice.toFixed(2)})` : ''}
-                  </Text>
-                );
-              })}
-            </View>
-          )}
-
-          <Text className="text-xs mt-1" style={{ color: colors.textSecondary }}>
-            ₹{itemUnitTotal.toFixed(2)} × {quantity}
-          </Text>
-
-          {item.orderItemNote ? (
-            <Text className="text-xs mt-1 italic" style={{ color: colors.textSecondary }}>
-              Note: {item.orderItemNote}
+          <View
+            style={[
+              styles.qtyChip,
+              {
+                backgroundColor: colors.primary + '14',
+                borderColor: colors.primary + '2a',
+              },
+            ]}
+          >
+            <Text style={{ color: colors.primary, fontWeight: '700', fontSize: 11 }}>
+              x{quantity}
             </Text>
-          ) : null}
+          </View>
         </View>
 
-        <Text className="font-semibold text-sm" style={{ color: colors.text }}>
-          ₹{itemLineTotal.toFixed(2)}
-        </Text>
+        {item.attributeValues && item.attributeValues.length > 0 && (
+          <View style={{ marginTop: 8 }}>
+            {item.attributeValues.map((attributeValue: AttributeValue, valueIndex: number) => {
+              const name = getAttributeValueName(attributeValue);
+              const valueQuantity = getAttributeValueQuantity(attributeValue);
+              const valuePrice = getAttributeValuePrice(attributeValue);
+              if (!name) return null;
+
+              return (
+                <Text
+                  key={`${item.cartId}-value-${valueIndex}`}
+                  style={{ color: colors.textSecondary, fontSize: 12, marginTop: 2 }}
+                >
+                  • {valueQuantity} x {name}
+                  {valuePrice > 0 ? ` (+₹${valuePrice.toFixed(2)})` : ''}
+                </Text>
+              );
+            })}
+          </View>
+        )}
+
+        {item.orderItemNote ? (
+          <View
+            style={[
+              styles.noteWrap,
+              {
+                borderColor: colors.border,
+                backgroundColor: colors.surfaceHover || colors.background,
+              },
+            ]}
+          >
+            <MaterialCommunityIcons name="note-text-outline" size={14} color={colors.textSecondary} />
+            <Text style={{ color: colors.textSecondary, marginLeft: 6, flex: 1, fontSize: 12 }}>
+              {item.orderItemNote}
+            </Text>
+          </View>
+        ) : null}
+
+        <View style={[styles.itemTotalRow, { borderTopColor: colors.border }]}>
+          <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+            ₹{itemUnitTotal.toFixed(2)} × {quantity}
+          </Text>
+          <Text style={{ color: colors.text, fontSize: 15, fontWeight: '800' }}>
+            ₹{itemLineTotal.toFixed(2)}
+          </Text>
+        </View>
       </View>
     );
   };
 
-  const subtotal = calculateSubtotal();
-  const total = calculateTotal();
-
   return (
-    <View style={{ flex: 1, backgroundColor: colors.background }}>
-      {/* Content */}
-      <ScrollView className="flex-1 px-4 py-4">
-        {/* Order Info */}
-        {tableNo && (
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['bottom']}>
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{
+          paddingHorizontal: 14,
+          paddingTop: 12,
+          paddingBottom: insets.bottom + 214,
+        }}
+        showsVerticalScrollIndicator={false}
+      >
+        {checkoutCart.items.length > 0 ? (
+          checkoutCart.items.map((item: CartItem, index: number) => renderOrderItem(item, index))
+        ) : (
           <View
-            className="bg-surface rounded-lg p-3 mb-4 border"
-            style={{ borderColor: colors.border }}
+            style={[
+              styles.emptyState,
+              {
+                backgroundColor: colors.surface,
+                borderColor: colors.border,
+              },
+            ]}
           >
-            <Text className="text-sm" style={{ color: colors.textSecondary }}>
-              Table Number
-            </Text>
-            <Text className="text-2xl font-bold mt-1" style={{ color: colors.primary }}>
-              {tableNo}
+            <MaterialCommunityIcons name="cart-outline" size={34} color={colors.textSecondary} />
+            <Text style={{ color: colors.text, fontWeight: '700', marginTop: 10 }}>Cart is empty</Text>
+            <Text style={{ color: colors.textSecondary, marginTop: 4, textAlign: 'center', fontSize: 12 }}>
+              Go back to menu and add items before checkout.
             </Text>
           </View>
         )}
-
-        {/* Order Items Header */}
-        <Text className="text-base font-bold mt-4 mb-2" style={{ color: colors.text }}>
-          Items ({cart.items.length})
-        </Text>
-
-        {/* Order Items */}
-        <View
-          className="bg-surface rounded-lg p-4 mb-4 border"
-          style={{ borderColor: colors.border }}
-        >
-          {cart.items.map((item: CartItem) => renderOrderItem(item))}
-        </View>
       </ScrollView>
 
-      {/* Footer - Summary */}
-      <View
-        className="px-4 py-4 border-t"
-        style={{ borderColor: colors.border }}
+      <Animated.View
+        style={[
+          styles.footer,
+          {
+            transform: [{ scale: placeAnim }],
+            borderTopColor: colors.border,
+            backgroundColor: colors.background,
+            paddingBottom: insets.bottom + 12,
+          },
+        ]}
       >
-        {/* Summary */}
-        <View className="mb-4">
-          {orderNote ? (
-            <View className="mb-2">
-              <Text style={{ color: colors.textSecondary }}>Cart Note</Text>
-              <Text className="text-xs mt-1" style={{ color: colors.text }}>
-                {orderNote}
-              </Text>
-            </View>
-          ) : null}
-          <View className="flex-row justify-between mb-2">
-            <Text style={{ color: colors.textSecondary }}>Subtotal</Text>
-            <Text className="font-semibold" style={{ color: colors.text }}>
-              ₹{subtotal.toFixed(2)}
-            </Text>
+        <View
+          style={[
+            styles.summaryCard,
+            {
+              borderColor: colors.border,
+              backgroundColor: colors.surface,
+            },
+          ]}
+        >
+          <View style={styles.summaryRow}>
+            <Text style={{ color: colors.textSecondary, fontSize: 12 }}>Subtotal</Text>
+            <Text style={{ color: colors.text, fontWeight: '700' }}>₹{subtotal.toFixed(2)}</Text>
           </View>
 
-          {tax > 0 && (
-            <View className="flex-row justify-between mb-2">
-              <Text style={{ color: colors.textSecondary }}>Tax</Text>
-              <Text className="font-semibold" style={{ color: colors.text }}>
-                ₹{tax.toFixed(2)}
-              </Text>
+          {tax > 0 ? (
+            <View style={styles.summaryRow}>
+              <Text style={{ color: colors.textSecondary, fontSize: 12 }}>Tax</Text>
+              <Text style={{ color: colors.text, fontWeight: '700' }}>₹{tax.toFixed(2)}</Text>
             </View>
-          )}
+          ) : null}
 
-          {calculateDiscount() > 0 && (
-            <View className="flex-row justify-between mb-2">
-              <Text style={{ color: colors.textSecondary }}>
-                Discount
-                {appliedDiscount ? ` (${getDiscountTypeLabel(appliedDiscount.discountType)} ${getDiscountLabel(appliedDiscount)})` : ''}
-              </Text>
-              <Text className="font-semibold" style={{ color: colors.error }}>
-                -₹{calculateDiscount().toFixed(2)}
-              </Text>
+          {discountAmount > 0 ? (
+            <View style={styles.summaryRow}>
+              <Text style={{ color: colors.textSecondary, fontSize: 12 }}>Discount</Text>
+              <Text style={{ color: colors.error, fontWeight: '700' }}>-₹{discountAmount.toFixed(2)}</Text>
             </View>
-          )}
+          ) : null}
 
-          {/* Total */}
-          <View
-            className="mt-3 pt-3 border-t flex-row justify-between"
-            style={{ borderColor: colors.border }}
-          >
-            <Text className="font-bold text-base" style={{ color: colors.text }}>
-              Total
-            </Text>
-            <Text
-              className="font-bold text-lg"
-              style={{ color: colors.primary }}
-            >
+          <View style={[styles.summaryRow, { borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 8 }]}>
+            <Text style={{ color: colors.text, fontWeight: '800' }}>Total Payable</Text>
+            <Text style={{ color: colors.primary, fontWeight: '800', fontSize: 18 }}>
               ₹{total.toFixed(2)}
             </Text>
           </View>
         </View>
 
-        {/* Action Buttons */}
-        <View className="flex-row gap-3">
+        <View style={styles.footerActions}>
           <TouchableOpacity
-            onPress={() => navigation.goBack()}
-            className="flex-1 border rounded-lg py-3"
-            style={{ borderColor: colors.border }}
+            onPress={() => cartNotes.setShowCartNoteModal(true)}
+            style={[
+              styles.secondaryActionBtn,
+              {
+                borderColor: colors.border,
+                backgroundColor: colors.surface,
+              },
+            ]}
           >
-            <Text
-              className="text-center font-semibold"
-              style={{ color: colors.text }}
-            >
-              Edit Order
+            <MaterialCommunityIcons name="ticket-percent-outline" size={17} color={colors.text} />
+            <Text style={{ color: colors.text, marginLeft: 6, fontWeight: '700', fontSize: 12 }}>
+              Note / Discount
             </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            onPress={placeOrder}
-            disabled={loading}
-            className="flex-1 bg-primary rounded-lg py-3"
+            onPress={handlePlaceOrder}
+            disabled={orderSubmit.loading || checkoutCart.items.length === 0}
+            style={[
+              styles.primaryActionBtn,
+              {
+                backgroundColor:
+                  orderSubmit.loading || checkoutCart.items.length === 0
+                    ? colors.border
+                    : colors.primary,
+              },
+            ]}
           >
-            {loading ? (
-              <ActivityIndicator color={colors.textInverse} />
+            {orderSubmit.loading ? (
+              <ActivityIndicator color={colors.textInverse || '#fff'} />
             ) : (
-              <Text
-                className="text-center font-bold"
-                style={{ color: colors.textInverse }}
-              >
-                Place Order
-              </Text>
+              <>
+                <MaterialCommunityIcons name="check-circle-outline" size={18} color={colors.textInverse || '#fff'} />
+                <Text style={{ color: colors.textInverse || '#fff', marginLeft: 6, fontWeight: '800', fontSize: 13 }}>
+                  Place Order
+                </Text>
+              </>
             )}
           </TouchableOpacity>
         </View>
-      </View>
-    </View>
+      </Animated.View>
+
+      <CartNoteModal
+        visible={cartNotes.showCartNoteModal}
+        initialNote={checkoutCart.orderNote || ''}
+        initialDiscount={checkoutCart.discount || null}
+        onClose={() => cartNotes.setShowCartNoteModal(false)}
+        onSave={handleSaveCartNote}
+      />
+    </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  contextCard: {
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 12,
+  },
+  contextIconWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
+  },
+  contextActionBtn: {
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  discountBanner: {
+    marginTop: 10,
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  itemCard: {
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 10,
+  },
+  itemHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  itemName: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  optionText: {
+    fontSize: 12,
+    marginTop: 5,
+  },
+  qtyChip: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    minWidth: 34,
+    alignItems: 'center',
+  },
+  noteWrap: {
+    marginTop: 8,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 7,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  itemTotalRow: {
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0,0,0,0.08)',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  emptyState: {
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 20,
+    alignItems: 'center',
+  },
+  footer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderTopWidth: 1,
+    paddingHorizontal: 14,
+    paddingTop: 12,
+  },
+  summaryCard: {
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 12,
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  footerActions: {
+    flexDirection: 'row',
+    marginTop: 10,
+    gap: 8,
+  },
+  secondaryActionBtn: {
+    flex: 1,
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingVertical: 13,
+    paddingHorizontal: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  primaryActionBtn: {
+    flex: 1.2,
+    borderRadius: 12,
+    paddingVertical: 13,
+    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+});
