@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import localDatabase from '../services/localDatabase';
 import { getOrderStatusLabel } from '../utils/orderUtils';
 
@@ -40,8 +41,20 @@ export const useOrdersData = () => {
     try {
       setLoading(true);
 
-      // Fetch all orders from 'order' collection
-      const orders = await localDatabase.select('order', { where: {} });
+      // Get user info from AsyncStorage to retrieve companyId
+      const userDataStr = await AsyncStorage.getItem('userData');
+      const userData = userDataStr ? JSON.parse(userDataStr) : null;
+      const companyId = userData?.companyId;
+
+      console.log('OrdersData: User data retrieved:', { companyId });
+
+      // Fetch orders from 'order' collection with companyId filter
+      const orders = await localDatabase.select('order', {
+        where: {
+          ...(companyId ? { companyId } : {}),
+          orderStatusId: { $ne: 5 },
+        },
+      });
 
       if (orders && Array.isArray(orders)) {
         setAllOrders(orders);
