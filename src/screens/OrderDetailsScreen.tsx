@@ -1,11 +1,13 @@
 import React, { useMemo, useState } from 'react';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { View, Text, TouchableOpacity, ScrollView, Alert, StyleSheet } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../theme/ThemeProvider';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import Card from '../components/Card';
 import orderService from '../services/orderService';
-import { getOrderStatusLabel } from '../utils/orderUtils';
+import commonFunctionService from '../services/commonFunctionService';
+import { getOrderStatusLabel, ORDER_STATUS } from '../utils/orderUtils';
 import {
   getAttributeValueName,
   getAttributeValuePrice,
@@ -251,33 +253,80 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
   const settleOrderWithPayment = async (option: any) => {
     try {
       setMarking(true);
-      const paymentPayload: any = {
+      const now = new Date().toISOString();
+      const userDataStr = await AsyncStorage.getItem('userData');
+      const userData = userDataStr ? JSON.parse(userDataStr) : null;
+      const paidBy = Number(userData?.id || userData?.userId || 0) || null;
+      const companyId =
+        Number(order.companyId || order.orderDetails?.companyId || userData?.companyId || 0) ||
+        0;
+      const invoiceNumber = await commonFunctionService.generateInvoice(companyId);
+      const tip = toNumber((option as any).tip, 0);
+      const giftCard = (option as any).giftCard;
+      const giftCardTotal = toNumber(giftCard?.amount, 0);
+      const deliveryCharge = toNumber(order.orderDetails?.deliveryCharge, 0);
+      const currency = order.orderDetails?.currency || 'INR';
+      const amount = totals.total + tip + deliveryCharge - giftCardTotal;
+      const cashProvided = toNumber((option as any).cashProvided, 0);
+      const moneyBack = option.id === 0 ? cashProvided - amount : 0;
+
+      const orderPaymentSummary: any = {
         paymentProcessorId: option.id,
         paymentMethodLabel: PAYMENT_METHOD_LABELS[option.id] || option.label,
-        amount: totals.total,
-        paidAt: new Date().toISOString(),
+        amount,
+        paidAt: now,
+        tip,
       };
 
-      if ((option as any).tip) {
-        paymentPayload.tip = (option as any).tip;
+      if (giftCard) {
+        orderPaymentSummary.giftCard = giftCard;
       }
-      if ((option as any).giftCard) {
-        paymentPayload.giftCard = (option as any).giftCard;
+
+      const localOrderId = order._id || order.id || order.orderId;
+      const tsc = order.orderDetails?.tsc;
+
+      const orderInfo: any = {
+        ...(order.orderDetails || {}),
+        orderStatusId: ORDER_STATUS.DELIVERED,
+        updatedAt: now,
+        paidAt: now,
+        isFinalBillPrint: !!option.print,
+        orderPaymentSummary,
+        tip,
+        deliveryCharge,
+        paidBy: paidBy || undefined,
+        invoiceNumber,
+        localOrderId,
+      };
+
+      if (tsc) {
+        orderInfo.tsc = tsc;
+      }
+
+      if (giftCard) {
+        orderInfo.giftCard = giftCard;
+        orderInfo.appliedGiftCard = giftCard;
+        orderInfo.giftCardTotal = giftCardTotal;
+        orderInfo.isfullPaidWithGiftCard =
+          giftCardTotal > 0 && Math.abs(totals.total - giftCardTotal) < 0.01;
       }
 
       const settlePayload: any = {
-        orderId: order._id || order.id || order.orderId,
-        orderInfo: order.orderDetails || {},
-        orderPaymentSummary: paymentPayload,
-        orderPaymentDetails: [
-          {
-            paymentProcessorId: option.id,
-            paymentTotal: totals.total - (paymentPayload.tip || 0),
-            ...(option.giftCard ? { giftCard: option.giftCard } : {}),
-          },
-        ],
-        tip: paymentPayload.tip || 0,
+        id: localOrderId,
+        currency,
+        paymentMethod: option.id,
+        amount,
+        moneyBack,
+        tip,
+        deliveryCharge,
+        isEditPayment: false,
+        orderInfo,
+        orderPaymentSummary,
       };
+
+      if (tsc) {
+        settlePayload.tsc = tsc;
+      }
 
       await orderService.settleOrder(order._id || order.id || order.orderId, settlePayload);
       setMarking(false);

@@ -10,11 +10,14 @@ const api: AxiosInstance = axios.create({
 
 const KEY = 'SERVER_BASE_URL';
 const TOKEN_KEY = 'token';
+const LEGACY_TOKEN_KEY = 'authToken';
 
 // Set up request interceptor to add auth token and POS ID (same as POS_V2)
 api.interceptors.request.use(
   async (config) => {
-    const token = await AsyncStorage.getItem(TOKEN_KEY);
+    const token =
+      (await AsyncStorage.getItem(TOKEN_KEY)) ||
+      (await AsyncStorage.getItem(LEGACY_TOKEN_KEY));
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -37,6 +40,7 @@ api.interceptors.response.use(
     if (error.response?.status === 401) {
       // Handle unauthorized - clear token and redirect to login if needed
       AsyncStorage.removeItem(TOKEN_KEY).catch(console.error);
+      AsyncStorage.removeItem(LEGACY_TOKEN_KEY).catch(console.error);
     }
     return Promise.reject(error);
   }
@@ -54,11 +58,13 @@ export const setServerBaseUrl = async (base: string) => {
 
 export const setAuthToken = async (token: string) => {
   await AsyncStorage.setItem(TOKEN_KEY, token);
+  await AsyncStorage.setItem(LEGACY_TOKEN_KEY, token);
   api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
 };
 
 export const clearAuthToken = async () => {
   await AsyncStorage.removeItem(TOKEN_KEY);
+  await AsyncStorage.removeItem(LEGACY_TOKEN_KEY);
   delete api.defaults.headers.common['Authorization'];
 };
 

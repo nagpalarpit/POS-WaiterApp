@@ -93,4 +93,10 @@ export const API_ENDPOINTS = {
 
   // Miscellaneous
   health: '',
+
+  // TSC (Cloud)
+  tsc: {
+    START_TRANSACTION: `${API_V1}admin/tsc/startNewTransaction`,
+    UPDATE_TRANSACTION: `${API_V1}admin/tsc/updateTransaction`,
+  },
 };

@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import orderService, { PlaceOrderItemPayload } from '../services/orderService';
 import cartService, { Cart, CartItem, AttributeValue } from '../services/cartService';
 import posIdService from '../services/posIdService';
+import tscService from '../services/tscService';
 import {
   getAttributeValueName,
   getAttributeValuePrice,
@@ -13,6 +14,7 @@ import {
 } from '../utils/cartCalculations';
 
 const ORDER_STATUS_PENDING = 1;
+const TSC_OFFLINE_MESSAGE = 'Active TSS not found for the given POS and company.';
 
 /**
  * Convert delivery type to order type string
@@ -212,6 +214,33 @@ export const useOrderSubmit = (cart: Cart, tableNo: number | null, deliveryType:
         companyId,
         settleInfo,
       };
+
+      // TSC transaction (match POS flow: startTransaction on place order)
+      try {
+        const tscRes = await tscService.startTransaction({
+          ...orderData,
+          revision: 1,
+        });
+        const tscData =
+          tscRes?.data?.data ??
+          tscRes?.data ??
+          [];
+        const tscArray = Array.isArray(tscData) ? tscData : [tscData].filter(Boolean);
+        const lastObj = tscArray[tscArray.length - 1];
+
+        if (!lastObj?.success) {
+          orderData.orderDetails.isTscOffline = true;
+          if (lastObj?.data === TSC_OFFLINE_MESSAGE) {
+            console.warn('TSC offline:', lastObj?.data);
+          }
+        } else {
+          orderData.orderDetails.tsc = tscArray;
+          orderData.settleInfo.tsc = tscArray;
+        }
+      } catch (error) {
+        console.error('Error starting TSC transaction:', error);
+        orderData.orderDetails.isTscOffline = true;
+      }
 
       // Create order using OrderService
       const result = await orderService.createOrder(orderData);
