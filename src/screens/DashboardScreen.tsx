@@ -1,20 +1,14 @@
 import React, { useState, useLayoutEffect, useEffect, useMemo } from 'react';
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  ScrollView,
-  FlatList,
-  ActivityIndicator,
-  RefreshControl,
-  Image,
-} from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, FlatList, ActivityIndicator, RefreshControl, Image } from 'react-native';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../theme/ThemeProvider';
 import { SERVER_BASE_URL } from '../config/urls';
 import { getOrderStatusLabel } from '../utils/orderUtils';
+import { formatCurrency } from '../utils/currency';
+import { isOrderLocked, isTableLocked, lockOrder, lockTable } from '../services/orderSyncService';
+import { useToast } from '../components/ToastProvider';
 
 // Hooks
 import { useOrdersData, DELIVERY_TYPE, Order } from '../hooks/useOrdersData';
@@ -36,11 +30,19 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
   const ordersData = useOrdersData();
   const settingsData = useSettings();
   const tableStats = useTableStatistics(ordersData.dineInTables, settingsData.settings);
+  const { showToast } = useToast();
+
+  const getOrderDisplayLabel = (order: Order | any) => {
+    const tableNo = order?.orderDetails?.tableNo;
+    if (tableNo) return `Table ${tableNo}`;
+    return order?.customOrderId || order?.id || order?._id || 'Order';
+  };
 
   // Local state
   const [activeTab, setActiveTab] = useState<number>(DELIVERY_TYPE.DINE_IN);
   const [refreshing, setRefreshing] = useState(false);
   const [logoSource, setLogoSource] = useState<any>(null);
+  const [selectedTableArea, setSelectedTableArea] = useState<any | null>(null);
 
   /**
    * Get company initials for placeholder logo
@@ -70,6 +72,123 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
     };
     loadUserData();
   }, []);
+
+  const tableAreaList = useMemo(() => {
+    const rawAreas = (settingsData.settings as any)?.tableAreas;
+    if (!Array.isArray(rawAreas)) return [];
+    return rawAreas.filter(
+      (area: any) =>
+        Array.isArray(area?.tableAreaMappings) &&
+        area.tableAreaMappings.length > 0
+    );
+  }, [settingsData.settings]);
+
+  const allAreaTables = useMemo(() => {
+    if (!tableAreaList.length) return [];
+    const tableNos = tableAreaList.flatMap((area: any) =>
+      Array.isArray(area?.tableAreaMappings)
+        ? area.tableAreaMappings
+            .filter((mapping: any) => mapping?.isActive !== false)
+            .map((mapping: any) => Number(mapping.tableNo))
+        : []
+    );
+    const unique = Array.from(
+      new Set(tableNos.filter((value: number) => Number.isFinite(value)))
+    );
+    return unique.sort((a, b) => a - b);
+  }, [tableAreaList]);
+
+  const bookedTableNos = useMemo(() => {
+    const tableNos = ordersData.dineInTables
+      .map((order) => Number(order.orderDetails?.tableNo))
+      .filter((value) => Number.isFinite(value));
+    return new Set(tableNos);
+  }, [ordersData.dineInTables]);
+
+  useEffect(() => {
+    if (!tableAreaList.length) {
+      if (selectedTableArea !== null) {
+        setSelectedTableArea(null);
+      }
+      return;
+    }
+
+    const stillExists = tableAreaList.some(
+      (area: any) => area?.id === selectedTableArea?.id
+    );
+
+    if (!selectedTableArea || !stillExists) {
+      setSelectedTableArea(tableAreaList[0]);
+    }
+  }, [tableAreaList, selectedTableArea]);
+
+  const getAreaBookedCount = (area: any) => {
+    if (!area || !Array.isArray(area.tableAreaMappings)) return 0;
+    return area.tableAreaMappings.filter((mapping: any) => {
+      if (mapping?.isActive === false) return false;
+      const tableNo = Number(mapping.tableNo);
+      return Number.isFinite(tableNo) && bookedTableNos.has(tableNo);
+    }).length;
+  };
+
+  const getActiveTablesFromArea = (area: any) => {
+    if (!area || !Array.isArray(area.tableAreaMappings)) return [];
+    const tableNos = area.tableAreaMappings
+      .filter((mapping: any) => mapping?.isActive !== false)
+      .map((mapping: any) => Number(mapping.tableNo))
+      .filter((value: number) => Number.isFinite(value));
+    return Array.from(new Set(tableNos)).sort((a:any, b:any) => a - b);
+  };
+
+  const selectedAreaTables = useMemo(
+    () => getActiveTablesFromArea(selectedTableArea),
+    [selectedTableArea]
+  );
+
+  const tableNumbers = useMemo(() => {
+    if (selectedTableArea) {
+      return selectedAreaTables;
+    }
+
+    if (allAreaTables.length > 0) {
+      return allAreaTables;
+    }
+
+    const total = Number(settingsData.settings?.totalTables ?? 0);
+    if (total > 0) {
+      return Array.from({ length: total }, (_, i) => i + 1);
+    }
+
+    return [];
+  }, [selectedAreaTables, selectedTableArea, allAreaTables, settingsData.settings]);
+
+  const resolveTableAreaForTable = (tableNo: number) => {
+    if (!tableAreaList.length) return null;
+
+    const findInArea = (area: any) => {
+      if (!area || !Array.isArray(area.tableAreaMappings)) return null;
+      const mapping = area.tableAreaMappings.find((m: any) => {
+        const mappedNo = Number(m?.tableNo);
+        return Number.isFinite(mappedNo) && mappedNo === tableNo && m?.isActive !== false;
+      });
+      if (!mapping) return null;
+
+      const payload: any = { ...area, tableAreaMappings: [mapping] };
+      delete payload.company;
+      delete payload.freeTables;
+      return payload;
+    };
+
+    const fromSelected = findInArea(selectedTableArea);
+    if (fromSelected) return fromSelected;
+
+    for (const area of tableAreaList) {
+      const found = findInArea(area);
+      if (found) return found;
+    }
+
+    return null;
+  };
 
   /**
    * Memoize header left component to prevent re-renders on tab change
@@ -262,6 +381,100 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
     );
   };
 
+  const renderTableAreas = () => {
+    if (activeTab !== DELIVERY_TYPE.DINE_IN) return null;
+
+    if (!tableAreaList.length) {
+      return (
+        <View
+          style={{
+            marginTop: 12,
+            paddingHorizontal: 12,
+            paddingVertical: 10,
+            borderRadius: 12,
+            borderWidth: 1,
+            borderColor: colors.border,
+            backgroundColor: colors.surface,
+          }}
+        >
+          <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+            Table areas not available
+          </Text>
+        </View>
+      );
+    }
+
+    return (
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={{ marginTop: 12 }}
+        contentContainerStyle={{ alignItems: 'center', paddingVertical: 4 }}
+      >
+        {tableAreaList.map((area: any) => {
+          const isActive = selectedTableArea?.id === area?.id;
+          const bookedCount = getAreaBookedCount(area);
+
+          return (
+            <TouchableOpacity
+              key={`${area?.id || area?.name}`}
+              onPress={() => setSelectedTableArea(area)}
+              style={{
+                marginRight: 10,
+                paddingHorizontal: 12,
+                paddingVertical: 8,
+                borderRadius: 14,
+                borderWidth: 1,
+                flexDirection: 'row',
+                alignItems: 'center',
+                backgroundColor: isActive ? colors.primary + '18' : colors.surface,
+                borderColor: isActive ? colors.primary : colors.border,
+              }}
+            >
+              <Text
+                style={{
+                  color: isActive ? colors.primary : colors.text,
+                  fontSize: 12,
+                  fontWeight: '700',
+                  maxWidth: 140,
+                }}
+                numberOfLines={1}
+              >
+                {area?.name || 'Area'}
+              </Text>
+              {bookedCount > 0 && (
+                <View
+                  style={{
+                    marginLeft: 8,
+                    paddingHorizontal: 6,
+                    paddingVertical: 2,
+                    borderRadius: 999,
+                    backgroundColor: isActive
+                      ? colors.primary
+                      : colors.surfaceHover,
+                    borderWidth: 1,
+                    borderColor: isActive ? colors.primary : colors.border,
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: isActive ? colors.textInverse : colors.textSecondary,
+                      fontSize: 10,
+                      fontWeight: '700',
+                    }}
+                  >
+                    {bookedCount}
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+    );
+  };
+
+
   const renderEmptyState = () => (
     <View className="flex-1 justify-center items-center py-8">
       <Text className="text-gray-400 text-center">
@@ -273,16 +486,13 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
   );
 
   const renderDineInTables = () => {
-    if (!settingsData.settings?.totalTables) {
+    if (tableNumbers.length === 0) {
       return renderEmptyState();
     }
 
-    const tables = Array.from(
-      { length: settingsData.settings.totalTables },
-      (_, i) => i + 1
-    ).map((tableNo) => {
+    const tables = tableNumbers.map((tableNo) => {
       const order = ordersData.dineInTables.find(
-        (o) => o.orderDetails?.tableNo === tableNo
+        (o) => Number(o.orderDetails?.tableNo) === tableNo
       );
       let status = 'available';
 
@@ -300,14 +510,32 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
             key={table.tableNo}
             onPress={() => {
               if (table.order) {
+                if (isOrderLocked(table.order)) {
+                  const label = getOrderDisplayLabel(table.order);
+                  showToast(
+                    `${label} is being handled on another device. Please try later.`,
+                    { type: 'error' },
+                  );
+                  return;
+                }
+                lockOrder(table.order);
                 navigation.navigate('OrderDetails', { order: table.order });
                 return;
               }
+
+              if (isTableLocked(table.tableNo)) {
+                showToast(`Table ${table.tableNo} is currently selected on another device.`, { type: 'error' });
+                return;
+              }
+
+              const tableArea = resolveTableAreaForTable(table.tableNo);
+              lockTable(table.tableNo);
 
               navigation.navigate('Menu', {
                 tableNo: table.tableNo,
                 deliveryType: DELIVERY_TYPE.DINE_IN,
                 existingOrder: table.order,
+                tableArea,
               });
             }}
             className="rounded-lg p-3 items-center justify-center border-2 mb-2"
@@ -350,7 +578,7 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
                   marginTop: 6,
                 }}
               >
-                ₹{table.order.orderDetails?.orderTotal?.toFixed(2)}
+                {formatCurrency(Number(table.order.orderDetails?.orderTotal ?? 0))}
               </Text>
             )}
           </TouchableOpacity>
@@ -361,7 +589,15 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
 
   const renderOrderItem = ({ item: order }: { item: Order }) => (
     <TouchableOpacity
-      onPress={() => navigation.navigate('OrderDetails', { order })}
+      onPress={() => {
+        if (isOrderLocked(order)) {
+          const label = getOrderDisplayLabel(order);
+          showToast(`${label} is being handled on another device. Please try later.`, { type: 'error' });
+          return;
+        }
+        lockOrder(order);
+        navigation.navigate('OrderDetails', { order });
+      }}
       className="rounded-lg p-4 mb-3 border"
       style={{ backgroundColor: colors.surface, borderColor: colors.border }}
     >
@@ -393,7 +629,7 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
         <Text
           style={{ color: colors.success, fontSize: 18, fontWeight: '700' }}
         >
-          ₹{order.orderDetails?.orderTotal?.toFixed(2)}
+          {formatCurrency(Number(order.orderDetails?.orderTotal ?? 0))}
         </Text>
       </View>
     </TouchableOpacity>
@@ -612,9 +848,13 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
         {/* Status badges for dine-in */}
         {renderTableStatusBadge()}
 
+        {/* Table area filters for dine-in */}
+        {renderTableAreas()}
+
         {/* Tab content */}
         {renderTabContent()}
       </View>
     </ScrollView>
   );
 }
+

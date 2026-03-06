@@ -89,6 +89,23 @@ class OrderService {
   }
 
   /**
+   * Update an existing order (POS_V2 update shape)
+   */
+  async updateOrder(orderId: string, newData: any) {
+    try {
+      const result = await localDatabase.update(
+        'order',
+        newData,
+        { where: { id: orderId } }
+      );
+      return result;
+    } catch (error) {
+      console.error('Error updating order:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Get all orders
    */
   async getAllOrders() {
@@ -214,25 +231,37 @@ class OrderService {
       const paidAt = data.paidAt ?? data.data?.paidAt ?? data.dataValues?.paidAt ?? new Date().toISOString();
       const tsc = data.tsc ?? data.data?.tsc ?? data.dataValues?.tsc;
       const invoiceNumber = data.invoiceNumber ?? data.data?.invoiceNumber ?? data.dataValues?.invoiceNumber;
-
-      const updatePayload: any = {
-        'orderDetails.isPaid': true,
-        updatedAt: new Date().toISOString(),
-        'orderDetails.orderPaymentSummary': orderPaymentSummary || settlePayload.orderPaymentSummary || settlePayload.paymentSummary,
+      const fallbackPaymentSummary = {
+        paymentProcessorId: settlePayload?.paymentMethod,
+        amount: settlePayload?.amount,
+        tip: settlePayload?.tip,
+        deliveryCharge: settlePayload?.deliveryCharge,
+        paidAt,
       };
 
-      if (orderPaymentDetails) updatePayload['orderDetails.orderPaymentDetails'] = orderPaymentDetails;
-      if (paidAt) updatePayload['orderDetails.paidAt'] = paidAt;
-      if (tsc) updatePayload['orderDetails.tsc'] = tsc;
-      if (invoiceNumber) updatePayload['orderDetails.invoiceNumber'] = invoiceNumber;
+      const updatePayload: any = {
+        orderStatusId: 5,
+        isSynced: true,
+        settleInfo: settlePayload,
+      };
 
       // Persist to local DB
-      const result = await localDatabase.update('order', updatePayload, { where: { _id: orderId } });
+      const result = await localDatabase.update('order', updatePayload, {
+        where: { id: orderId },
+      });
       return { remote: true, result, data };
     } catch (error) {
       console.warn('Remote settle failed, falling back to local mark as paid:', error);
       // fallback: mark locally as paid with provided payment summary if available
-      const paymentSummary = settlePayload?.orderPaymentSummary || settlePayload?.paymentSummary || settlePayload;
+      const paymentSummary =
+        settlePayload?.orderPaymentSummary ||
+        settlePayload?.paymentSummary || {
+          paymentProcessorId: settlePayload?.paymentMethod,
+          amount: settlePayload?.amount,
+          tip: settlePayload?.tip,
+          deliveryCharge: settlePayload?.deliveryCharge,
+          paidAt: new Date().toISOString(),
+        };
       const result = await this.markOrderAsPaid(orderId, paymentSummary);
       return { remote: false, result, error };
     }

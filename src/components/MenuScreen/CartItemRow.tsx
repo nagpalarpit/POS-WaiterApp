@@ -11,6 +11,7 @@ import {
   getItemOptionsSummary,
   getItemUnitTotal,
 } from '../../utils/cartCalculations';
+import { formatCurrency } from '../../utils/currency';
 
 interface CartItemRowProps {
   item: CartItem;
@@ -66,7 +67,7 @@ export const CartItemRow: React.FC<CartItemRowProps> = ({
       {/* Variant price */}
       {item.variantName && item.variantPrice ? (
         <Text className="text-xs" style={{ color: colors.textSecondary, marginBottom: 4 }}>
-          + Variant: ₹{item.variantPrice.toFixed(2)}
+          + Variant: {formatCurrency(item.variantPrice)}
         </Text>
       ) : null}
 
@@ -82,7 +83,7 @@ export const CartItemRow: React.FC<CartItemRowProps> = ({
             return (
               <Text key={idx} className="text-xs" style={{ color: colors.textSecondary }}>
                 • {valueQuantity} x @{name}
-                {valuePrice > 0 ? ` (+₹${valuePrice.toFixed(2)})` : ''}
+                {valuePrice > 0 ? ` (+${formatCurrency(valuePrice)})` : ''}
               </Text>
             );
           })}
@@ -91,7 +92,7 @@ export const CartItemRow: React.FC<CartItemRowProps> = ({
 
       {/* Unit price snapshot */}
       <Text className="text-xs" style={{ color: colors.textSecondary, marginBottom: 4 }}>
-        ₹{itemUnitTotal.toFixed(2)} × {quantity}
+        {formatCurrency(itemUnitTotal)} × {quantity}
       </Text>
 
       {/* Item note */}
@@ -152,7 +153,7 @@ export const CartItemRow: React.FC<CartItemRowProps> = ({
       {/* Price and Quantity Controls */}
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.border }}>
         <Text className="font-semibold text-sm" style={{ color: colors.primary, fontWeight: '800' }}>
-          ₹{itemLineTotal.toFixed(2)}
+          {formatCurrency(itemLineTotal)}
         </Text>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
           <TouchableOpacity

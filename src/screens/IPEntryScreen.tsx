@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, Alert, Keyboard, Platform, KeyboardAvoidingView, ScrollView } from 'react-native';
+import { View, Text, TextInput, Keyboard, Platform, KeyboardAvoidingView, ScrollView } from 'react-native';
 import { useNavigation, useIsFocused } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -7,6 +7,7 @@ import PrimaryButton from '../components/PrimaryButton';
 import { useTheme } from '../theme/ThemeProvider';
 import serverConnection from '../services/serverConnection';
 import { setLocalBaseUrl } from '../services/localApi';
+import { useToast } from '../components/ToastProvider';
 
 export default function IPEntryScreen() {
     const navigation = useNavigation();
@@ -16,6 +17,7 @@ export default function IPEntryScreen() {
     const [loading, setLoading] = useState(false);
     const [initialized, setInitialized] = useState(false);
     const { colors } = useTheme();
+    const { showToast } = useToast();
 
     // Initialize with saved server URL on screen focus
     useEffect(() => {
@@ -40,7 +42,7 @@ export default function IPEntryScreen() {
         const trimmedPort = port.trim();
 
         if (!trimmedIp) {
-            Alert.alert('Validation Error', 'Please enter server IP');
+            showToast('Please enter server IP', { type: 'error' });
             return;
         }
 
@@ -69,13 +71,13 @@ export default function IPEntryScreen() {
 
                 navigation.navigate('Login' as never);
             } else {
-                Alert.alert(
-                    'Connection Failed',
-                    'Unable to reach the POS server. Please check the IP address and port are correct and try again.'
+                showToast(
+                    'Unable to reach the POS server. Please check the IP address and port are correct and try again.',
+                    { type: 'error' },
                 );
             }
         } catch (err: any) {
-            Alert.alert('Connection Error', err.message || 'Unable to reach server');
+            showToast(err.message || 'Unable to reach server', { type: 'error' });
         } finally {
             setLoading(false);
         }

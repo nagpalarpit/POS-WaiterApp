@@ -4,6 +4,7 @@ import serverConnection from './serverConnection';
 import localDatabase from './localDatabase';
 import posIdService from './posIdService';
 import { initLocalSocket, initCloudSocket, disconnectSocket } from './socket';
+import { initOrderSync } from './orderSyncService';
 import { API_ENDPOINTS } from '../config/apiEndpoints';
 
 export interface LoginResponse {
@@ -43,8 +44,13 @@ class AuthService {
         response.user
       );
 
-      // Initialize cloud socket connection
-      await initCloudSocket();
+      // Prefer local socket for POS sync when available; fall back to cloud socket
+      const localSocket = await initLocalSocket();
+      if (localSocket) {
+        initOrderSync();
+      } else {
+        await initCloudSocket();
+      }
 
       return {
         success: true,
@@ -106,6 +112,7 @@ class AuthService {
 
       // Initialize local socket connection
       await initLocalSocket();
+      initOrderSync();
 
       return loginResponse;
     } catch (error: any) {

@@ -5,6 +5,7 @@ import AppNavigator from './src/navigation/AppNavigator';
 import { setServerBaseUrlFromStorage } from './src/services/api';
 import { setLocalBaseUrlFromStorage } from './src/services/localApi';
 import { ThemeProvider } from './src/theme/ThemeProvider';
+import { ToastProvider } from './src/components/ToastProvider';
 
 export default function App() {
   useEffect(() => {
@@ -16,9 +17,10 @@ export default function App() {
   return (
     <ThemeProvider>
       <SafeAreaProvider>
-        <AppNavigator />
+        <ToastProvider>
+          <AppNavigator />
+        </ToastProvider>
       </SafeAreaProvider>
     </ThemeProvider>
   );
 }
-

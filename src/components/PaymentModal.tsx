@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Modal, View, Text, TouchableOpacity, StyleSheet, TextInput, ScrollView } from 'react-native';
 import { useTheme } from '../theme/ThemeProvider';
 import Card from './Card';
+import { formatCurrency } from '../utils/currency';
 
 type PaymentOption = {
     id: number;
@@ -154,7 +155,9 @@ export default function PaymentModal({ visible, onClose, onSelect, orderTotal = 
 
                                         <Text style={{ color: colors.textSecondary, marginTop: 8 }}>Cash to return</Text>
                                         <View style={[styles.input, { justifyContent: 'center' }]}>
-                                            <Text style={{ color: colors.text }}>{Math.max(0, (parseFloat(cashProvided || '0') || 0) - due).toFixed(2)}</Text>
+                                            <Text style={{ color: colors.text }}>
+                                                {formatCurrency(Math.max(0, (parseFloat(cashProvided || '0') || 0) - due))}
+                                            </Text>
                                         </View>
                                     </View>
                                 )}
@@ -225,7 +228,7 @@ export default function PaymentModal({ visible, onClose, onSelect, orderTotal = 
                     </ScrollView>
 
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 }}>
-                        <Text style={{ color: colors.text, fontWeight: '700' }}>{due.toFixed(2)}</Text>
+                        <Text style={{ color: colors.text, fontWeight: '700' }}>{formatCurrency(due)}</Text>
                         <View style={{ flexDirection: 'row', gap: 8 }}>
                             <TouchableOpacity onPress={() => { reset(); onClose(); }} style={[styles.ghostBtn, { borderColor: colors.border }]}>
                                 <Text style={{ color: colors.textSecondary }}>Cancel</Text>

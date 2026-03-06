@@ -17,6 +17,7 @@ import {
     getCartSubtotal,
     getDiscountAmount,
 } from '../../utils/cartCalculations';
+import { formatCurrency } from '../../utils/currency';
 
 interface CartDrawerProps {
     visible: boolean;
@@ -152,7 +153,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                                             Order Summary
                                         </Text>
                                         <Text style={{ fontSize: 12, color: colors.textSecondary, marginTop: 2 }}>
-                                            {cartQuantity} {cartQuantity === 1 ? 'item' : 'items'} • ₹{total.toFixed(2)}
+                                            {cartQuantity} {cartQuantity === 1 ? 'item' : 'items'} • {formatCurrency(total)}
                                         </Text>
                                     </View>
                                 </View>

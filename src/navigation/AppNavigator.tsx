@@ -3,7 +3,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createDrawerNavigator, DrawerContentComponentProps } from '@react-navigation/drawer';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { View, Text, Switch, TouchableOpacity, Alert, ScrollView } from 'react-native';
+import { View, Text, Switch, TouchableOpacity, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 
@@ -15,6 +15,7 @@ import CheckoutScreen from '../screens/CheckoutScreen';
 import OrderDetailsScreen from '../screens/OrderDetailsScreen';
 import serverConnection from '../services/serverConnection';
 import { useTheme } from '../theme/ThemeProvider';
+import { useToast } from '../components/ToastProvider';
 
 export type RootStackParamList = {
   IPEntry: undefined;
@@ -24,11 +25,14 @@ export type RootStackParamList = {
     tableNo?: number;
     deliveryType: number;
     existingOrder?: any;
+    tableArea?: any;
   };
   Checkout: {
     cart: any;
     tableNo?: number;
     deliveryType: number;
+    tableArea?: any;
+    existingOrder?: any;
   };
   OrderDetails: {
     order: any;
@@ -74,6 +78,7 @@ function CustomDrawerContent(props: DrawerContentComponentProps) {
     displayName: 'Waiter',
     subtitle: 'POS Waiter App',
   });
+  const { showToast } = useToast();
 
   useEffect(() => {
     setIsOnline(serverConnection.isConnected());
@@ -136,14 +141,14 @@ function CustomDrawerContent(props: DrawerContentComponentProps) {
       setIsOnline(status.isConnected);
 
       if (!status.isConnected) {
-        Alert.alert(
-          'Connection Failed',
-          'Unable to connect to the local server. Update IP settings and try again.'
+        showToast(
+          'Unable to connect to the local server. Update IP settings and try again.',
+          { type: 'error' },
         );
       }
     } catch (error) {
       setIsOnline(false);
-      Alert.alert('Connection Error', 'There was an issue updating server connection status.');
+      showToast('There was an issue updating server connection status.', { type: 'error' });
     } finally {
       setUpdatingConnection(false);
     }

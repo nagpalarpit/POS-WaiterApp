@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import localDatabase from '../services/localDatabase';
-import { getOrderStatusLabel } from '../utils/orderUtils';
+import { ORDER_STATUS } from '../utils/orderUtils';
+import { onOrderSync } from '../services/orderSyncService';
 
 export const DELIVERY_TYPE = {
   DINE_IN: 0,
@@ -17,6 +18,7 @@ export interface Order {
   orderDetails: {
     orderDeliveryTypeId: number;
     tableNo?: number;
+    tableArea?: any;
     orderStatusId?: number;
     orderTotal: number;
     isPaid?: number;
@@ -57,16 +59,24 @@ export const useOrdersData = () => {
       });
 
       if (orders && Array.isArray(orders)) {
-        setAllOrders(orders);
+        const activeOrders = orders.filter((o: Order) => {
+          const statusId = o.orderDetails?.orderStatusId ?? o.orderStatusId;
+          const isPaid =
+            statusId === ORDER_STATUS.DELIVERED ||
+            o.orderDetails?.isPaid === 1;
+          return !isPaid;
+        });
+
+        setAllOrders(activeOrders);
 
         // Separate orders by delivery type
-        const dineIn = orders.filter(
+        const dineIn = activeOrders.filter(
           (o: Order) => o.orderDetails?.orderDeliveryTypeId === DELIVERY_TYPE.DINE_IN
         );
-        const delivery = orders.filter(
+        const delivery = activeOrders.filter(
           (o: Order) => o.orderDetails?.orderDeliveryTypeId === DELIVERY_TYPE.DELIVERY
         );
-        const pickup = orders.filter(
+        const pickup = activeOrders.filter(
           (o: Order) => o.orderDetails?.orderDeliveryTypeId === DELIVERY_TYPE.PICKUP
         );
 
@@ -75,7 +85,7 @@ export const useOrdersData = () => {
         setPickupOrders(pickup);
 
         console.log('Orders fetched:', { 
-          total: orders.length, 
+          total: activeOrders.length, 
           dineIn: dineIn.length, 
           delivery: delivery.length, 
           pickup: pickup.length 
@@ -93,6 +103,15 @@ export const useOrdersData = () => {
     fetchOrders();
   }, []);
 
+  useEffect(() => {
+    const unsubscribe = onOrderSync((event) => {
+      const type = (event?.eventType || 'ORDER_SYNC').toUpperCase();
+      if (type.endsWith('LOCK') || type === 'UNLOCK') return;
+      fetchOrders();
+    });
+    return () => { unsubscribe(); };
+  }, []);
+
   return {
     allOrders,
     dineInTables,
@@ -102,3 +121,4 @@ export const useOrdersData = () => {
     fetchOrders,
   };
 };
+

@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeProvider';
+import { formatCurrency } from '../utils/currency';
 import Card from './Card';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -323,7 +324,7 @@ export default function ItemDetailsModal({
                     >
                         {/* Item Price */}
                         <Text style={{ fontSize: 16, color: colors.textSecondary, marginBottom: 16 }}>
-                            Base Price: ₹{(item.price || 0).toFixed(2)}
+                            Base Price: {formatCurrency(item.price || 0)}
                         </Text>
 
                         {/* Variants */}
@@ -361,7 +362,7 @@ export default function ItemDetailsModal({
                                                 </Text>
                                                 {(variant.price || 0) > 0 && (
                                                     <Text style={{ color: colors.primary, fontWeight: 'bold' }}>
-                                                        +₹{Number(variant.price || 0).toFixed(2)}
+                                                        +{formatCurrency(Number(variant.price || 0))}
                                                     </Text>
                                                 )}
                                             </View>
@@ -416,7 +417,7 @@ export default function ItemDetailsModal({
                                                         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                                                             {(attrValue.price || 0) > 0 && (
                                                                 <Text style={{ color: colors.primary, fontWeight: 'bold', marginRight: 8 }}>
-                                                                    ₹{Number(attrValue.price || 0).toFixed(2)}
+                                                                    {formatCurrency(Number(attrValue.price || 0))}
                                                                 </Text>
                                                             )}
                                                             {isAttributeValueSelected(attrValue) && (
@@ -484,7 +485,7 @@ export default function ItemDetailsModal({
                         >
                             <Text style={{ fontSize: 16, color: colors.textSecondary }}>Total Price</Text>
                             <Text style={{ fontSize: 20, fontWeight: 'bold', color: colors.primary }}>
-                                ₹{calculateTotal().toFixed(2)}
+                                {formatCurrency(calculateTotal())}
                             </Text>
                         </View>
 

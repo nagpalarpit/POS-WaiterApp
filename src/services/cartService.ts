@@ -64,6 +64,36 @@ export interface Cart {
 
 const CART_STORAGE_KEY = 'cart';
 
+const toNumber = (value: unknown, fallback = 0): number => {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : fallback;
+  }
+
+  if (typeof value === 'string' && value.trim() !== '') {
+    const parsed = parseFloat(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+  }
+
+  return fallback;
+};
+
+const normalizeDiscountFromOrder = (discount: any): CartDiscount | null => {
+  if (!discount) return null;
+  const discountType =
+    discount.discountType === 1 ||
+    discount.discountType === '1' ||
+    discount.discountType === 'PERCENTAGE'
+      ? 'PERCENTAGE'
+      : 'FLAT';
+  const discountValue = toNumber(discount.discountValue ?? discount.value, 0);
+  if (!discountValue) return null;
+  return {
+    discountName: discount.discountName || discount.name || '',
+    discountType,
+    discountValue,
+  };
+};
+
 class CartService {
   /**
    * Load cart from AsyncStorage
@@ -323,6 +353,139 @@ class CartService {
       return cart;
     } catch (error) {
       console.error('Error updating cart discount:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Hydrate cart from an existing order (edit flow)
+   */
+  async setCartFromOrder(order: any): Promise<Cart> {
+    try {
+      const orderDetails = order?.orderDetails || {};
+      const rawItems = Array.isArray(orderDetails?.orderItem)
+        ? orderDetails.orderItem
+        : [];
+
+      const items: CartItem[] = rawItems.map((item: any, index: number) => {
+        const variant =
+          item?.orderItemVariant ||
+          (Array.isArray(item?.orderItemVariants)
+            ? item.orderItemVariants[0]
+            : null);
+
+        const variantAttributes = Array.isArray(
+          variant?.orderItemVariantAttributes
+        )
+          ? variant.orderItemVariantAttributes
+          : Array.isArray(variant?.menuItemVariantAttributes)
+            ? variant.menuItemVariantAttributes
+            : [];
+
+        const attribute = variantAttributes[0];
+
+        const attributeValuesRaw = Array.isArray(
+          attribute?.orderItemVariantAttributeValues
+        )
+          ? attribute.orderItemVariantAttributeValues
+          : Array.isArray(attribute?.menuItemVariantAttributeValues)
+            ? attribute.menuItemVariantAttributeValues
+            : Array.isArray(item?.attributeValues)
+              ? item.attributeValues
+              : [];
+
+        const attributeValues: AttributeValue[] = attributeValuesRaw.map(
+          (av: any) => ({
+            attributeValueId:
+              av?.menuItemVariantAttributeValueId ??
+              av?.attributeValueId ??
+              av?.id,
+            attributeValueName:
+              av?.menuItemVariantAttributeValue?.name ??
+              av?.attributeValueName ??
+              av?.name ??
+              '',
+            attributeValuePrice: toNumber(
+              av?.unitPrice ??
+                av?.attributeValuePrice ??
+                av?.price ??
+                av?.menuItemVariantAttributeValue?.price,
+              0
+            ),
+            attributeValueQuantity: Math.max(
+              toNumber(av?.quantity ?? av?.attributeValueQuantity, 1),
+              1
+            ),
+          })
+        );
+
+        const cartItem: CartItem = {
+          categoryId: item.categoryId ?? item.menuCategoryId ?? item.category?.id ?? 0,
+          categoryName:
+            item.categoryName ??
+            item.menuCategoryName ??
+            item.category?.name ??
+            '',
+          customId: toNumber(item.customId ?? item.customID ?? item.customId, 0),
+          itemId: item.menuItemId ?? item.itemId ?? item.id ?? 0,
+          itemName: item.itemName ?? item.name ?? '',
+          itemPrice: toNumber(item.itemPrice ?? item.unitPrice ?? item.price, 0),
+          quantity: Math.max(toNumber(item.quantity, 1), 1),
+          orderItemNote: item.orderItemNote ?? item.note ?? '',
+          tax: item.tax ?? item.taxInfo ?? item.taxObj ?? null,
+          groupType: item.groupType ?? 0,
+          groupLabel: item.groupLabel ?? '',
+          isOld: item.isOld,
+          oldQuantity: item.oldQuantity,
+        };
+
+        if (variant) {
+          cartItem.variantId =
+            variant?.menuItemVariantId ?? variant?.id ?? item.variantId;
+          cartItem.variantName =
+            variant?.name ?? item.variantName ?? '';
+          cartItem.variantPrice = toNumber(
+            variant?.unitPrice ?? variant?.price ?? item.variantPrice,
+            0
+          );
+        }
+
+        if (attribute) {
+          cartItem.attributeId =
+            attribute?.menuItemVariantAttributeId ??
+            attribute?.attributeId ??
+            attribute?.id ??
+            item.attributeId;
+          cartItem.attributeName =
+            attribute?.menuItemVariantAttribute?.name ??
+            attribute?.attributeName ??
+            attribute?.name ??
+            item.attributeName ??
+            '';
+          cartItem.attributePrice = toNumber(
+            attribute?.unitPrice ?? attribute?.price ?? item.attributePrice,
+            0
+          );
+        }
+
+        if (attributeValues.length > 0) {
+          cartItem.attributeValues = attributeValues;
+        }
+
+        cartItem.cartId = item.cartId || this.generateCartId(cartItem);
+        return cartItem;
+      });
+
+      const cart: Cart = {
+        items,
+        orderNote: orderDetails?.orderNotes || '',
+        discount: normalizeDiscountFromOrder(orderDetails?.discount),
+      };
+
+      await this.saveCart(cart);
+      return cart;
+    } catch (error) {
+      console.error('Error hydrating cart from order:', error);
       throw error;
     }
   }

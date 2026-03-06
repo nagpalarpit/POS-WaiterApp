@@ -8,6 +8,7 @@ import {
     getDiscountLabel,
     getDiscountTypeLabel,
 } from '../../utils/cartCalculations';
+import { formatCurrency } from '../../utils/currency';
 
 interface CartSummaryProps {
     cart: Cart;
@@ -90,7 +91,7 @@ export const CartSummary: React.FC<CartSummaryProps> = ({
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                         <Text style={{ fontSize: 14, color: colors.textSecondary }}>Subtotal</Text>
                         <Text style={{ fontSize: 14, fontWeight: '600', color: colors.text }}>
-                            ₹{subtotal.toFixed(2)}
+                            {formatCurrency(subtotal)}
                         </Text>
                     </View>
 
@@ -98,7 +99,7 @@ export const CartSummary: React.FC<CartSummaryProps> = ({
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                             <Text style={{ fontSize: 14, color: colors.textSecondary }}>Discount</Text>
                             <Text style={{ fontSize: 14, fontWeight: '600', color: colors.error }}>
-                                -₹{discount.toFixed(2)}
+                                {formatCurrency(-discount)}
                             </Text>
                         </View>
                     )}
@@ -116,7 +117,7 @@ export const CartSummary: React.FC<CartSummaryProps> = ({
                             Total
                         </Text>
                         <Text style={{ fontSize: 18, fontWeight: '800', color: colors.primary }}>
-                            ₹{total.toFixed(2)}
+                            {formatCurrency(total)}
                         </Text>
                     </View>
                 </View>

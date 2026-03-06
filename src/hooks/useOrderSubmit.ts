@@ -16,6 +16,19 @@ import {
 const ORDER_STATUS_PENDING = 1;
 const TSC_OFFLINE_MESSAGE = 'Active TSS not found for the given POS and company.';
 
+const toNumber = (value: unknown, fallback = 0): number => {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : fallback;
+  }
+
+  if (typeof value === 'string' && value.trim() !== '') {
+    const parsed = parseFloat(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+  }
+
+  return fallback;
+};
+
 /**
  * Convert delivery type to order type string
  */
@@ -36,7 +49,13 @@ const getPosV2DiscountType = (discountType?: string): number => {
 /**
  * Hook for managing order submission and calculations
  */
-export const useOrderSubmit = (cart: Cart, tableNo: number | null, deliveryType: number) => {
+export const useOrderSubmit = (
+  cart: Cart,
+  tableNo: number | null,
+  deliveryType: number,
+  tableArea?: any,
+  existingOrder?: any
+) => {
   const [loading, setLoading] = useState(false);
 
   /**
@@ -119,7 +138,7 @@ export const useOrderSubmit = (cart: Cart, tableNo: number | null, deliveryType:
   /**
    * Submit order to server
    */
-  const submitOrder = async (tax: number): Promise<boolean> => {
+  const submitOrder = async (tax: number): Promise<{ success: boolean; order?: any }> => {
     try {
       if (!cart.items?.length) {
         throw new Error('No items in cart');
@@ -133,7 +152,12 @@ export const useOrderSubmit = (cart: Cart, tableNo: number | null, deliveryType:
 
       const userDataStr = await AsyncStorage.getItem('userData');
       const userData = userDataStr ? JSON.parse(userDataStr) : null;
-      const companyId = Number(userData?.companyId || 0);
+      const companyId = Number(
+        existingOrder?.companyId ||
+          existingOrder?.orderDetails?.companyId ||
+          userData?.companyId ||
+          0
+      );
 
       if (!companyId) {
         throw new Error('Company ID missing. Please login again.');
@@ -152,6 +176,180 @@ export const useOrderSubmit = (cart: Cart, tableNo: number | null, deliveryType:
       const now = new Date().toISOString();
       const orderItems = prepareOrderItems(companyId);
       const total = subtotal + tax - discount;
+      const existingOrderId =
+        existingOrder?._id || existingOrder?.id || existingOrder?.orderId || null;
+      const addedBy =
+        existingOrder?.orderDetails?.addedBy != null
+          ? existingOrder.orderDetails.addedBy
+          : Number(userData?.id || 0) || null;
+      const posId =
+        existingOrder?.orderDetails?.posId != null
+          ? existingOrder.orderDetails.posId
+          : posIdService.getPosId() || '';
+
+      if (existingOrder && !existingOrderId) {
+        throw new Error('Order ID missing. Unable to update order.');
+      }
+
+      if (existingOrderId) {
+        const existingDetails = existingOrder?.orderDetails || {};
+        const nextCount = toNumber(existingDetails?.count, 1) + 1;
+        const baseStatusId =
+          existingDetails?.orderStatusId ??
+          existingOrder?.orderStatusId ??
+          ORDER_STATUS_PENDING;
+
+        const orderDetails: any = {
+          ...existingDetails,
+          companyId,
+          customerId: existingDetails?.customerId ?? userData?.customerId ?? null,
+          userEmail: existingDetails?.userEmail ?? userData?.email ?? '',
+          userFirstName:
+            existingDetails?.userFirstName ??
+            userData?.firstName ??
+            userData?.username ??
+            '',
+          userLastName: existingDetails?.userLastName ?? userData?.lastName ?? '',
+          userMobile:
+            existingDetails?.userMobile ??
+            userData?.mobileNo ??
+            userData?.mobile ??
+            null,
+          addresses: existingDetails?.addresses ?? userData?.addresses ?? [],
+          customerCompanyName:
+            existingDetails?.customerCompanyName ?? userData?.customerCompanyName,
+          steuerId: existingDetails?.steuerId ?? userData?.steuerId,
+          isDebitor:
+            existingDetails?.isDebitor ??
+            (!!userData?.isDebitor || false),
+          currency: existingDetails?.currency ?? userData?.currency ?? 'EUR',
+          isPickup: deliveryType === 2,
+          pickupDateTime: existingDetails?.pickupDateTime ?? null,
+          familyName: existingDetails?.familyName ?? '',
+          orderType: getOrderType(deliveryType),
+          isSandbox: existingDetails?.isSandbox ?? false,
+          isPriceIncludingTax: existingDetails?.isPriceIncludingTax ?? false,
+          orderTaxTotal: tax,
+          orderCartTaxAndChargesTotal:
+            existingDetails?.orderCartTaxAndChargesTotal ?? 0,
+          orderDeliveryTypeId: deliveryType,
+          orderPromoCodeDiscountTotal:
+            existingDetails?.orderPromoCodeDiscountTotal ?? 0,
+          countryCode: existingDetails?.countryCode ?? userData?.countryCode ?? 'IN',
+          customerAddressId:
+            existingDetails?.customerAddressId ?? userData?.customerAddressId ?? null,
+          orderNotes: orderNote,
+          orderDiscountTotal: discount,
+          orderItem: orderItems,
+          orderStatusId: baseStatusId,
+          orderSubTotal: subtotal,
+          orderTotal: total,
+          createdAt: existingDetails?.createdAt ?? existingOrder?.createdAt ?? now,
+          count: nextCount,
+          discountId: null,
+          discount: normalizedDiscount ?? null,
+          user: existingDetails?.user ?? userData ?? null,
+          addedBy,
+          posId,
+          onHold: existingDetails?.onHold ?? false,
+          holdingName: existingDetails?.holdingName ?? '',
+          isSplitOrder: existingDetails?.isSplitOrder ?? false,
+          tableNo:
+            deliveryType === 0
+              ? tableNo
+              : null,
+          tableArea:
+            deliveryType === 0
+              ? tableArea ?? null
+              : null,
+          updatedAt: now,
+        };
+
+        const settleInfo: any = {
+          ...orderDetails,
+          orderStatusId: baseStatusId,
+          orderDetails,
+          companyId,
+          updatedAt: now,
+          localOrderId: existingOrderId,
+        };
+
+        if (!orderDetails.isSplitOrder && !orderDetails.isTscOffline) {
+          const tscArray = Array.isArray(orderDetails.tsc) ? orderDetails.tsc : [];
+          let maxRevision = 0;
+          let tscGuid: string | undefined;
+          const orderNumber =
+            existingOrder?.customOrderId ??
+            existingOrder?.orderDetails?.customOrderId ??
+            existingOrder?.orderDetails?.orderNumber ??
+            '';
+
+          tscArray.forEach((item: any) => {
+            if (item?.success === true) {
+              maxRevision = Math.max(maxRevision, toNumber(item?.data?.revision, 0));
+              if (item?.data?._id) {
+                tscGuid = item.data._id;
+              }
+            }
+          });
+
+          try {
+            const tscRes = await tscService.updateTransaction({
+              _id: existingOrderId,
+              customOrderId: orderNumber,
+              orderDetails,
+              companyId,
+              revision: maxRevision + 1 || 1,
+              guid: tscGuid,
+              state: 'ACTIVE',
+            });
+            const tscData =
+              tscRes?.data?.data ??
+              tscRes?.data ??
+              [];
+            const tscEntries = Array.isArray(tscData)
+              ? tscData
+              : [tscData].filter(Boolean);
+            const lastObj = tscEntries[tscEntries.length - 1];
+
+            if (!lastObj?.success) {
+              orderDetails.isTscOffline = true;
+              if (lastObj?.data === TSC_OFFLINE_MESSAGE) {
+                console.warn('TSC offline:', lastObj?.data);
+              }
+            } else {
+              orderDetails.tsc = [...tscArray, ...tscEntries];
+              settleInfo.tsc = orderDetails.tsc;
+            }
+          } catch (error) {
+            console.error('Error updating TSC transaction:', error);
+            orderDetails.isTscOffline = true;
+          }
+        }
+
+        const updatedOrderData = {
+          orderStatusId: baseStatusId,
+          orderDetails,
+          companyId,
+          settleInfo,
+          updatedAt: now,
+        };
+
+        await orderService.updateOrder(existingOrderId, updatedOrderData);
+        await cartService.clearCart();
+        return {
+          success: true,
+          order: {
+            ...updatedOrderData,
+            _id: existingOrderId,
+            customOrderId:
+              existingOrder?.customOrderId ??
+              existingOrder?.orderDetails?.customOrderId ??
+              existingOrder?.orderDetails?.orderNumber ??
+              undefined,
+          },
+        };
+      }
 
       const orderDetails: any = {
         companyId,
@@ -165,7 +363,7 @@ export const useOrderSubmit = (cart: Cart, tableNo: number | null, deliveryType:
         customerCompanyName: userData?.customerCompanyName,
         steuerId: userData?.steuerId,
         isDebitor: !!userData?.isDebitor,
-        currency: userData?.currency || 'INR',
+        currency: userData?.currency || 'EUR',
         isPickup: deliveryType === 2,
         pickupDateTime: null,
         familyName: '',
@@ -198,7 +396,7 @@ export const useOrderSubmit = (cart: Cart, tableNo: number | null, deliveryType:
 
       if (deliveryType === 0) {
         orderDetails.tableNo = tableNo;
-        orderDetails.tableArea = null;
+        orderDetails.tableArea = tableArea || null;
       }
 
       const settleInfo = {
@@ -248,7 +446,7 @@ export const useOrderSubmit = (cart: Cart, tableNo: number | null, deliveryType:
       if (result) {
         // Clear cart after successful order
         await cartService.clearCart();
-        return true;
+        return { success: true, order: result };
       } else {
         throw new Error('Failed to create order');
       }

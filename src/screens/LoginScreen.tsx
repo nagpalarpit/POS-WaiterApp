@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, Alert, Keyboard, Platform, KeyboardAvoidingView, ScrollView } from 'react-native';
+import { View, Text, TextInput, Keyboard, Platform, KeyboardAvoidingView, ScrollView } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import PrimaryButton from '../components/PrimaryButton';
 import { useTheme } from '../theme/ThemeProvider';
 import authService from '../services/authService';
+import { useToast } from '../components/ToastProvider';
 
 export default function LoginScreen() {
   const navigation = useNavigation();
@@ -13,10 +14,11 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('admin@123');
   const [loading, setLoading] = useState(false);
   const { colors } = useTheme();
+  const { showToast } = useToast();
 
   const doLogin = async () => {
     if (!username.trim() || !password.trim()) {
-      Alert.alert('Validation Error', 'Please enter username and password');
+      showToast('Please enter username and password', { type: 'error' });
       return;
     }
 
@@ -44,10 +46,10 @@ export default function LoginScreen() {
         // Navigate to Dashboard (reset stack so Dashboard becomes the root)
         navigation.reset({ index: 0, routes: [{ name: 'Main' as never }] });
       } else {
-        Alert.alert('Login Failed', result.error || 'Unable to authenticate');
+        showToast(result.error || 'Unable to authenticate', { type: 'error' });
       }
     } catch (err: any) {
-      Alert.alert('Login Error', err.message || 'An unexpected error occurred');
+      showToast(err.message || 'An unexpected error occurred', { type: 'error' });
     } finally {
       setLoading(false);
     }

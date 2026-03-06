@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, Modal, TextInput, Pressable, KeyboardAvoidingView, Platform } from 'react-native';
 import { useTheme } from '../theme/ThemeProvider';
+import { getCurrencySymbol } from '../utils/currency';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import Card from './Card';
 import { CartDiscount } from '../services/cartService';
@@ -68,7 +69,9 @@ export default function CartNoteModal({ visible, initialNote = '', initialDiscou
                             <Text style={{ color: colors.textSecondary, fontSize: 12, fontWeight: '600', marginBottom: 8 }}>Discount</Text>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                                 <TouchableOpacity onPress={() => setDiscountType('FLAT')} style={{ padding: 10, borderRadius: 8, borderWidth: 1.5, borderColor: discountType === 'FLAT' ? colors.primary : colors.border, backgroundColor: discountType === 'FLAT' ? colors.primary + '20' : colors.surface }}>
-                                    <Text style={{ color: discountType === 'FLAT' ? colors.primary : colors.text, fontWeight: '600', fontSize: 12 }}>₹ Flat</Text>
+                                    <Text style={{ color: discountType === 'FLAT' ? colors.primary : colors.text, fontWeight: '600', fontSize: 12 }}>
+                                      {getCurrencySymbol()} Flat
+                                    </Text>
                                 </TouchableOpacity>
                                 <TouchableOpacity onPress={() => setDiscountType('PERCENTAGE')} style={{ padding: 10, borderRadius: 8, borderWidth: 1.5, borderColor: discountType === 'PERCENTAGE' ? colors.primary : colors.border, backgroundColor: discountType === 'PERCENTAGE' ? colors.primary + '20' : colors.surface }}>
                                     <Text style={{ color: discountType === 'PERCENTAGE' ? colors.primary : colors.text, fontWeight: '600', fontSize: 12 }}>% Percent</Text>

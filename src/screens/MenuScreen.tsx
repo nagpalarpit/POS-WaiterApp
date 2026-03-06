@@ -4,7 +4,6 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Dimensions,
-  Alert,
   Text,
   TextInput,
 } from 'react-native';
@@ -36,6 +35,9 @@ import {
   getCartSubtotal,
   getDiscountAmount,
 } from '../utils/cartCalculations';
+import cartService from '../services/cartService';
+import { lockOrder, lockTable, unlockTable } from '../services/orderSyncService';
+import { useToast } from '../components/ToastProvider';
 
 const { width } = Dimensions.get('window');
 
@@ -50,7 +52,7 @@ interface MenuScreenProps {
  */
 export default function MenuScreen({ navigation, route }: MenuScreenProps) {
   const { colors } = useTheme();
-  const { tableNo = null, deliveryType = 0 } = route.params || {};
+  const { tableNo = null, deliveryType = 0, tableArea = null, existingOrder = null } = route.params || {};
   const cartDrawerWidth = Math.min(width * 0.84, 400);
 
   // Use custom hooks for complex logic
@@ -58,6 +60,7 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
   const cartData = useMenuCart();
   const cartAnimation = useCartDrawerAnimation(cartDrawerWidth);
   const feedback = useCartFeedback();
+  const { showToast } = useToast();
 
   // Local state
   const [showItemDetail, setShowItemDetail] = useState(false);
@@ -84,6 +87,38 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
     if (deliveryType === 2) return 'shopping-outline';
     return 'silverware-fork-knife';
   }, [tableNo, deliveryType]);
+
+  useEffect(() => {
+    if (!existingOrder) return;
+    const hydrateCart = async () => {
+      try {
+        const orderCart = await cartService.setCartFromOrder(existingOrder);
+        cartData.setCart(orderCart);
+        await lockOrder(existingOrder);
+      } catch (error) {
+        console.error('MenuScreen: Failed to hydrate cart from existing order', error);
+      }
+    };
+    hydrateCart();
+  }, [existingOrder, cartData.setCart]);
+
+  useEffect(() => {
+    if (existingOrder) return;
+    if (!tableNo) return;
+    lockTable(tableNo);
+  }, [existingOrder, tableNo]);
+
+  useEffect(() => {
+    if (existingOrder || !tableNo) return;
+    const unsubscribe = navigation.addListener('beforeRemove', (e: any) => {
+      const action = e?.data?.action;
+      if (action?.type === 'NAVIGATE' && action?.payload?.name === 'Checkout') {
+        return;
+      }
+      unlockTable(tableNo);
+    });
+    return unsubscribe;
+  }, [navigation, existingOrder, tableNo]);
 
   const activeCategory = menuData.categories[menuData.activeCategory];
   const filteredItemsCount = useMemo(() => {
@@ -181,7 +216,7 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
         attributeValues
       );
     } catch (error) {
-      Alert.alert('Error', 'Failed to add item to cart');
+      showToast('Failed to add item to cart', { type: 'error' });
     }
   };
 
@@ -204,7 +239,7 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
 
   const proceedToCheckout = async () => {
     if (cartData.cart.items.length === 0) {
-      Alert.alert('Empty Cart', 'Please add items to cart');
+      showToast('Please add items to cart', { type: 'error' });
       return;
     }
 
@@ -216,6 +251,8 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
       cart: cartData.cart,
       tableNo,
       deliveryType,
+      tableArea,
+      existingOrder,
     });
   };
 
@@ -229,7 +266,7 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
       }
       cartNotes.setShowCartNoteModal(false);
     } catch (err) {
-      Alert.alert('Error', 'Failed to save cart note');
+      showToast('Failed to save cart note', { type: 'error' });
     }
   };
 
@@ -346,7 +383,7 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
                 );
                 cartNotes.cancelItemNoteEdit();
               } catch (err) {
-                Alert.alert('Error', 'Failed to save item note');
+                showToast('Failed to save item note', { type: 'error' });
               }
             }
           }}

@@ -1,13 +1,14 @@
 import { useState } from 'react';
-import { Alert } from 'react-native';
 import { CartDiscountType } from '../services/cartService';
 import { getDiscountTypeLabel } from '../utils/cartCalculations';
 import { Cart } from '../services/cartService';
+import { useToast } from '../components/ToastProvider';
 
 /**
  * Hook for managing cart notes and discount editing states
  */
 export const useCartNotes = (cart: Cart, onSaveNote: any, onSaveDiscount: any) => {
+  const { showToast } = useToast();
   // Item note editing
   const [editingItemNoteId, setEditingItemNoteId] = useState<string | null>(null);
   const [itemNoteDraft, setItemNoteDraft] = useState('');
@@ -100,7 +101,7 @@ export const useCartNotes = (cart: Cart, onSaveNote: any, onSaveDiscount: any) =
       }
 
       if (discountTypeDraft === 'PERCENTAGE' && discountValue > 100) {
-        Alert.alert('Invalid Discount', 'Percentage discount cannot exceed 100.');
+        showToast('Percentage discount cannot exceed 100.', { type: 'error' });
         return;
       }
 

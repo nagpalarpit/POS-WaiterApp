@@ -5,7 +5,6 @@ import {
   TouchableOpacity,
   ScrollView,
   ActivityIndicator,
-  Alert,
   Animated,
   StyleSheet,
 } from 'react-native';
@@ -16,6 +15,9 @@ import { useOrderSubmit } from '../hooks/useOrderSubmit';
 import { useCartNotes } from '../hooks/useCartNotes';
 import cartService, { Cart, CartItem, AttributeValue } from '../services/cartService';
 import CartNoteModal from '../components/CartNoteModal';
+import { formatCurrency } from '../utils/currency';
+import { emitOrderSync, emitPosKotPrint, unlockOrder, unlockTable } from '../services/orderSyncService';
+import { useToast } from '../components/ToastProvider';
 import {
   getAttributeValueName,
   getAttributeValuePrice,
@@ -50,11 +52,20 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
   const incomingCart = (route.params?.cart || { items: [], orderNote: '', discount: null }) as Cart;
   const tableNo = route.params?.tableNo ?? null;
   const deliveryType = route.params?.deliveryType ?? 0;
+  const tableArea = route.params?.tableArea ?? null;
+  const existingOrder = route.params?.existingOrder ?? null;
 
   const [checkoutCart, setCheckoutCart] = useState<Cart>(incomingCart);
   const [tax, setTax] = useState(0);
+  const { showToast } = useToast();
 
-  const orderSubmit = useOrderSubmit(checkoutCart, tableNo, deliveryType);
+  const orderSubmit = useOrderSubmit(
+    checkoutCart,
+    tableNo,
+    deliveryType,
+    tableArea,
+    existingOrder
+  );
   const cartNotes = useCartNotes(
     checkoutCart,
     cartService.updateItemNote,
@@ -62,10 +73,17 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
   );
 
   const placeAnim = useRef(new Animated.Value(1)).current;
+  const toastNavTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     setCheckoutCart((route.params?.cart || { items: [], orderNote: '', discount: null }) as Cart);
   }, [route.params?.cart]);
+
+  useEffect(() => {
+    return () => {
+      if (toastNavTimer.current) clearTimeout(toastNavTimer.current);
+    };
+  }, []);
 
   const calculateTax = (subtotal: number): number => {
     const firstItemTax = checkoutCart.items[0]?.tax;
@@ -109,19 +127,19 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
       setCheckoutCart(refreshedCart);
       cartNotes.setShowCartNoteModal(false);
     } catch (err) {
-      Alert.alert('Error', 'Failed to save cart note');
+      showToast('Failed to save cart note', { type: 'error' });
     }
   };
 
   const handlePlaceOrder = async () => {
     try {
       if (!checkoutCart.items?.length) {
-        Alert.alert('Error', 'Please add items before placing order');
+        showToast('Please add items before placing order', { type: 'error' });
         return;
       }
 
       if (deliveryType === 0 && !tableNo) {
-        Alert.alert('Error', 'Please select table');
+        showToast('Please select table', { type: 'error' });
         return;
       }
 
@@ -130,20 +148,60 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
         Animated.timing(placeAnim, { toValue: 1, duration: 250, useNativeDriver: true }),
       ]).start();
 
-      await orderSubmit.submitOrder(tax);
-
-      Alert.alert('Success', 'Order placed successfully', [
-        {
-          text: 'OK',
-          onPress: () => navigation.navigate('Dashboard'),
-        },
-      ]);
+      const submitResult = await orderSubmit.submitOrder(tax);
+      const submittedOrder = submitResult?.order;
+      const orderInfo = {
+        tableNo,
+        orderNumber:
+          existingOrder?.customOrderId ||
+          existingOrder?.orderDetails?.customOrderId ||
+          existingOrder?.orderDetails?.orderNumber ||
+          existingOrder?._id ||
+          existingOrder?.id,
+        orderDeliveryTypeId: deliveryType,
+      };
+      await emitOrderSync(
+        existingOrder ? 'ORDER_UPDATED' : 'ORDER_PLACED',
+        orderInfo,
+      );
+      if (submittedOrder) {
+        const orderDetails = submittedOrder.orderDetails || submittedOrder;
+        const items =
+          orderDetails?.orderItem ||
+          orderDetails?.orderItems ||
+          [];
+        if (Array.isArray(items) && items.length > 0) {
+          emitPosKotPrint({
+            items,
+            isOrderDetails: true,
+            currentUser: orderDetails?.user ?? submittedOrder?.user ?? null,
+            orderInfo: {
+              ...orderDetails,
+              orderNumber:
+                orderDetails?.customOrderId ||
+                submittedOrder?.customOrderId ||
+                submittedOrder?._id ||
+                submittedOrder?.id,
+            },
+          });
+        }
+      }
+      if (existingOrder) {
+        await unlockOrder(existingOrder);
+      } else if (tableNo) {
+        await unlockTable(tableNo);
+      }
+      showToast(existingOrder ? 'Order updated successfully' : 'Order placed successfully', { type: 'success' });
+      if (toastNavTimer.current) clearTimeout(toastNavTimer.current);
+      toastNavTimer.current = setTimeout(() => {
+        navigation.navigate('Dashboard');
+      }, 800);
     } catch (error) {
       const message =
         (error as any)?.response?.data?.message ||
         (error as any)?.message ||
         'Failed to place order';
-      Alert.alert('Error', `${message}`);
+      showToast(message, { type: 'error' });
       console.error('Error placing order:', error);
     }
   };
@@ -207,7 +265,7 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
                   style={{ color: colors.textSecondary, fontSize: 12, marginTop: 2 }}
                 >
                   • {valueQuantity} x {name}
-                  {valuePrice > 0 ? ` (+₹${valuePrice.toFixed(2)})` : ''}
+                  {valuePrice > 0 ? ` (+${formatCurrency(valuePrice)})` : ''}
                 </Text>
               );
             })}
@@ -233,10 +291,10 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
 
         <View style={[styles.itemTotalRow, { borderTopColor: colors.border }]}>
           <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
-            ₹{itemUnitTotal.toFixed(2)} × {quantity}
+            {formatCurrency(itemUnitTotal)} × {quantity}
           </Text>
           <Text style={{ color: colors.text, fontSize: 15, fontWeight: '800' }}>
-            ₹{itemLineTotal.toFixed(2)}
+            {formatCurrency(itemLineTotal)}
           </Text>
         </View>
       </View>
@@ -297,27 +355,33 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
         >
           <View style={styles.summaryRow}>
             <Text style={{ color: colors.textSecondary, fontSize: 12 }}>Subtotal</Text>
-            <Text style={{ color: colors.text, fontWeight: '700' }}>₹{subtotal.toFixed(2)}</Text>
+            <Text style={{ color: colors.text, fontWeight: '700' }}>
+              {formatCurrency(subtotal)}
+            </Text>
           </View>
 
           {tax > 0 ? (
             <View style={styles.summaryRow}>
               <Text style={{ color: colors.textSecondary, fontSize: 12 }}>Tax</Text>
-              <Text style={{ color: colors.text, fontWeight: '700' }}>₹{tax.toFixed(2)}</Text>
+              <Text style={{ color: colors.text, fontWeight: '700' }}>
+                {formatCurrency(tax)}
+              </Text>
             </View>
           ) : null}
 
           {discountAmount > 0 ? (
             <View style={styles.summaryRow}>
               <Text style={{ color: colors.textSecondary, fontSize: 12 }}>Discount</Text>
-              <Text style={{ color: colors.error, fontWeight: '700' }}>-₹{discountAmount.toFixed(2)}</Text>
+              <Text style={{ color: colors.error, fontWeight: '700' }}>
+                {formatCurrency(-discountAmount)}
+              </Text>
             </View>
           ) : null}
 
           <View style={[styles.summaryRow, { borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 8 }]}>
             <Text style={{ color: colors.text, fontWeight: '800' }}>Total Payable</Text>
             <Text style={{ color: colors.primary, fontWeight: '800', fontSize: 18 }}>
-              ₹{total.toFixed(2)}
+              {formatCurrency(total)}
             </Text>
           </View>
         </View>

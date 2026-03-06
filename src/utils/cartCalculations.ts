@@ -5,6 +5,7 @@ import type {
   CartDiscountType,
   CartItem,
 } from '../services/cartService';
+import { formatCurrency } from './currency';
 
 const toNumber = (value: unknown, fallback = 0): number => {
   if (typeof value === 'number') {
@@ -99,7 +100,7 @@ export const getDiscountLabel = (discount: CartDiscount): string => {
   if (discount.discountType === 'PERCENTAGE') {
     return `${discount.discountValue}%`;
   }
-  return `₹${roundToTwo(discount.discountValue).toFixed(2)}`;
+  return formatCurrency(roundToTwo(discount.discountValue));
 };
 
 export const getDiscountAmount = (

@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, Image } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { MenuItem, getMenuItemIdentity } from '../../hooks/useMenuData';
+import { formatCurrency } from '../../utils/currency';
 
 interface MenuItemCardProps {
   item: MenuItem;
@@ -77,7 +78,7 @@ export const MenuItemCard: React.FC<MenuItemCardProps> = ({
         <View>
           <Text style={{ fontSize: 11, color: colors.textSecondary }}>Price</Text>
           <Text style={{ color: colors.primary, fontSize: 17, fontWeight: '800', marginTop: 1 }}>
-            ₹{item.price.toFixed(2)}
+            {formatCurrency(item.price)}
           </Text>
         </View>
 

@@ -1,9 +1,10 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { View, Text, TouchableOpacity, ScrollView, Alert, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../theme/ThemeProvider';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import Card from '../components/Card';
 import orderService from '../services/orderService';
 import commonFunctionService from '../services/commonFunctionService';
@@ -18,6 +19,12 @@ import {
   getItemUnitTotal,
 } from '../utils/cartCalculations';
 import PaymentModal from '../components/PaymentModal';
+import { formatCurrency } from '../utils/currency';
+import { emitOrderSync, emitPosPrint, lockOrder, lockPayment, unlockOrder } from '../services/orderSyncService';
+import { useToast } from '../components/ToastProvider';
+import tscService from '../services/tscService';
+
+const TSC_OFFLINE_MESSAGE = 'Active TSS not found for the given POS and company.';
 
 const toNumber = (value: unknown, fallback = 0): number => {
   if (typeof value === 'number') {
@@ -189,6 +196,8 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
   const [activeSection, setActiveSection] = useState<'items' | 'notes' | 'payment'>('items');
   const order = route.params?.order;
   const [marking, setMarking] = useState(false);
+  const editingRef = useRef(false);
+  const { showToast } = useToast();
 
   const PAYMENT_METHOD_LABELS: Record<number, string> = {
     0: 'Cash',
@@ -242,11 +251,31 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
   const statusTone = getStatusTone(orderStatusLabel, colors);
   const isPaid = order.orderDetails?.isPaid === 1;
 
+  useFocusEffect(
+    useCallback(() => {
+      editingRef.current = false;
+      return () => {};
+    }, []),
+  );
+
+  useEffect(() => {
+    if (!order) return;
+    lockOrder(order);
+    return () => {
+      if (!editingRef.current) {
+        unlockOrder(order);
+      }
+    };
+  }, [order]);
+
   const onEdit = () => {
+    editingRef.current = true;
+    lockOrder(order);
     navigation.navigate('Menu', {
       tableNo: order.orderDetails?.tableNo,
       deliveryType: order.orderDetails?.orderDeliveryTypeId ?? 0,
       existingOrder: order,
+      tableArea: order.orderDetails?.tableArea ?? null,
     });
   };
 
@@ -257,51 +286,164 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
       const userDataStr = await AsyncStorage.getItem('userData');
       const userData = userDataStr ? JSON.parse(userDataStr) : null;
       const paidBy = Number(userData?.id || userData?.userId || 0) || null;
+      const orderDetails = order.orderDetails || {};
       const companyId =
-        Number(order.companyId || order.orderDetails?.companyId || userData?.companyId || 0) ||
+        Number(order.companyId || orderDetails?.companyId || userData?.companyId || 0) ||
         0;
       const invoiceNumber = await commonFunctionService.generateInvoice(companyId);
       const tip = toNumber((option as any).tip, 0);
       const giftCard = (option as any).giftCard;
       const giftCardTotal = toNumber(giftCard?.amount, 0);
-      const deliveryCharge = toNumber(order.orderDetails?.deliveryCharge, 0);
-      const currency = order.orderDetails?.currency || 'INR';
+      const deliveryCharge = toNumber(orderDetails?.deliveryCharge, 0);
+      const currency = orderDetails?.currency || 'EUR';
       const amount = totals.total + tip + deliveryCharge - giftCardTotal;
-      const cashProvided = toNumber((option as any).cashProvided, 0);
-      const moneyBack = option.id === 0 ? cashProvided - amount : 0;
-
-      const orderPaymentSummary: any = {
-        paymentProcessorId: option.id,
-        paymentMethodLabel: PAYMENT_METHOD_LABELS[option.id] || option.label,
-        amount,
-        paidAt: now,
-        tip,
-      };
-
-      if (giftCard) {
-        orderPaymentSummary.giftCard = giftCard;
-      }
-
       const localOrderId = order._id || order.id || order.orderId;
-      const tsc = order.orderDetails?.tsc;
+      const tsc = orderDetails?.tsc;
+      const orderDeliveryTypeId = Number(
+        orderDetails?.orderDeliveryTypeId ?? order?.orderDeliveryTypeId ?? 0
+      );
+      const orderType =
+        orderDetails?.orderType ||
+        (orderDeliveryTypeId === 1
+          ? 'delivery'
+          : orderDeliveryTypeId === 2
+            ? 'pickup'
+            : orderDeliveryTypeId === 3
+              ? 'kiosk'
+              : 'table');
 
-      const orderInfo: any = {
-        ...(order.orderDetails || {}),
+      const rawOrderItems = Array.isArray(orderDetails?.orderItem)
+        ? orderDetails.orderItem
+        : Array.isArray(orderDetails?.orderItems)
+          ? orderDetails.orderItems
+          : [];
+
+      const normalizedOrderItems = rawOrderItems.map((item: any) => ({
+        companyId: item.companyId ?? companyId,
+        categoryId: item.categoryId ?? item.menuCategoryId ?? item.category?.id ?? 0,
+        cartId: item.cartId,
+        categoryName: item.categoryName ?? item.menuCategoryName ?? item.category?.name ?? '',
+        menuItemId: item.menuItemId ?? item.itemId ?? item.id ?? 0,
+        itemName: item.itemName ?? item.name ?? '',
+        quantity: Math.max(toNumber(item.quantity, 1), 1),
+        unitPrice: `${item.unitPrice ?? item.itemPrice ?? item.price ?? 0}`,
+        orderItemNote: item.orderItemNote ?? item.note ?? '',
+        groupType: item.groupType ?? 0,
+        groupLabel: item.groupLabel ?? '',
+        customId: item.customId ?? item.customID ?? item.customId ?? null,
+        tax: item.tax ?? item.taxInfo ?? item.taxObj ?? null,
+        splitPaidQuantity: toNumber(item.splitPaidQuantity, 0),
+        atgPinsSale: item.atgPinsSale ?? false,
+        atgVatPercent: toNumber(item.atgVatPercent, 0),
+        atgOrderPayload: item.atgOrderPayload ?? null,
+        ...(item.orderItemVariant ? { orderItemVariant: item.orderItemVariant } : {}),
+        ...(item.orderItemVariants ? { orderItemVariants: item.orderItemVariants } : {}),
+      }));
+
+        const orderInfo: any = {
+          companyId,
+          currency,
+        isPickup: orderDetails?.isPickup ?? orderDeliveryTypeId === 2,
+        pickupDateTime: orderDetails?.pickupDateTime ?? null,
+        familyName: orderDetails?.familyName ?? '',
+        orderType,
+        isSandbox: orderDetails?.isSandbox ?? false,
+        isPriceIncludingTax: orderDetails?.isPriceIncludingTax ?? false,
+        orderTaxTotal: toNumber(orderDetails?.orderTaxTotal, 0),
+        orderCartTaxAndChargesTotal: toNumber(
+          orderDetails?.orderCartTaxAndChargesTotal,
+          0
+        ),
+        orderDeliveryTypeId,
+        orderPromoCodeDiscountTotal: toNumber(
+          orderDetails?.orderPromoCodeDiscountTotal,
+          0
+        ),
+        countryCode: orderDetails?.countryCode || userData?.countryCode || 'IN',
+        orderNotes: orderDetails?.orderNotes || '',
+        orderDiscountTotal: toNumber(orderDetails?.orderDiscountTotal, 0),
+        orderItem: normalizedOrderItems,
         orderStatusId: ORDER_STATUS.DELIVERED,
+        orderSubTotal: toNumber(orderDetails?.orderSubTotal, totals.subtotal),
+        orderTotal: toNumber(orderDetails?.orderTotal, totals.total),
+        createdAt: orderDetails?.createdAt || order?.createdAt || now,
+        count: toNumber(orderDetails?.count, 1),
+        user: orderDetails?.user || order?.user || userData || null,
+        addedBy: orderDetails?.addedBy ?? paidBy ?? null,
+        posId: orderDetails?.posId || order?.posId || '',
+        onHold: orderDetails?.onHold ?? false,
+        holdingName: orderDetails?.holdingName ?? '',
+        atgPinsPayloads: orderDetails?.atgPinsPayloads ?? [],
+        tableNo: orderDetails?.tableNo ?? null,
+        tableArea: orderDetails?.tableArea ?? null,
+        tsc: tsc ?? undefined,
+        customOrderId: orderDetails?.customOrderId || order?.customOrderId || '',
+        localOrderId,
+        reason: orderDetails?.reason ?? '',
+        isDeleted: orderDetails?.isDeleted ?? order?.isDeleted ?? false,
         updatedAt: now,
         paidAt: now,
-        isFinalBillPrint: !!option.print,
-        orderPaymentSummary,
-        tip,
-        deliveryCharge,
-        paidBy: paidBy || undefined,
-        invoiceNumber,
-        localOrderId,
-      };
+        isCorporate: orderDetails?.isCorporate ?? false,
+          isFinalBillPrint: !!option.print,
+          canceledOrderPayment: orderDetails?.canceledOrderPayment ?? 0,
+          invoiceNumber,
+          paidBy: paidBy || undefined,
+          company: orderDetails?.company || order?.company || undefined,
+          printObj: orderDetails?.printObj ?? order?.printObj ?? undefined,
+          tip,
+          deliveryCharge,
+          isTscOffline: orderDetails?.isTscOffline ?? false,
+        };
 
-      if (tsc) {
-        orderInfo.tsc = tsc;
-      }
+        orderInfo.orderPaymentSummary = { paymentProcessorId: option.id };
+
+        if (!orderInfo.isTscOffline) {
+          const tscArray = Array.isArray(orderDetails?.tsc) ? orderDetails.tsc : [];
+          let maxRevision = 0;
+          let tscGuid: string | undefined;
+
+          tscArray.forEach((item: any) => {
+            if (item?.success === true) {
+              maxRevision = Math.max(maxRevision, toNumber(item?.data?.revision, 0));
+              if (item?.data?._id) {
+                tscGuid = item.data._id;
+              }
+            }
+          });
+
+          try {
+            const tscRes = await tscService.updateTransaction({
+              _id: localOrderId,
+              customOrderId: orderInfo.customOrderId || order?.customOrderId || '',
+              orderDetails: {
+                ...orderDetails,
+                orderItem: normalizedOrderItems,
+                orderStatusId: ORDER_STATUS.DELIVERED,
+                updatedAt: now,
+                paidAt: now,
+              },
+              companyId,
+              revision: maxRevision + 1 || 1,
+              guid: tscGuid,
+              state: 'ACTIVE',
+            });
+            const tscData = tscRes?.data?.data ?? tscRes?.data ?? [];
+            const tscEntries = Array.isArray(tscData) ? tscData : [tscData].filter(Boolean);
+            const lastObj = tscEntries[tscEntries.length - 1];
+
+            if (!lastObj?.success) {
+              orderInfo.isTscOffline = true;
+              if (lastObj?.data === TSC_OFFLINE_MESSAGE) {
+                console.warn('TSC offline:', lastObj?.data);
+              }
+            } else {
+              orderInfo.tsc = [...tscArray, ...tscEntries];
+            }
+          } catch (error) {
+            console.error('Error updating TSC transaction:', error);
+            orderInfo.isTscOffline = true;
+          }
+        }
 
       if (giftCard) {
         orderInfo.giftCard = giftCard;
@@ -312,29 +454,31 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
       }
 
       const settlePayload: any = {
-        id: localOrderId,
         currency,
         paymentMethod: option.id,
         amount,
-        moneyBack,
         tip,
         deliveryCharge,
         isEditPayment: false,
         orderInfo,
-        orderPaymentSummary,
       };
 
-      if (tsc) {
-        settlePayload.tsc = tsc;
-      }
-
-      await orderService.settleOrder(order._id || order.id || order.orderId, settlePayload);
+        await orderService.settleOrder(order._id || order.id || order.orderId, settlePayload);
+        if (option?.print) {
+          emitPosPrint(orderInfo, option.id);
+        }
+        await emitOrderSync('ORDER_PAID', {
+          tableNo: orderDetails?.tableNo ?? null,
+          orderNumber: order?.customOrderId || order?._id,
+          orderDeliveryTypeId,
+        });
+      await unlockOrder(order);
       setMarking(false);
       navigation.goBack();
     } catch (err) {
       setMarking(false);
       console.error('Error settling order after payment selection:', err);
-      Alert.alert('Error', 'Unable to complete payment');
+      showToast('Unable to complete payment', { type: 'error' });
     }
   };
 
@@ -481,7 +625,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
                               style={{ color: colors.textSecondary, fontSize: 12, marginTop: 2 }}
                             >
                               • {valueQuantity} x {name}
-                              {valuePrice > 0 ? ` (+₹${valuePrice.toFixed(2)})` : ''}
+                              {valuePrice > 0 ? ` (+${formatCurrency(valuePrice)})` : ''}
                             </Text>
                           );
                         })}
@@ -509,10 +653,10 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
 
                     <View style={{ alignItems: 'flex-end', marginTop: 20 }}>
                       <Text style={{ color: colors.textSecondary, fontSize: 11 }}>
-                        ₹{itemUnitTotal.toFixed(2)} each
+                        {formatCurrency(itemUnitTotal)} each
                       </Text>
                       <Text style={{ color: colors.text, fontWeight: '800', fontSize: 15, marginTop: 2 }}>
-                        ₹{itemLineTotal.toFixed(2)}
+                        {formatCurrency(itemLineTotal)}
                       </Text>
                     </View>
                   </View>
@@ -552,7 +696,9 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
             </View>
             <View style={styles.paymentRow}>
               <Text style={{ color: colors.textSecondary }}>Total Amount</Text>
-              <Text style={{ color: colors.text, fontWeight: '700' }}>₹{totals.total.toFixed(2)}</Text>
+              <Text style={{ color: colors.text, fontWeight: '700' }}>
+                {formatCurrency(totals.total)}
+              </Text>
             </View>
             <TouchableOpacity
               onPress={() => setPaymentModalVisible(true)}
@@ -611,23 +757,31 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
         >
           <View style={styles.summaryRow}>
             <Text style={{ color: colors.textSecondary }}>Subtotal</Text>
-            <Text style={{ color: colors.text, fontWeight: '700' }}>₹{totals.subtotal.toFixed(2)}</Text>
+            <Text style={{ color: colors.text, fontWeight: '700' }}>
+              {formatCurrency(totals.subtotal)}
+            </Text>
           </View>
           {totals.tax > 0 ? (
             <View style={styles.summaryRow}>
               <Text style={{ color: colors.textSecondary }}>Tax</Text>
-              <Text style={{ color: colors.text, fontWeight: '700' }}>₹{totals.tax.toFixed(2)}</Text>
+              <Text style={{ color: colors.text, fontWeight: '700' }}>
+                {formatCurrency(totals.tax)}
+              </Text>
             </View>
           ) : null}
           {totals.discount > 0 ? (
             <View style={styles.summaryRow}>
               <Text style={{ color: colors.textSecondary }}>Discount</Text>
-              <Text style={{ color: colors.error, fontWeight: '700' }}>-₹{totals.discount.toFixed(2)}</Text>
+              <Text style={{ color: colors.error, fontWeight: '700' }}>
+                {formatCurrency(-totals.discount)}
+              </Text>
             </View>
           ) : null}
           <View style={[styles.summaryRow, { borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 8 }]}>
             <Text style={{ color: colors.text, fontWeight: '800' }}>Total</Text>
-            <Text style={{ color: colors.primary, fontWeight: '800', fontSize: 17 }}>₹{totals.total.toFixed(2)}</Text>
+            <Text style={{ color: colors.primary, fontWeight: '800', fontSize: 17 }}>
+              {formatCurrency(totals.total)}
+            </Text>
           </View>
         </View>
 
@@ -651,6 +805,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
           <TouchableOpacity
             onPress={() => {
               if (isPaid) return;
+              lockPayment(order);
               setPendingSettle(true);
               setPaymentModalVisible(true);
             }}

@@ -1,6 +1,33 @@
 import { useState, useEffect } from 'react';
-import { Order, DELIVERY_TYPE } from './useOrdersData';
+import { Order } from './useOrdersData';
 import { Settings } from './useSettings';
+
+const getActiveTableNumbers = (settings: Settings | null): number[] => {
+  const tableAreas = settings?.tableAreas;
+
+  if (Array.isArray(tableAreas) && tableAreas.length > 0) {
+    const tableNos = tableAreas.flatMap((area: any) =>
+      Array.isArray(area?.tableAreaMappings)
+        ? area.tableAreaMappings
+            .filter((mapping: any) => mapping?.isActive !== false)
+            .map((mapping: any) => Number(mapping.tableNo))
+        : []
+    );
+
+    const unique = Array.from(
+      new Set(tableNos.filter((value: number) => Number.isFinite(value)))
+    );
+
+    return unique.sort((a, b) => a - b);
+  }
+
+  const totalTables = Number(settings?.totalTables ?? 0) || 0;
+  if (totalTables > 0) {
+    return Array.from({ length: totalTables }, (_, i) => i + 1);
+  }
+
+  return [];
+};
 
 /**
  * Hook for calculating table statistics for dine-in orders
@@ -15,9 +42,19 @@ export const useTableStatistics = (dineInOrders: Order[], settings: Settings | n
    */
   const calculateTableStatuses = (dineInTableOrders: Order[]) => {
     const settingsData = settings || { totalTables: 20 };
-    const totalTables = settingsData.totalTables || 20;
+    const activeTables = getActiveTableNumbers(settingsData);
+    const activeTableSet = new Set(activeTables);
+
+    const scopedOrders = activeTables.length > 0
+      ? dineInTableOrders.filter((order) =>
+          activeTableSet.has(Number(order.orderDetails?.tableNo))
+        )
+      : dineInTableOrders;
+
     const occupiedTableNumbers = new Set(
-      dineInTableOrders.map((o) => o.orderDetails?.tableNo).filter(Boolean)
+      scopedOrders
+        .map((o) => Number(o.orderDetails?.tableNo))
+        .filter((value) => Number.isFinite(value))
     );
 
     // Booked: tables with active orders
@@ -26,7 +63,7 @@ export const useTableStatistics = (dineInOrders: Order[], settings: Settings | n
     let booked = 0;
     let semiPaid = 0;
 
-    dineInTableOrders.forEach((order) => {
+    scopedOrders.forEach((order) => {
       const total = Number(order.orderDetails?.orderTotal ?? 0) || 0;
       const paymentDetails = Array.isArray((order as any).orderDetails?.orderPaymentDetails)
         ? (order as any).orderDetails.orderPaymentDetails
@@ -44,6 +81,9 @@ export const useTableStatistics = (dineInOrders: Order[], settings: Settings | n
       }
     });
 
+    const totalTables = activeTables.length > 0
+      ? activeTables.length
+      : settingsData.totalTables || 20;
     const available = totalTables - occupiedTableNumbers.size;
 
     setAvailableTablesCount(Math.max(0, available));
