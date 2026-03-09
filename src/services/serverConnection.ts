@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import axios from 'axios';
+import axios, { AxiosError } from 'axios';
 import { API_ENDPOINTS } from '../config/apiEndpoints';
 import posIdService from './posIdService';
 
@@ -18,6 +18,7 @@ class ServerConnectionService {
     baseUrl: null,
     lastChecked: 0,
   };
+  private lastError: string | null = null;
 
   /**
    * Check if local server is reachable
@@ -25,10 +26,26 @@ class ServerConnectionService {
   async checkLocalServerConnection(baseUrl: string): Promise<boolean> {
     try {
       const testUrl = `${baseUrl}${API_ENDPOINTS.health}`;
+      this.lastError = null;
+      console.log('[LocalServer] Health check URL:', testUrl);
       const response = await axios.get(testUrl, { timeout: 3000 });
       return response.status === 200;
     } catch (error) {
-      console.log('Local server health check failed:', error);
+      const err = error as AxiosError;
+      const status = err.response?.status;
+      const statusText = err.response?.statusText;
+      const code = err.code;
+      const message = err.message;
+      const detail = [
+        status ? `status=${status}` : null,
+        statusText ? `statusText=${statusText}` : null,
+        code ? `code=${code}` : null,
+        message ? `message=${message}` : null,
+      ]
+        .filter(Boolean)
+        .join(' | ');
+      this.lastError = detail || 'unknown error';
+      console.log('[LocalServer] Health check failed:', this.lastError);
       return false;
     }
   }
@@ -109,6 +126,10 @@ class ServerConnectionService {
    */
   getServerUrl(): string | null {
     return this.connectionStatus.baseUrl;
+  }
+
+  getLastError(): string | null {
+    return this.lastError;
   }
 
   /**

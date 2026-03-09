@@ -16,12 +16,14 @@
       "supportsTablet": true
     },
     "android": {
+      "usesCleartextTraffic": true,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.aditya20121996.WaiterApp"
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -33,7 +35,10 @@
     "extra": {
       "NODE_ENV": "DEV",
       "SERVER_BASE_URL": "http://146.190.9.120:3000/",
-      "LOCAL_BASE_URL": ""
+      "LOCAL_BASE_URL": "",
+      "eas": {
+        "projectId": "7bd16601-3525-45e8-b13e-d754c32bade3"
+      }
     }
   }
 }

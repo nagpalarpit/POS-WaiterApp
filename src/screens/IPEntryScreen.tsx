@@ -16,6 +16,7 @@ export default function IPEntryScreen() {
     const [port, setPort] = useState('4000'); // Default port
     const [loading, setLoading] = useState(false);
     const [initialized, setInitialized] = useState(false);
+    const [debugInfo, setDebugInfo] = useState<string | null>(null);
     const { colors } = useTheme();
     const { showToast } = useToast();
 
@@ -49,6 +50,8 @@ export default function IPEntryScreen() {
         Keyboard.dismiss();
         const host = trimmedPort ? `http://${trimmedIp}:${trimmedPort}/` : `http://${trimmedIp}/`;
         setLoading(true);
+        setDebugInfo(`Testing: ${host}`);
+        console.log('[IPEntry] Testing connection to:', host);
 
         try {
             const success = await serverConnection.setServerUrl(host);
@@ -56,6 +59,7 @@ export default function IPEntryScreen() {
             console.log('Connection test result:', success);
 
             if (success) {
+                setDebugInfo('Connected successfully.');
                 // Also set it in localApi for direct API calls
                 await setLocalBaseUrl(host);
                 // Backward compatibility for modules still using legacy storage.
@@ -71,12 +75,15 @@ export default function IPEntryScreen() {
 
                 navigation.navigate('Login' as never);
             } else {
+                const lastError = serverConnection.getLastError();
+                setDebugInfo(lastError ? `Failed: ${lastError}` : 'Failed: unknown error');
                 showToast(
                     'Unable to reach the POS server. Please check the IP address and port are correct and try again.',
                     { type: 'error' },
                 );
             }
         } catch (err: any) {
+            setDebugInfo(err?.message ? `Error: ${err.message}` : 'Error: unknown');
             showToast(err.message || 'Unable to reach server', { type: 'error' });
         } finally {
             setLoading(false);
@@ -137,6 +144,12 @@ export default function IPEntryScreen() {
                             loading={loading}
                             className="mt-2"
                         />
+
+                        {!!debugInfo && (
+                            <Text className="text-xs mt-3" style={{ color: colors.textSecondary }}>
+                                {debugInfo}
+                            </Text>
+                        )}
                     </View>
                 </ScrollView>
             </KeyboardAvoidingView>
