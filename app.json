@@ -38,8 +38,9 @@
       "SERVER_BASE_URL": "http://146.190.9.120:3000/",
       "LOCAL_BASE_URL": "",
       "eas": {
-        "projectId": "7bd16601-3525-45e8-b13e-d754c32bade3"
+        "projectId": "109695e7-d1ce-41de-bb69-775182d1345d"
       }
-    }
+    },
+    "owner": "nagpalarpit"
   }
 }
