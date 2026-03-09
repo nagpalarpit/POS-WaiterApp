@@ -392,7 +392,9 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
           printObj: orderDetails?.printObj ?? order?.printObj ?? undefined,
           tip,
           deliveryCharge,
-          isTscOffline: orderDetails?.isTscOffline ?? false,
+        // Always allow server-side TSE generation on settle.
+        // Mobile-side TSC calls can fail even when server TSE is available.
+        isTscOffline: false,
         };
 
         orderInfo.orderPaymentSummary = { paymentProcessorId: option.id };
@@ -432,7 +434,6 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
             const lastObj = tscEntries[tscEntries.length - 1];
 
             if (!lastObj?.success) {
-              orderInfo.isTscOffline = true;
               if (lastObj?.data === TSC_OFFLINE_MESSAGE) {
                 console.warn('TSC offline:', lastObj?.data);
               }
@@ -441,7 +442,6 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
             }
           } catch (error) {
             console.error('Error updating TSC transaction:', error);
-            orderInfo.isTscOffline = true;
           }
         }
 
@@ -463,7 +463,35 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
         orderInfo,
       };
 
-        await orderService.settleOrder(order._id || order.id || order.orderId, settlePayload);
+        const settleRes = await orderService.settleOrder(
+          order._id || order.id || order.orderId,
+          settlePayload
+        );
+        const normalized = settleRes?.normalized;
+        console.log(normalized)
+        if (normalized) {
+          orderInfo.orderPaymentSummary =
+            normalized.orderPaymentSummary ?? orderInfo.orderPaymentSummary;
+          if (normalized.orderPaymentDetails) {
+            orderInfo.orderPaymentDetails = normalized.orderPaymentDetails;
+          }
+          if (normalized.paidAt) {
+            orderInfo.paidAt = normalized.paidAt;
+          }
+          if (normalized.tsc !== undefined) {
+            console.log('tsc===>',normalized.tsc)
+            orderInfo.tsc = normalized.tsc;
+          }
+          if (normalized.invoiceNumber !== undefined) {
+            orderInfo.invoiceNumber = normalized.invoiceNumber;
+          }
+          if (normalized.giftCardLogs !== undefined) {
+            orderInfo.giftCardLogs = normalized.giftCardLogs;
+          }
+          if (normalized.orderCustomerDetails !== undefined) {
+            orderInfo.orderCustomerDetails = normalized.orderCustomerDetails;
+          }
+        }
         if (option?.print) {
           emitPosPrint(orderInfo, option.id);
         }

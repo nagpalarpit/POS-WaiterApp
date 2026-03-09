@@ -54,7 +54,7 @@ export const useOrdersData = () => {
       const orders = await localDatabase.select('order', {
         where: {
           ...(companyId ? { companyId } : {}),
-          orderStatusId: { $ne: 5 },
+          orderStatusId: 1,
         },
       });
 
