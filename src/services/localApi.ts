@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import posIdService from './posIdService';
 
 const localApi: AxiosInstance = axios.create({
-  timeout: 5000,
+  timeout: 15000,
   baseURL: 'http://localhost:3000', // Default, will be set dynamically
 });
 

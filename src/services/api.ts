@@ -4,7 +4,7 @@ import { SERVER_BASE_URL } from '../config/env';
 import posIdService from './posIdService';
 
 const api: AxiosInstance = axios.create({
-  timeout: 5000,
+  timeout: 20000,
   baseURL: SERVER_BASE_URL,
 });
 

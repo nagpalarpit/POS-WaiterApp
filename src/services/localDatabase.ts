@@ -8,6 +8,60 @@ import serverConnection from './serverConnection';
  * All query paths include /api/v1 prefix as configured in local server
  */
 class LocalDatabaseService {
+  private readonly LOCAL_REQUEST_TIMEOUT_MS = 15000;
+  private readonly MAX_RETRY_COUNT = 2; // Total attempts = 3
+
+  private async sleep(ms: number): Promise<void> {
+    await new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  private isRetryableError(error: any): boolean {
+    const status = error?.response?.status;
+    const code = `${error?.code || ''}`.toUpperCase();
+    const message = `${error?.message || ''}`.toLowerCase();
+
+    return (
+      code === 'ECONNABORTED' ||
+      code === 'ETIMEDOUT' ||
+      code === 'ERR_NETWORK' ||
+      message.includes('timeout') ||
+      status === 408 ||
+      status === 429 ||
+      status === 502 ||
+      status === 503 ||
+      status === 504
+    );
+  }
+
+  private async executeWithRetry<T>(
+    operation: () => Promise<T>,
+    action: string,
+    retryCount: number = this.MAX_RETRY_COUNT
+  ): Promise<T> {
+    let lastError: any;
+
+    for (let attempt = 0; attempt <= retryCount; attempt++) {
+      try {
+        return await operation();
+      } catch (error: any) {
+        lastError = error;
+        const canRetry = this.isRetryableError(error) && attempt < retryCount;
+        if (!canRetry) break;
+
+        const delayMs = 300 * (attempt + 1);
+        console.warn(
+          `[LocalDB] ${action} failed (attempt ${attempt + 1}/${
+            retryCount + 1
+          }). Retrying in ${delayMs}ms...`,
+          error?.message || error
+        );
+        await this.sleep(delayMs);
+      }
+    }
+
+    throw lastError;
+  }
+
   /**
    * Select (Find) data from collection
    * Matches POS_V2's mongodbService.select() pattern
@@ -26,10 +80,18 @@ class LocalDatabaseService {
         throw new Error('Local server not connected');
       }
 
-      const response = await localApi.post(`/api/v1/${collection}/find`, {
-        condition,
-        attributes,
-      });
+      const response = await this.executeWithRetry(
+        () =>
+          localApi.post(
+            `/api/v1/${collection}/find`,
+            {
+              condition,
+              attributes,
+            },
+            { timeout: this.LOCAL_REQUEST_TIMEOUT_MS }
+          ),
+        `select:${collection}`
+      );
 
       // Server response format: { data: [...], status: 200, message: "Success" }
       if (response.status === 200 && response.data?.status === 200 && response.data?.data) {
@@ -56,7 +118,13 @@ class LocalDatabaseService {
         throw new Error('Local server not connected');
       }
 
-      const response = await localApi.post(`/api/v1/${collection}/create`, document);
+      const response = await this.executeWithRetry(
+        () =>
+          localApi.post(`/api/v1/${collection}/create`, document, {
+            timeout: this.LOCAL_REQUEST_TIMEOUT_MS,
+          }),
+        `insert:${collection}`
+      );
 
       // Server response format: { data: {...}, status: 200, message: "Success" }
       if (response.status === 200 && response.data?.status === 200 && response.data?.data) {
@@ -88,14 +156,22 @@ class LocalDatabaseService {
         throw new Error('Local server not connected');
       }
 
-      const response = await localApi.post(`/api/v1/${collection}/update`, {
-        newData,
-        condition,
-      });
+      const response = await this.executeWithRetry(
+        () =>
+          localApi.post(
+            `/api/v1/${collection}/update`,
+            {
+              newData,
+              condition,
+            },
+            { timeout: this.LOCAL_REQUEST_TIMEOUT_MS }
+          ),
+        `update:${collection}`
+      );
 
       // Server response format: { data: {...}, status: 200, message: "Success" }
-      if (response.status === 200 && response.data?.status === 200 && response.data?.data) {
-        return response.data.data;
+      if (response.status === 200 && response.data?.status === 200) {
+        return response.data?.data ?? response.data;
       }
 
       throw new Error(`Failed to update ${collection}: ${response.data?.message || 'Unknown error'}`);
@@ -118,9 +194,17 @@ class LocalDatabaseService {
         throw new Error('Local server not connected');
       }
 
-      const response = await localApi.post(`/api/v1/${collection}/delete`, {
-        condition: condition || {},
-      });
+      const response = await this.executeWithRetry(
+        () =>
+          localApi.post(
+            `/api/v1/${collection}/delete`,
+            {
+              condition: condition || {},
+            },
+            { timeout: this.LOCAL_REQUEST_TIMEOUT_MS }
+          ),
+        `delete:${collection}`
+      );
 
       // Server response format: { data: {...}, status: 200, message: "Success" }
       if (response.status === 200 && response.data?.status === 200) {

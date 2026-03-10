@@ -7,6 +7,8 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import Card from '../components/Card';
 import orderService from '../services/orderService';
+import localDatabase from '../services/localDatabase';
+import tscService from '../services/tscService';
 import commonFunctionService from '../services/commonFunctionService';
 import { getOrderStatusLabel, ORDER_STATUS } from '../utils/orderUtils';
 import {
@@ -22,9 +24,6 @@ import PaymentModal from '../components/PaymentModal';
 import { formatCurrency } from '../utils/currency';
 import { emitOrderSync, emitPosPrint, lockOrder, lockPayment, unlockOrder } from '../services/orderSyncService';
 import { useToast } from '../components/ToastProvider';
-import tscService from '../services/tscService';
-
-const TSC_OFFLINE_MESSAGE = 'Active TSS not found for the given POS and company.';
 
 const toNumber = (value: unknown, fallback = 0): number => {
   if (typeof value === 'number') {
@@ -38,6 +37,8 @@ const toNumber = (value: unknown, fallback = 0): number => {
 
   return fallback;
 };
+
+const round2 = (value: number): number => Number(value.toFixed(2));
 
 const normalizeAttributeValues = (values: any[] = []) => {
   return values
@@ -223,22 +224,56 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
     );
   }
 
-  const rawItems = order.orderDetails?.orderItem || [];
+  const [workingOrderDetails, setWorkingOrderDetails] = useState<any>(
+    order?.orderDetails || {}
+  );
+  const displayedOrderDetails = workingOrderDetails || order?.orderDetails || {};
+
+  const rawItems = displayedOrderDetails?.orderItem || [];
   const items = useMemo(
     () => rawItems.map((item: any, index: number) => normalizeOrderItem(item, index)),
     [rawItems]
   );
 
+  const splitPaymentItems = useMemo(
+    () =>
+      items.map((item: any, index: number) => ({
+        key: `${item.cartId || item.menuItemId || index}-${index}`,
+        name: `${item.customId ? `${item.customId}. ` : ''}${item.itemName || 'Item'}`,
+        quantity: Math.max(getCartItemQuantity(item), 0),
+        unitTotal: round2(getItemUnitTotal(item)),
+      })),
+    [items]
+  );
+
+  const remainingSplitItemUnits = useMemo(
+    () =>
+      splitPaymentItems.reduce(
+        (sum: number, item: any) => sum + Math.max(toNumber(item?.quantity, 0), 0),
+        0
+      ),
+    [splitPaymentItems]
+  );
+
+  const allowSplitOption = useMemo(() => {
+    if (displayedOrderDetails?.isSplitOrder) return false;
+    if (Array.isArray(displayedOrderDetails?.giftCardLogs) && displayedOrderDetails.giftCardLogs.length > 0) {
+      return false;
+    }
+    return splitPaymentItems.length > 1 || remainingSplitItemUnits > 1;
+  }, [displayedOrderDetails?.isSplitOrder, displayedOrderDetails?.giftCardLogs, splitPaymentItems.length, remainingSplitItemUnits]);
+
   const totals = useMemo(() => {
-    const od = order.orderDetails || {};
+    const od = displayedOrderDetails || {};
     const subtotal = Number(od.orderSubTotal ?? od.orderCartSubTotal ?? 0) || 0;
     const discount = Number(od.orderDiscountTotal ?? 0) || 0;
     const tax = Number(od.orderTaxTotal ?? od.orderCartTaxAndChargesTotal ?? 0) || 0;
     const total = Number(od.orderTotal ?? subtotal - discount + tax) || 0;
     return { subtotal, discount, tax, total };
-  }, [order]);
+  }, [displayedOrderDetails]);
 
-  const paymentProcessorId = order.orderDetails?.orderPaymentSummary?.paymentProcessorId;
+  const paymentProcessorId =
+    displayedOrderDetails?.orderPaymentSummary?.paymentProcessorId;
   const [selectedPaymentId, setSelectedPaymentId] = useState<number | null>(
     paymentProcessorId ?? null
   );
@@ -249,7 +284,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
     PAYMENT_METHOD_LABELS[selectedPaymentId ?? paymentProcessorId] || 'Not set';
   const orderStatusLabel = getOrderStatusLabel(order);
   const statusTone = getStatusTone(orderStatusLabel, colors);
-  const isPaid = order.orderDetails?.isPaid === 1;
+  const isPaid = displayedOrderDetails?.isPaid === 1;
 
   useFocusEffect(
     useCallback(() => {
@@ -268,14 +303,18 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
     };
   }, [order]);
 
+  useEffect(() => {
+    setWorkingOrderDetails(order?.orderDetails || {});
+  }, [order?._id, order?.id]);
+
   const onEdit = () => {
     editingRef.current = true;
     lockOrder(order);
     navigation.navigate('Menu', {
-      tableNo: order.orderDetails?.tableNo,
-      deliveryType: order.orderDetails?.orderDeliveryTypeId ?? 0,
+      tableNo: displayedOrderDetails?.tableNo,
+      deliveryType: displayedOrderDetails?.orderDeliveryTypeId ?? 0,
       existingOrder: order,
-      tableArea: order.orderDetails?.tableArea ?? null,
+      tableArea: displayedOrderDetails?.tableArea ?? null,
     });
   };
 
@@ -283,10 +322,11 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
     try {
       setMarking(true);
       const now = new Date().toISOString();
+      const selectedPaymentMethod = toNumber(option?.paymentMethod ?? option?.id, 0);
       const userDataStr = await AsyncStorage.getItem('userData');
       const userData = userDataStr ? JSON.parse(userDataStr) : null;
       const paidBy = Number(userData?.id || userData?.userId || 0) || null;
-      const orderDetails = order.orderDetails || {};
+      const orderDetails = displayedOrderDetails || {};
       const companyId =
         Number(order.companyId || orderDetails?.companyId || userData?.companyId || 0) ||
         0;
@@ -296,7 +336,32 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
       const giftCardTotal = toNumber(giftCard?.amount, 0);
       const deliveryCharge = toNumber(orderDetails?.deliveryCharge, 0);
       const currency = orderDetails?.currency || 'EUR';
-      const amount = totals.total + tip + deliveryCharge - giftCardTotal;
+      const defaultAmount = totals.total + tip + deliveryCharge - giftCardTotal;
+      const incomingPaymentDetails = Array.isArray(option?.orderPaymentDetails)
+        ? option.orderPaymentDetails
+            .map((detail: any) => ({
+              paymentProcessorId: toNumber(detail?.paymentProcessorId, selectedPaymentMethod),
+              paymentTotal: toNumber(detail?.paymentTotal, 0),
+            }))
+            .filter((detail: any) => detail.paymentTotal > 0)
+        : [];
+      let orderPaymentDetails =
+        incomingPaymentDetails.length > 0
+          ? incomingPaymentDetails
+          : [
+              {
+                paymentProcessorId: selectedPaymentMethod,
+                paymentTotal: toNumber(defaultAmount, 0),
+              },
+            ];
+      const splitAmount = orderPaymentDetails.reduce(
+        (sum: number, detail: any) => sum + toNumber(detail?.paymentTotal, 0),
+        0
+      );
+      let amount = splitAmount > 0 ? splitAmount : defaultAmount;
+      let orderPaymentSummary = option?.orderPaymentSummary ?? {
+        paymentProcessorId: selectedPaymentMethod,
+      };
       const localOrderId = order._id || order.id || order.orderId;
       const tsc = orderDetails?.tsc;
       const orderDeliveryTypeId = Number(
@@ -318,7 +383,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
           ? orderDetails.orderItems
           : [];
 
-      const normalizedOrderItems = rawOrderItems.map((item: any) => ({
+      let normalizedOrderItems = rawOrderItems.map((item: any) => ({
         companyId: item.companyId ?? companyId,
         categoryId: item.categoryId ?? item.menuCategoryId ?? item.category?.id ?? 0,
         cartId: item.cartId,
@@ -340,20 +405,641 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
         ...(item.orderItemVariants ? { orderItemVariants: item.orderItemVariants } : {}),
       }));
 
-        const orderInfo: any = {
+      let payableSubTotal = round2(toNumber(orderDetails?.orderSubTotal, totals.subtotal));
+      let payableDiscount = round2(toNumber(orderDetails?.orderDiscountTotal, totals.discount));
+      let payableTax = round2(
+        toNumber(
+          orderDetails?.orderTaxTotal ?? orderDetails?.orderCartTaxAndChargesTotal,
+          totals.tax
+        )
+      );
+      let payableTotal = round2(toNumber(orderDetails?.orderTotal, totals.total));
+      let payableCount = toNumber(orderDetails?.count, normalizedOrderItems.length || 1);
+      let payableDeliveryCharge = deliveryCharge;
+
+      let splitSelections = Array.isArray(option?.splitSelections)
+        ? option.splitSelections.map((qty: any) => Math.max(0, Math.floor(toNumber(qty, 0))))
+        : [];
+      let isItemSplit =
+        option?.isItemSplit === true &&
+        splitSelections.some((qty: number) => qty > 0);
+
+      const shouldFinalizeExistingSplit =
+        !isItemSplit &&
+        !!orderDetails?.isSplitOrder;
+
+      if (shouldFinalizeExistingSplit) {
+        splitSelections = normalizedOrderItems.map((item: any) =>
+          Math.max(0, Math.floor(toNumber(item?.quantity, 0)))
+        );
+        isItemSplit = splitSelections.some((qty: number) => qty > 0);
+      }
+
+      if (isItemSplit) {
+        const selectedOrderItems: any[] = [];
+        const remainingOrderItems: any[] = [];
+        let selectedSubTotal = 0;
+        let remainingSubTotal = 0;
+
+        normalizedOrderItems.forEach((item: any, index: number) => {
+          const availableQty = Math.max(Math.floor(toNumber(item.quantity, 0)), 0);
+          const selectedQty = Math.min(availableQty, splitSelections[index] || 0);
+          const remainingQty = Math.max(0, availableQty - selectedQty);
+          const unitTotal = toNumber(splitPaymentItems[index]?.unitTotal, toNumber(item.unitPrice, 0));
+
+          if (selectedQty > 0) {
+            selectedSubTotal += unitTotal * selectedQty;
+            selectedOrderItems.push({
+              ...item,
+              quantity: selectedQty,
+            });
+          }
+
+          if (remainingQty > 0) {
+            remainingSubTotal += unitTotal * remainingQty;
+            remainingOrderItems.push({
+              ...item,
+              quantity: remainingQty,
+              splitPaidQuantity: toNumber(item.splitPaidQuantity, 0) + selectedQty,
+            });
+          }
+        });
+
+        if (selectedOrderItems.length === 0) {
+          throw new Error('No items selected for split payment');
+        }
+
+        selectedSubTotal = round2(selectedSubTotal);
+        remainingSubTotal = round2(remainingSubTotal);
+
+        const baseSubTotal = round2(selectedSubTotal + remainingSubTotal);
+        const sourceSubTotal = round2(toNumber(orderDetails?.orderSubTotal, totals.subtotal));
+        const effectiveSubTotal = sourceSubTotal > 0 ? sourceSubTotal : baseSubTotal;
+        const sourceDiscount = round2(
+          toNumber(orderDetails?.orderDiscountTotal, totals.discount)
+        );
+        const sourceTax = round2(
+          toNumber(
+            orderDetails?.orderTaxTotal ?? orderDetails?.orderCartTaxAndChargesTotal,
+            totals.tax
+          )
+        );
+        const splitRatio =
+          effectiveSubTotal > 0 ? Math.min(1, selectedSubTotal / effectiveSubTotal) : 1;
+
+        const selectedDiscount = round2(sourceDiscount * splitRatio);
+        const selectedTax = round2(sourceTax * splitRatio);
+        const remainingDiscount = round2(sourceDiscount - selectedDiscount);
+        const remainingTax = round2(sourceTax - selectedTax);
+        const selectedTotal = round2(
+          Math.max(0, selectedSubTotal - selectedDiscount + selectedTax)
+        );
+        const remainingTotal = round2(
+          Math.max(0, remainingSubTotal - remainingDiscount + remainingTax)
+        );
+        const splitDeliveryCharge = remainingOrderItems.length > 0 ? 0 : deliveryCharge;
+        const splitDefaultAmount = round2(
+          Math.max(0, selectedTotal + tip + splitDeliveryCharge - giftCardTotal)
+        );
+        const splitPaymentDetails =
+          incomingPaymentDetails.length > 0
+            ? incomingPaymentDetails
+            : [
+                {
+                  paymentProcessorId: selectedPaymentMethod,
+                  paymentTotal: splitDefaultAmount,
+                },
+              ];
+        const splitPaymentSummary = option?.orderPaymentSummary ?? {
+          paymentProcessorId: selectedPaymentMethod,
+        };
+        const splitAmount = round2(
+          splitPaymentDetails.reduce(
+            (sum: number, detail: any) => sum + toNumber(detail?.paymentTotal, 0),
+            0
+          ) || splitDefaultAmount
+        );
+        const splitOrderInfo: any = {
           companyId,
           currency,
+          isPickup: orderDetails?.isPickup ?? orderDeliveryTypeId === 2,
+          pickupDateTime: orderDetails?.pickupDateTime ?? null,
+          familyName: orderDetails?.familyName ?? '',
+          orderType,
+          isSandbox: orderDetails?.isSandbox ?? false,
+          isPriceIncludingTax: orderDetails?.isPriceIncludingTax ?? false,
+          orderTaxTotal: selectedTax,
+          orderCartTaxAndChargesTotal: selectedTax,
+          orderDeliveryTypeId,
+          orderPromoCodeDiscountTotal: toNumber(
+            orderDetails?.orderPromoCodeDiscountTotal,
+            0
+          ),
+          countryCode: orderDetails?.countryCode || userData?.countryCode || 'IN',
+          orderNotes: orderDetails?.orderNotes || '',
+          orderDiscountTotal: selectedDiscount,
+          orderItem: selectedOrderItems,
+          orderStatusId: ORDER_STATUS.DELIVERED,
+          orderSubTotal: selectedSubTotal,
+          orderTotal: selectedTotal,
+          createdAt: orderDetails?.createdAt || order?.createdAt || now,
+          count: selectedOrderItems.length,
+          user: orderDetails?.user || order?.user || userData || null,
+          addedBy: orderDetails?.addedBy ?? paidBy ?? null,
+          posId: orderDetails?.posId || order?.posId || '',
+          onHold: false,
+          holdingName: '',
+          atgPinsPayloads: orderDetails?.atgPinsPayloads ?? [],
+          tableNo: orderDetails?.tableNo ?? null,
+          tableArea: orderDetails?.tableArea ?? null,
+          tsc: tsc ?? undefined,
+          customOrderId: orderDetails?.customOrderId || order?.customOrderId || '',
+          parentLocalOrderId: localOrderId,
+          reason: orderDetails?.reason ?? '',
+          isDeleted: false,
+          updatedAt: now,
+          paidAt: now,
+          isCorporate: orderDetails?.isCorporate ?? false,
+          isFinalBillPrint: !!option.print,
+          canceledOrderPayment: 0,
+          invoiceNumber,
+          paidBy: paidBy || undefined,
+          company: orderDetails?.company || order?.company || undefined,
+          printObj: orderDetails?.printObj ?? order?.printObj ?? undefined,
+          paymentMethod: selectedPaymentMethod,
+          orderPaymentSummary: splitPaymentSummary,
+          orderPaymentDetails: splitPaymentDetails,
+          tip,
+          deliveryCharge: splitDeliveryCharge,
+          isSplitOrder: true,
+        };
+
+        if (giftCard) {
+          splitOrderInfo.giftCard = giftCard;
+          splitOrderInfo.appliedGiftCard = giftCard;
+          splitOrderInfo.giftCardTotal = giftCardTotal;
+          splitOrderInfo.isfullPaidWithGiftCard =
+            giftCardTotal > 0 && Math.abs(selectedTotal - giftCardTotal) < 0.01;
+        }
+
+        const splitSettlePayload: any = {
+          currency,
+          paymentMethod: selectedPaymentMethod,
+          amount: splitAmount,
+          tip,
+          deliveryCharge: splitDeliveryCharge,
+          isEditPayment: false,
+          orderInfo: splitOrderInfo,
+        };
+
+        try {
+          const tscStartPayload: any = {
+            orderStatusId: ORDER_STATUS.DELIVERED,
+            orderDetails: { ...splitOrderInfo },
+            companyId,
+            parentLocalOrderId: localOrderId,
+            revision: 1,
+          };
+          const tscStartRes: any = await tscService.startTransaction(tscStartPayload);
+          const rawTscData = tscStartRes?.data?.data ?? tscStartRes?.data ?? [];
+          const tscData = Array.isArray(rawTscData)
+            ? rawTscData
+            : [rawTscData].filter(Boolean);
+          const lastObj = tscData[tscData.length - 1];
+
+          if (!lastObj?.success) {
+            splitOrderInfo.isTscOffline = true;
+          } else {
+            const filteredTscData = tscData
+              .filter((item: any) => item?.data?.state === 'FINISHED')
+              .reduce(
+                (acc: any, item: any) => {
+                  const isReceipt =
+                    item?.data?.schema?.standard_v1?.receipt?.receipt_type ===
+                    'RECEIPT';
+                  if (isReceipt) {
+                    acc.receipt = { ...item.data, success: item.success };
+                  } else {
+                    acc.order = { ...item.data, success: item.success };
+                  }
+                  return acc;
+                },
+                { order: null, receipt: null }
+              );
+            splitOrderInfo.tsc = filteredTscData;
+          }
+        } catch (tscErr) {
+          console.warn('startNewTransaction failed for split order:', tscErr);
+          splitOrderInfo.isTscOffline = true;
+        }
+
+        const splitCreatePayload: any = {
+          orderStatusId: ORDER_STATUS.DELIVERED,
+          orderDetails: splitOrderInfo,
+          companyId,
+          settleInfo: splitSettlePayload,
+          parentLocalOrderId: localOrderId,
+        };
+
+        const createdSplitOrder = await orderService.createOrder(splitCreatePayload);
+        const createdSplitOrderId =
+          createdSplitOrder?._id ||
+          createdSplitOrder?.id ||
+          createdSplitOrder?.orderId ||
+          createdSplitOrder?.localOrderId;
+        const splitOrderForPrint = {
+          ...splitOrderInfo,
+          localOrderId: createdSplitOrderId || undefined,
+          customOrderId: createdSplitOrder?.customOrderId || splitOrderInfo.customOrderId,
+        };
+
+        if (remainingOrderItems.length > 0) {
+          const remainingOrderDetails: any = {
+            ...orderDetails,
+            orderItem: remainingOrderItems,
+            orderStatusId: ORDER_STATUS.PENDING,
+            orderSubTotal: remainingSubTotal,
+            orderTotal: remainingTotal,
+            orderDiscountTotal: remainingDiscount,
+            orderTaxTotal: remainingTax,
+            orderCartTaxAndChargesTotal: remainingTax,
+            orderPaymentSummary: { paymentProcessorId: 3 },
+            paymentMethod: 3,
+            count: remainingOrderItems.length,
+            isSplitOrder: true,
+            updatedAt: now,
+            tip: 0,
+            isPaid: 0,
+            deliveryCharge,
+          };
+
+          await orderService.updateOrder(`${localOrderId}`, {
+            orderStatusId: ORDER_STATUS.PENDING,
+            orderDetails: remainingOrderDetails,
+            settleInfo: {
+              ...splitSettlePayload,
+              splitLog: true,
+            },
+          });
+
+          if (option?.print) {
+            emitPosPrint(splitOrderForPrint, selectedPaymentMethod);
+          }
+
+          await emitOrderSync('ORDER_UPDATED', {
+            tableNo: orderDetails?.tableNo ?? null,
+            orderNumber: order?.customOrderId || order?._id,
+            orderDeliveryTypeId,
+          });
+
+          setWorkingOrderDetails(remainingOrderDetails);
+          const paidItemQty = selectedOrderItems.reduce(
+            (sum: number, item: any) => sum + toNumber(item?.quantity, 0),
+            0
+          );
+          showToast(
+            `Split payment saved (${paidItemQty} item${paidItemQty === 1 ? '' : 's'} paid)`,
+            { type: 'success' }
+          );
+          setMarking(false);
+          return { keepModalOpen: true };
+        }
+
+        const splitOrdersFromDb = await localDatabase.select('order', {
+          where: {
+            parentLocalOrderId: localOrderId,
+          },
+        });
+        const splitOrders = Array.isArray(splitOrdersFromDb)
+          ? [...splitOrdersFromDb]
+          : [];
+        if (
+          createdSplitOrderId &&
+          !splitOrders.some(
+            (splitOrder: any) =>
+              `${splitOrder?._id || splitOrder?.id || ''}` ===
+              `${createdSplitOrderId}`
+          )
+        ) {
+          splitOrders.push({
+            ...(createdSplitOrder || {}),
+            _id: createdSplitOrderId,
+            parentLocalOrderId: localOrderId,
+            orderDetails: splitOrderInfo,
+          });
+        }
+
+        const itemMap = new Map<string, any>();
+        let mainOrderSubTotal = 0;
+        let mainOrderTotal = 0;
+        let mainOrderDiscount = 0;
+        let mainOrderTax = 0;
+        let finalOrderTip = 0;
+        let finalOrderDeliveryCharge = 0;
+
+        splitOrders.forEach((splitOrder: any, index: number) => {
+          const details = splitOrder?.orderDetails || {};
+          mainOrderSubTotal += toNumber(details.orderSubTotal, 0);
+          mainOrderTotal += toNumber(details.orderTotal, 0);
+          mainOrderDiscount += toNumber(details.orderDiscountTotal, 0);
+          mainOrderTax += toNumber(
+            details.orderTaxTotal ?? details.orderCartTaxAndChargesTotal,
+            0
+          );
+          finalOrderTip += toNumber(details.tip, 0);
+          finalOrderDeliveryCharge += toNumber(details.deliveryCharge, 0);
+
+          const splitItems = Array.isArray(details.orderItem) ? details.orderItem : [];
+          splitItems.forEach((splitItem: any, itemIndex: number) => {
+            const key =
+              splitItem?.cartId ||
+              `${splitItem?.menuItemId || splitItem?.itemName || 'item'}-${index}-${itemIndex}`;
+            if (itemMap.has(key)) {
+              const existing = itemMap.get(key);
+              existing.quantity = toNumber(existing.quantity, 0) + toNumber(splitItem.quantity, 0);
+              delete existing.splitPaidQuantity;
+            } else {
+              const cloned = { ...splitItem };
+              delete cloned.splitPaidQuantity;
+              itemMap.set(key, cloned);
+            }
+          });
+        });
+
+        const mergedOrderItems = Array.from(itemMap.values());
+        const mainOrderInvoiceNumber =
+          (await commonFunctionService.generateInvoice(companyId)) || invoiceNumber;
+        const finalizedMainOrderInfo: any = {
+          ...orderDetails,
+          orderItem: mergedOrderItems,
+          orderSubTotal: round2(mainOrderSubTotal),
+          orderTotal: round2(mainOrderTotal),
+          orderDiscountTotal: round2(mainOrderDiscount),
+          orderTaxTotal: round2(mainOrderTax),
+          orderCartTaxAndChargesTotal: round2(mainOrderTax),
+          orderStatusId: ORDER_STATUS.DELIVERED,
+          updatedAt: now,
+          paidAt: now,
+          tip: round2(finalOrderTip),
+          deliveryCharge: round2(finalOrderDeliveryCharge),
+          count: mergedOrderItems.length || toNumber(orderDetails?.count, 1),
+          isSplitOrder: true,
+          isPaid: 1,
+          localOrderId,
+          customOrderId: order?.customOrderId || orderDetails?.customOrderId,
+          parentLocalOrderId: undefined,
+          invoiceNumber: mainOrderInvoiceNumber,
+          paidBy: paidBy || undefined,
+          orderPaymentSummary: {
+            paymentProcessorId: 3,
+          },
+        };
+
+        const bulkOrdersObj: any[] = splitOrders.map((splitOrder: any) => {
+          const details = splitOrder?.orderDetails || {};
+          const paymentMethod = toNumber(
+            details?.paymentMethod ??
+              details?.orderPaymentSummary?.paymentProcessorId,
+            selectedPaymentMethod
+          );
+          const splitLocalOrderId =
+            splitOrder?._id || splitOrder?.id || details?.localOrderId;
+
+          return {
+            currency: details?.currency || currency,
+            paymentMethod,
+            amount: toNumber(details?.orderTotal, 0),
+            moneyBack: 0,
+            tip: toNumber(details?.tip, 0),
+            deliveryCharge: toNumber(details?.deliveryCharge, 0),
+            orderInfo: {
+              orderStatusId: ORDER_STATUS.DELIVERED,
+              ...details,
+              updatedAt: now,
+              localOrderId: splitLocalOrderId,
+              parentLocalOrderId: splitOrder?.parentLocalOrderId || localOrderId,
+              customOrderId: splitOrder?.customOrderId || details?.customOrderId,
+            },
+          };
+        });
+
+        const mainSettleObj = {
+          currency,
+          paymentMethod: selectedPaymentMethod,
+          amount: round2(mainOrderTotal),
+          moneyBack: 0,
+          tip: round2(finalOrderTip),
+          deliveryCharge: round2(finalOrderDeliveryCharge),
+          orderInfo: {
+            ...finalizedMainOrderInfo,
+            localOrderId,
+            customOrderId: order?.customOrderId || orderDetails?.customOrderId,
+            paymentMethod: selectedPaymentMethod,
+            orderPaymentDetails: [
+              {
+                paymentProcessorId: selectedPaymentMethod,
+                paymentTotal: round2(mainOrderTotal),
+              },
+            ],
+            orderPaymentSummary: {
+              paymentProcessorId: selectedPaymentMethod,
+            },
+          },
+        };
+
+        bulkOrdersObj.push({
+          ...mainSettleObj,
+          isOrderPaid: isPaid,
+        });
+
+        await orderService.updateOrder(`${localOrderId}`, {
+          orderStatusId: ORDER_STATUS.DELIVERED,
+          orderDetails: finalizedMainOrderInfo,
+          settleInfo: {
+            ...mainSettleObj,
+            splitLog: true,
+          },
+        });
+
+        try {
+          const bulkSettleRes: any = await orderService.settleBulkOrder(bulkOrdersObj);
+          const bulkSettleRows = Array.isArray(bulkSettleRes?.data)
+            ? bulkSettleRes.data
+            : Array.isArray(bulkSettleRes?.data?.data)
+              ? bulkSettleRes.data.data
+              : Array.isArray(bulkSettleRes)
+                ? bulkSettleRes
+                : [];
+
+          if (bulkSettleRows.length > 0) {
+            const localOrdersToUpdate = new Map<string, any>();
+
+            splitOrders.forEach((splitOrder: any) => {
+              const splitId =
+                splitOrder?._id ||
+                splitOrder?.id ||
+                splitOrder?.orderDetails?.localOrderId;
+              if (splitId !== undefined && splitId !== null && `${splitId}` !== '') {
+                localOrdersToUpdate.set(`${splitId}`, splitOrder);
+              }
+            });
+
+            if (localOrderId !== undefined && localOrderId !== null && `${localOrderId}` !== '') {
+              localOrdersToUpdate.set(`${localOrderId}`, {
+                _id: localOrderId,
+                id: order?.id,
+                customOrderId: order?.customOrderId || orderDetails?.customOrderId,
+                orderDetails: finalizedMainOrderInfo,
+                settleInfo: {
+                  ...mainSettleObj,
+                  splitLog: true,
+                },
+              });
+            }
+
+            const bulkRowByLocalId = new Map<string, any>();
+            bulkSettleRows.forEach((row: any) => {
+              const localIdCandidates = [
+                row?.dataValues?.localOrderId,
+                row?.localOrderId,
+                row?.orderInfo?.localOrderId,
+                row?.orderDetails?.localOrderId,
+                row?.data?.localOrderId,
+                row?.data?.dataValues?.localOrderId,
+              ];
+
+              localIdCandidates.forEach((candidateId) => {
+                if (
+                  candidateId !== undefined &&
+                  candidateId !== null &&
+                  `${candidateId}` !== ''
+                ) {
+                  bulkRowByLocalId.set(`${candidateId}`, row);
+                }
+              });
+            });
+
+            const localOrderUpdateTasks: Promise<any>[] = [];
+
+            localOrdersToUpdate.forEach((localOrderRecord: any, currentLocalId: string) => {
+              const settledRow = bulkRowByLocalId.get(currentLocalId);
+              const existingOrderDetails = localOrderRecord?.orderDetails || {};
+              const settledDataValues =
+                settledRow?.dataValues ??
+                settledRow?.data?.dataValues ??
+                settledRow?.data ??
+                {};
+              const updatedPaidAt =
+                settledDataValues?.paidAt ??
+                settledRow?.paidAt ??
+                existingOrderDetails?.paidAt ??
+                now;
+              const updatedOrderDetails: any = {
+                ...existingOrderDetails,
+                orderStatusId: ORDER_STATUS.DELIVERED,
+                updatedAt: now,
+                paidAt: updatedPaidAt,
+                localOrderId: currentLocalId,
+                parentLocalOrderId:
+                  localOrderRecord?.parentLocalOrderId ??
+                  existingOrderDetails?.parentLocalOrderId,
+                isTscOffline:
+                  settledRow?.isTscOffline ??
+                  settledDataValues?.isTscOffline ??
+                  existingOrderDetails?.isTscOffline,
+                tsc:
+                  settledRow?.tsc ??
+                  settledDataValues?.tsc ??
+                  existingOrderDetails?.tsc,
+                orderPaymentSummary:
+                  settledRow?.orderPaymentSummary ??
+                  settledDataValues?.orderPaymentSummary ??
+                  existingOrderDetails?.orderPaymentSummary,
+                orderPaymentDetails:
+                  settledRow?.orderPaymentDetails ??
+                  settledDataValues?.orderPaymentDetails ??
+                  existingOrderDetails?.orderPaymentDetails,
+                giftCardLogs:
+                  settledRow?.giftCardLogs ??
+                  settledDataValues?.giftCardLogs ??
+                  existingOrderDetails?.giftCardLogs ??
+                  null,
+                orderCustomerDetails:
+                  settledRow?.orderCustomerDetails ??
+                  settledDataValues?.orderCustomerDetails ??
+                  existingOrderDetails?.orderCustomerDetails,
+                invoiceNumber:
+                  settledDataValues?.invoiceNumber ??
+                  settledRow?.invoiceNumber ??
+                  existingOrderDetails?.invoiceNumber,
+              };
+
+              if (!updatedOrderDetails?.parentLocalOrderId) {
+                delete updatedOrderDetails.parentLocalOrderId;
+              }
+
+              const updatedSettleInfo = {
+                ...(localOrderRecord?.settleInfo || {}),
+                splitLog: true,
+                orderInfo: {
+                  ...(localOrderRecord?.settleInfo?.orderInfo || {}),
+                  ...updatedOrderDetails,
+                  isSynced: true,
+                  localOrderId: currentLocalId,
+                  parentLocalOrderId:
+                    localOrderRecord?.parentLocalOrderId || undefined,
+                  customOrderId:
+                    localOrderRecord?.customOrderId ||
+                    updatedOrderDetails?.customOrderId,
+                },
+              };
+
+              localOrderUpdateTasks.push(
+                orderService.updateOrder(currentLocalId, {
+                  orderStatusId: ORDER_STATUS.DELIVERED,
+                  isSynced: true,
+                  orderDetails: updatedOrderDetails,
+                  settleInfo: updatedSettleInfo,
+                })
+              );
+            });
+
+            if (localOrderUpdateTasks.length > 0) {
+              await Promise.all(localOrderUpdateTasks);
+            }
+          }
+        } catch (bulkErr) {
+          console.warn('settleBulkOrder failed; orders kept local for sync:', bulkErr);
+        }
+
+        if (option?.print) {
+          emitPosPrint(splitOrderForPrint, selectedPaymentMethod);
+        }
+
+        await emitOrderSync('ORDER_PAID', {
+          tableNo: orderDetails?.tableNo ?? null,
+          orderNumber: order?.customOrderId || order?._id,
+          orderDeliveryTypeId,
+        });
+
+        showToast('Split payment completed', { type: 'success' });
+        await unlockOrder(order);
+        setMarking(false);
+        navigation.goBack();
+        return { keepModalOpen: false };
+      }
+
+      const orderInfo: any = {
+        companyId,
+        currency,
         isPickup: orderDetails?.isPickup ?? orderDeliveryTypeId === 2,
         pickupDateTime: orderDetails?.pickupDateTime ?? null,
         familyName: orderDetails?.familyName ?? '',
         orderType,
         isSandbox: orderDetails?.isSandbox ?? false,
         isPriceIncludingTax: orderDetails?.isPriceIncludingTax ?? false,
-        orderTaxTotal: toNumber(orderDetails?.orderTaxTotal, 0),
-        orderCartTaxAndChargesTotal: toNumber(
-          orderDetails?.orderCartTaxAndChargesTotal,
-          0
-        ),
+        orderTaxTotal: payableTax,
+        orderCartTaxAndChargesTotal: payableTax,
         orderDeliveryTypeId,
         orderPromoCodeDiscountTotal: toNumber(
           orderDetails?.orderPromoCodeDiscountTotal,
@@ -361,13 +1047,13 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
         ),
         countryCode: orderDetails?.countryCode || userData?.countryCode || 'IN',
         orderNotes: orderDetails?.orderNotes || '',
-        orderDiscountTotal: toNumber(orderDetails?.orderDiscountTotal, 0),
+        orderDiscountTotal: payableDiscount,
         orderItem: normalizedOrderItems,
         orderStatusId: ORDER_STATUS.DELIVERED,
-        orderSubTotal: toNumber(orderDetails?.orderSubTotal, totals.subtotal),
-        orderTotal: toNumber(orderDetails?.orderTotal, totals.total),
+        orderSubTotal: payableSubTotal,
+        orderTotal: payableTotal,
         createdAt: orderDetails?.createdAt || order?.createdAt || now,
-        count: toNumber(orderDetails?.count, 1),
+        count: payableCount,
         user: orderDetails?.user || order?.user || userData || null,
         addedBy: orderDetails?.addedBy ?? paidBy ?? null,
         posId: orderDetails?.posId || order?.posId || '',
@@ -384,66 +1070,20 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
         updatedAt: now,
         paidAt: now,
         isCorporate: orderDetails?.isCorporate ?? false,
-          isFinalBillPrint: !!option.print,
-          canceledOrderPayment: orderDetails?.canceledOrderPayment ?? 0,
-          invoiceNumber,
-          paidBy: paidBy || undefined,
-          company: orderDetails?.company || order?.company || undefined,
-          printObj: orderDetails?.printObj ?? order?.printObj ?? undefined,
-          tip,
-          deliveryCharge,
-        // Always allow server-side TSE generation on settle.
-        // Mobile-side TSC calls can fail even when server TSE is available.
-        isTscOffline: false,
-        };
+        isSplitOrder: isItemSplit || orderDetails?.isSplitOrder || false,
+        isFinalBillPrint: !!option.print,
+        canceledOrderPayment: orderDetails?.canceledOrderPayment ?? 0,
+        invoiceNumber,
+        paidBy: paidBy || undefined,
+        company: orderDetails?.company || order?.company || undefined,
+        printObj: orderDetails?.printObj ?? order?.printObj ?? undefined,
+        paymentMethod: selectedPaymentMethod,
+        tip,
+        deliveryCharge: payableDeliveryCharge,
+      };
 
-        orderInfo.orderPaymentSummary = { paymentProcessorId: option.id };
-
-        if (!orderInfo.isTscOffline) {
-          const tscArray = Array.isArray(orderDetails?.tsc) ? orderDetails.tsc : [];
-          let maxRevision = 0;
-          let tscGuid: string | undefined;
-
-          tscArray.forEach((item: any) => {
-            if (item?.success === true) {
-              maxRevision = Math.max(maxRevision, toNumber(item?.data?.revision, 0));
-              if (item?.data?._id) {
-                tscGuid = item.data._id;
-              }
-            }
-          });
-
-          try {
-            const tscRes = await tscService.updateTransaction({
-              _id: localOrderId,
-              customOrderId: orderInfo.customOrderId || order?.customOrderId || '',
-              orderDetails: {
-                ...orderDetails,
-                orderItem: normalizedOrderItems,
-                orderStatusId: ORDER_STATUS.DELIVERED,
-                updatedAt: now,
-                paidAt: now,
-              },
-              companyId,
-              revision: maxRevision + 1 || 1,
-              guid: tscGuid,
-              state: 'ACTIVE',
-            });
-            const tscData = tscRes?.data?.data ?? tscRes?.data ?? [];
-            const tscEntries = Array.isArray(tscData) ? tscData : [tscData].filter(Boolean);
-            const lastObj = tscEntries[tscEntries.length - 1];
-
-            if (!lastObj?.success) {
-              if (lastObj?.data === TSC_OFFLINE_MESSAGE) {
-                console.warn('TSC offline:', lastObj?.data);
-              }
-            } else {
-              orderInfo.tsc = [...tscArray, ...tscEntries];
-            }
-          } catch (error) {
-            console.error('Error updating TSC transaction:', error);
-          }
-        }
+      orderInfo.orderPaymentSummary = orderPaymentSummary;
+      orderInfo.orderPaymentDetails = orderPaymentDetails;
 
       if (giftCard) {
         orderInfo.giftCard = giftCard;
@@ -455,10 +1095,10 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
 
       const settlePayload: any = {
         currency,
-        paymentMethod: option.id,
+        paymentMethod: selectedPaymentMethod,
         amount,
         tip,
-        deliveryCharge,
+        deliveryCharge: payableDeliveryCharge,
         isEditPayment: false,
         orderInfo,
       };
@@ -493,7 +1133,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
           }
         }
         if (option?.print) {
-          emitPosPrint(orderInfo, option.id);
+          emitPosPrint(orderInfo, selectedPaymentMethod);
         }
         await emitOrderSync('ORDER_PAID', {
           tableNo: orderDetails?.tableNo ?? null,
@@ -503,10 +1143,12 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
       await unlockOrder(order);
       setMarking(false);
       navigation.goBack();
+      return { keepModalOpen: false };
     } catch (err) {
       setMarking(false);
       console.error('Error settling order after payment selection:', err);
       showToast('Unable to complete payment', { type: 'error' });
+      return { keepModalOpen: false };
     }
   };
 
@@ -546,10 +1188,10 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
               ]}
             >
               <MaterialCommunityIcons name="silverware-fork-knife" size={14} color={colors.textSecondary} />
-              <Text style={{ color: colors.textSecondary, fontSize: 11, marginLeft: 4 }}>
-                {getOrderTypeLabel(order.orderDetails?.orderDeliveryTypeId ?? 0, order.orderDetails?.tableNo)}
-              </Text>
-            </View>
+                <Text style={{ color: colors.textSecondary, fontSize: 11, marginLeft: 4 }}>
+                  {getOrderTypeLabel(displayedOrderDetails?.orderDeliveryTypeId ?? 0, displayedOrderDetails?.tableNo)}
+                </Text>
+              </View>
             <View
               style={[
                 styles.metaChip,
@@ -558,7 +1200,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
             >
               <MaterialCommunityIcons name="clock-outline" size={14} color={colors.textSecondary} />
               <Text numberOfLines={1} style={{ color: colors.textSecondary, fontSize: 11, marginLeft: 4 }}>
-                {formatTimestamp(order.createdAt || order.orderDetails?.createdAt)}
+                {formatTimestamp(order.createdAt || displayedOrderDetails?.createdAt)}
               </Text>
             </View>
           </View>
@@ -696,7 +1338,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
           <Card style={{ padding: 12, borderColor: colors.border }}>
             <Text style={{ color: colors.text, fontWeight: '700', marginBottom: 8 }}>Order Note</Text>
             <Text style={{ color: colors.textSecondary }}>
-              {order.orderDetails?.orderNotes || 'No order note added.'}
+              {displayedOrderDetails?.orderNotes || 'No order note added.'}
             </Text>
 
             <View style={{ marginTop: 12, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 10 }}>
@@ -754,14 +1396,28 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
           setPendingSettle(false);
         }}
         onSelect={async (option: any) => {
-          setSelectedPaymentId(option.id);
-          setPaymentModalVisible(false);
-
+          setSelectedPaymentId(
+            toNumber(option?.paymentMethod ?? option?.id, 0)
+          );
           if (!pendingSettle) return;
+
+          const isSplitSelection = option?.isItemSplit === true;
+          if (!isSplitSelection) {
+            setPaymentModalVisible(false);
+          }
+
+          const settleResult = await settleOrderWithPayment(option);
+          if (isSplitSelection && settleResult?.keepModalOpen) {
+            setPaymentModalVisible(true);
+            setPendingSettle(true);
+            return;
+          }
+
           setPendingSettle(false);
-          await settleOrderWithPayment(option);
         }}
         orderTotal={totals.total}
+        splitItems={splitPaymentItems}
+        allowSplitOption={allowSplitOption}
       />
 
       <View

@@ -32,6 +32,7 @@ export const API_ENDPOINTS = {
     UPDATE: `${API_V1}admin/order/edit`,
     DELETE: `${API_V1}admin/order/delete`,
     SETTLE: `${API_V1}admin/order/settleOrder`,
+    SETTLE_BULK: `${API_V1}admin/order/settleBulkOrder`,
   },
 
   // Menu (Cloud)
