@@ -253,7 +253,6 @@ export const useOrderSubmit = (
           posId,
           onHold: existingDetails?.onHold ?? false,
           holdingName: existingDetails?.holdingName ?? '',
-          isSplitOrder: existingDetails?.isSplitOrder ?? false,
           tableNo:
             deliveryType === 0
               ? tableNo
@@ -264,6 +263,9 @@ export const useOrderSubmit = (
               : null,
           updatedAt: now,
         };
+        if (existingDetails?.isSplitOrder) {
+          orderDetails.isSplitOrder = true;
+        }
 
         const settleInfo: any = {
           ...orderDetails,
@@ -391,7 +393,6 @@ export const useOrderSubmit = (
         posId: posIdService.getPosId() || '',
         onHold: false,
         holdingName: '',
-        isSplitOrder: false,
       };
 
       if (deliveryType === 0) {

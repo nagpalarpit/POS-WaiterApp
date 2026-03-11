@@ -82,7 +82,7 @@ export const MenuItemCard: React.FC<MenuItemCardProps> = ({
           </Text>
         </View>
 
-        {hasVariants ? (
+        {/* {hasVariants ? (
           <View
             style={{
               borderWidth: 1,
@@ -96,7 +96,7 @@ export const MenuItemCard: React.FC<MenuItemCardProps> = ({
           >
             <Text style={{ color: colors.textSecondary, fontSize: 10, fontWeight: '700' }}>CUSTOMIZE</Text>
           </View>
-        ) : null}
+        ) : null} */}
 
         <TouchableOpacity
           onPress={() => onAddToCart(item)}

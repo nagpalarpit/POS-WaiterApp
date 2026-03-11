@@ -1,9 +1,17 @@
 import { io, Socket } from 'socket.io-client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { SERVER_BASE_URL } from '../config/env';
 import serverConnection from './serverConnection';
 import posIdService from './posIdService';
 
 let socket: Socket | null = null;
+const CLOUD_BASE_URL_KEY = 'SERVER_BASE_URL';
+
+const getCloudBaseUrl = async (): Promise<string> => {
+  const stored = await AsyncStorage.getItem(CLOUD_BASE_URL_KEY);
+  const base = stored || SERVER_BASE_URL || '';
+  return base.trim();
+};
 
 /**
  * Initialize socket connection for local server
@@ -75,7 +83,7 @@ export const initCloudSocket = async () => {
       socket = null;
     }
 
-    const cloudBaseUrl = process.env.REACT_APP_SERVER_BASE_URL || '';
+    const cloudBaseUrl = await getCloudBaseUrl();
 
     if (!cloudBaseUrl) {
       console.log('No cloud server URL configured');
@@ -141,4 +149,3 @@ export const disconnectSocket = () => {
     socket = null;
   }
 };
-

@@ -1070,7 +1070,6 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
         updatedAt: now,
         paidAt: now,
         isCorporate: orderDetails?.isCorporate ?? false,
-        isSplitOrder: isItemSplit || orderDetails?.isSplitOrder || false,
         isFinalBillPrint: !!option.print,
         canceledOrderPayment: orderDetails?.canceledOrderPayment ?? 0,
         invoiceNumber,
@@ -1081,6 +1080,9 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
         tip,
         deliveryCharge: payableDeliveryCharge,
       };
+      if (isItemSplit || orderDetails?.isSplitOrder) {
+        orderInfo.isSplitOrder = true;
+      }
 
       orderInfo.orderPaymentSummary = orderPaymentSummary;
       orderInfo.orderPaymentDetails = orderPaymentDetails;

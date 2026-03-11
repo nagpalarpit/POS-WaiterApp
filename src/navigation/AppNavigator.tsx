@@ -14,6 +14,8 @@ import MenuScreen from '../screens/MenuScreen';
 import CheckoutScreen from '../screens/CheckoutScreen';
 import OrderDetailsScreen from '../screens/OrderDetailsScreen';
 import serverConnection from '../services/serverConnection';
+import authService from '../services/authService';
+import posIdService from '../services/posIdService';
 import { useTheme } from '../theme/ThemeProvider';
 import { useToast } from '../components/ToastProvider';
 
@@ -74,6 +76,7 @@ function CustomDrawerContent(props: DrawerContentComponentProps) {
   const { colors } = useTheme();
   const [isOnline, setIsOnline] = useState(serverConnection.isConnected());
   const [updatingConnection, setUpdatingConnection] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [drawerUser, setDrawerUser] = useState<DrawerUser>({
     displayName: 'Waiter',
     subtitle: 'POS Waiter App',
@@ -151,6 +154,35 @@ function CustomDrawerContent(props: DrawerContentComponentProps) {
       showToast('There was an issue updating server connection status.', { type: 'error' });
     } finally {
       setUpdatingConnection(false);
+    }
+  };
+
+  const clearWebStorage = () => {
+    try {
+      const anyGlobal = globalThis as any;
+      if (anyGlobal?.localStorage?.clear) anyGlobal.localStorage.clear();
+      if (anyGlobal?.sessionStorage?.clear) anyGlobal.sessionStorage.clear();
+    } catch (_) {}
+  };
+
+  const handleLogout = async () => {
+    if (isLoggingOut) return;
+    setIsLoggingOut(true);
+    try {
+      await authService.logout();
+      await posIdService.clearPosId();
+      await serverConnection.disconnect();
+      await AsyncStorage.clear();
+      clearWebStorage();
+    } catch (error) {
+      showToast('Unable to logout. Please try again.', { type: 'error' });
+    } finally {
+      setIsLoggingOut(false);
+      props.navigation.closeDrawer();
+      props.navigation.reset({
+        index: 0,
+        routes: [{ name: 'IPEntry' }],
+      });
     }
   };
 
@@ -261,106 +293,141 @@ function CustomDrawerContent(props: DrawerContentComponentProps) {
         </View>
       </View>
 
-      <ScrollView contentContainerStyle={{ paddingHorizontal: 12, paddingTop: 14, paddingBottom: 20 }}>
-        {drawerItems.map((item) => {
-          const isActive = activeRoute === item.route;
-          return (
-            <TouchableOpacity
-              key={item.route}
-              onPress={() => navigateTo(item.route)}
-              activeOpacity={0.8}
-              style={{
-                borderRadius: 14,
-                borderWidth: 1,
-                borderColor: isActive ? colors.primary : colors.border,
-                backgroundColor: isActive ? colors.primary + '14' : colors.surface,
-                paddingHorizontal: 12,
-                paddingVertical: 12,
-                marginBottom: 10,
-              }}
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <View
-                  style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: 10,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    backgroundColor: isActive ? colors.primary + '20' : colors.surfaceHover,
-                  }}
-                >
-                  <MaterialIcons
-                    name={item.icon}
-                    size={20}
-                    color={isActive ? colors.primary : colors.textSecondary || colors.text}
-                  />
-                </View>
+      <View style={{ flex: 1 }}>
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={{ paddingHorizontal: 12, paddingTop: 14, paddingBottom: 24 }}
+        >
+          {drawerItems.map((item) => {
+            const isActive = activeRoute === item.route;
+            return (
+              <TouchableOpacity
+                key={item.route}
+                onPress={() => navigateTo(item.route)}
+                activeOpacity={0.8}
+                style={{
+                  borderRadius: 14,
+                  borderWidth: 1,
+                  borderColor: isActive ? colors.primary : colors.border,
+                  backgroundColor: isActive ? colors.primary + '14' : colors.surface,
+                  paddingHorizontal: 12,
+                  paddingVertical: 12,
+                  marginBottom: 10,
+                }}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <View
+                    style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: 10,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      backgroundColor: isActive ? colors.primary + '20' : colors.surfaceHover,
+                    }}
+                  >
+                    <MaterialIcons
+                      name={item.icon}
+                      size={20}
+                      color={isActive ? colors.primary : colors.textSecondary || colors.text}
+                    />
+                  </View>
 
-                <View style={{ flex: 1, marginLeft: 10 }}>
-                  <Text style={{ color: colors.text, fontSize: 15, fontWeight: '700' }}>{item.label}</Text>
-                  <Text style={{ color: colors.textSecondary, fontSize: 12, marginTop: 2 }}>{item.subtitle}</Text>
-                </View>
+                  <View style={{ flex: 1, marginLeft: 10 }}>
+                    <Text style={{ color: colors.text, fontSize: 15, fontWeight: '700' }}>{item.label}</Text>
+                    <Text style={{ color: colors.textSecondary, fontSize: 12, marginTop: 2 }}>{item.subtitle}</Text>
+                  </View>
 
-                <MaterialIcons name="chevron-right" size={18} color={colors.textSecondary || colors.text} />
+                  <MaterialIcons name="chevron-right" size={18} color={colors.textSecondary || colors.text} />
+                </View>
+              </TouchableOpacity>
+            );
+          })}
+
+          <View
+            style={{
+              marginTop: 8,
+              borderRadius: 14,
+              borderWidth: 1,
+              borderColor: colors.border,
+              backgroundColor: colors.surface,
+              paddingHorizontal: 12,
+              paddingVertical: 12,
+            }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <View
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: 10,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: colors.surfaceHover,
+                }}
+              >
+                <MaterialIcons
+                  name={isOnline ? 'cloud-done' : 'cloud-off'}
+                  size={20}
+                  color={isOnline ? colors.success : colors.warning}
+                />
               </View>
-            </TouchableOpacity>
-          );
-        })}
+              <View style={{ flex: 1, marginLeft: 10 }}>
+                <Text style={{ color: colors.text, fontSize: 15, fontWeight: '700' }}>Local Server</Text>
+                <Text style={{ color: colors.textSecondary, fontSize: 12, marginTop: 2 }}>
+                  {isOnline ? 'Connected and ready to sync' : 'Disconnected from server'}
+                </Text>
+              </View>
+              <Switch
+                value={isOnline}
+                onValueChange={handleOnlineToggle}
+                disabled={updatingConnection}
+                thumbColor={isOnline ? colors.primary : '#f4f3f4'}
+                trackColor={{ false: colors.border, true: colors.primary + '55' }}
+              />
+            </View>
+
+            {!isOnline && (
+              <TouchableOpacity
+                onPress={() => navigateTo('IPEntry')}
+                style={{ marginTop: 10, alignSelf: 'flex-start', paddingVertical: 6, paddingHorizontal: 8 }}
+              >
+                <Text style={{ color: colors.primary, fontWeight: '700', fontSize: 13 }}>Fix connection</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </ScrollView>
 
         <View
           style={{
-            marginTop: 8,
-            borderRadius: 14,
-            borderWidth: 1,
-            borderColor: colors.border,
-            backgroundColor: colors.surface,
             paddingHorizontal: 12,
-            paddingVertical: 12,
+            paddingBottom: 12,
+            paddingTop: 10,
+            borderTopWidth: 1,
+            borderTopColor: colors.border,
+            backgroundColor: colors.background,
           }}
         >
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <View
-              style={{
-                width: 36,
-                height: 36,
-                borderRadius: 10,
-                alignItems: 'center',
-                justifyContent: 'center',
-                backgroundColor: colors.surfaceHover,
-              }}
-            >
-              <MaterialIcons
-                name={isOnline ? 'cloud-done' : 'cloud-off'}
-                size={20}
-                color={isOnline ? colors.success : colors.warning}
-              />
-            </View>
-            <View style={{ flex: 1, marginLeft: 10 }}>
-              <Text style={{ color: colors.text, fontSize: 15, fontWeight: '700' }}>Local Server</Text>
-              <Text style={{ color: colors.textSecondary, fontSize: 12, marginTop: 2 }}>
-                {isOnline ? 'Connected and ready to sync' : 'Disconnected from server'}
-              </Text>
-            </View>
-            <Switch
-              value={isOnline}
-              onValueChange={handleOnlineToggle}
-              disabled={updatingConnection}
-              thumbColor={isOnline ? colors.primary : '#f4f3f4'}
-              trackColor={{ false: colors.border, true: colors.primary + '55' }}
-            />
-          </View>
-
-          {!isOnline && (
-            <TouchableOpacity
-              onPress={() => navigateTo('IPEntry')}
-              style={{ marginTop: 10, alignSelf: 'flex-start', paddingVertical: 6, paddingHorizontal: 8 }}
-            >
-              <Text style={{ color: colors.primary, fontWeight: '700', fontSize: 13 }}>Fix connection</Text>
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity
+            onPress={handleLogout}
+            disabled={isLoggingOut}
+            activeOpacity={0.8}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderRadius: 12,
+              paddingVertical: 12,
+              backgroundColor: isLoggingOut ? colors.border : colors.error,
+            }}
+          >
+            <MaterialIcons name="logout" size={18} color={colors.textInverse || '#fff'} />
+            <Text style={{ color: colors.textInverse || '#fff', fontWeight: '700', marginLeft: 8 }}>
+              {isLoggingOut ? 'Logging out...' : 'Logout'}
+            </Text>
+          </TouchableOpacity>
         </View>
-      </ScrollView>
+      </View>
     </SafeAreaView>
   );
 }

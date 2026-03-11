@@ -9,5 +9,11 @@ const getExtra = (key: string) => {
 };
 
 // Defaults fall back to the legacy config values to avoid breaking dev runs.
-export const SERVER_BASE_URL: string = (getExtra('SERVER_BASE_URL') as string) ?? 'https://live-api.atgpos.de/';
-export const LOCAL_BASE_URL: string | undefined = (getExtra('LOCAL_BASE_URL') as string) ?? undefined;
+export const SERVER_BASE_URL: string =
+  (getExtra('EXPO_PUBLIC_SERVER_BASE_URL') as string) ??
+  (getExtra('SERVER_BASE_URL') as string) ??
+  'http://146.190.9.120:3000/';
+export const LOCAL_BASE_URL: string | undefined =
+  (getExtra('EXPO_PUBLIC_LOCAL_BASE_URL') as string) ??
+  (getExtra('LOCAL_BASE_URL') as string) ??
+  undefined;
