@@ -56,7 +56,6 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
   const existingOrder = route.params?.existingOrder ?? null;
 
   const [checkoutCart, setCheckoutCart] = useState<Cart>(incomingCart);
-  const [tax, setTax] = useState(0);
   const { showToast } = useToast();
 
   const orderSubmit = useOrderSubmit(
@@ -85,24 +84,13 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
     };
   }, []);
 
-  const calculateTax = (subtotal: number): number => {
-    const firstItemTax = checkoutCart.items[0]?.tax;
-    if (firstItemTax?.percentage) return (subtotal * firstItemTax.percentage) / 100;
-    if (firstItemTax?.flatAmount) return firstItemTax.flatAmount;
-    return 0;
-  };
-
   const subtotal = getCartSubtotal(checkoutCart);
   const discountAmount = getDiscountAmount(subtotal, checkoutCart.discount || null);
-  const total = subtotal + tax - discountAmount;
+  const total = subtotal - discountAmount;
   const totalItems = checkoutCart.items.reduce(
     (sum, item) => sum + getCartItemQuantity(item),
     0
   );
-
-  useEffect(() => {
-    setTax(calculateTax(subtotal));
-  }, [checkoutCart, subtotal]);
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -148,7 +136,7 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
         Animated.timing(placeAnim, { toValue: 1, duration: 250, useNativeDriver: true }),
       ]).start();
 
-      const submitResult = await orderSubmit.submitOrder(tax);
+      const submitResult = await orderSubmit.submitOrder(0);
       const submittedOrder = submitResult?.order;
       const orderInfo = {
         tableNo,
@@ -359,15 +347,6 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
               {formatCurrency(subtotal)}
             </Text>
           </View>
-
-          {tax > 0 ? (
-            <View style={styles.summaryRow}>
-              <Text style={{ color: colors.textSecondary, fontSize: 12 }}>Tax</Text>
-              <Text style={{ color: colors.text, fontWeight: '700' }}>
-                {formatCurrency(tax)}
-              </Text>
-            </View>
-          ) : null}
 
           {discountAmount > 0 ? (
             <View style={styles.summaryRow}>

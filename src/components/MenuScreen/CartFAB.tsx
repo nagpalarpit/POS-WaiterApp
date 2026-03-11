@@ -2,6 +2,7 @@ import React from 'react';
 import { View, TouchableOpacity, Animated } from 'react-native';
 import { Text } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface CartFABProps {
   cartQuantity: number;
@@ -23,11 +24,12 @@ export const CartFAB: React.FC<CartFABProps> = ({
   badgeScaleAnim,
   colors,
 }) => {
+  const insets = useSafeAreaInsets();
   return (
     <Animated.View
       style={{
         position: 'absolute',
-        bottom: 22,
+        bottom: 22 + insets.bottom,
         right: 16,
         transform: [{ scale: scaleAnim }],
         elevation: 8,

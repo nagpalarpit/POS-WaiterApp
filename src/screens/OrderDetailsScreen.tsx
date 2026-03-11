@@ -256,12 +256,11 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
   );
 
   const allowSplitOption = useMemo(() => {
-    if (displayedOrderDetails?.isSplitOrder) return false;
     if (Array.isArray(displayedOrderDetails?.giftCardLogs) && displayedOrderDetails.giftCardLogs.length > 0) {
       return false;
     }
-    return splitPaymentItems.length > 1 || remainingSplitItemUnits > 1;
-  }, [displayedOrderDetails?.isSplitOrder, displayedOrderDetails?.giftCardLogs, splitPaymentItems.length, remainingSplitItemUnits]);
+    return remainingSplitItemUnits > 1;
+  }, [displayedOrderDetails?.giftCardLogs, remainingSplitItemUnits]);
 
   const totals = useMemo(() => {
     const od = displayedOrderDetails || {};

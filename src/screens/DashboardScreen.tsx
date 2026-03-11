@@ -846,7 +846,7 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
         </View>
 
         {/* Status badges for dine-in */}
-        {renderTableStatusBadge()}
+        {/* {renderTableStatusBadge()} */}
 
         {/* Table area filters for dine-in */}
         {renderTableAreas()}
