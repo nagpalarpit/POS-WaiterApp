@@ -8,6 +8,7 @@ export interface Settings {
   totalTables?: number;
   enableDelivery?: boolean;
   enablePickup?: boolean;
+  enableGroupLabel?: boolean;
   companyId?: string | number;
   companyName?: string;
   isKiosk?: boolean;

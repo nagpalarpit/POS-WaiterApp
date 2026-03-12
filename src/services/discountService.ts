@@ -76,6 +76,33 @@ const sortDiscounts = (discounts: DiscountOption[]): DiscountOption[] => {
   });
 };
 
+const getDiscountIdentity = (discount: DiscountOption): string => {
+  const id = discount.id ?? discount._id;
+  if (id !== undefined && id !== null && String(id).trim() !== '') {
+    return `id:${id}`;
+  }
+  const name = (discount.discountName || discount.name || '').trim().toLowerCase();
+  return `meta:${name}|${discount.discountType}|${discount.discountValue}`;
+};
+
+const dedupeDiscounts = (discounts: DiscountOption[]): DiscountOption[] => {
+  const byKey = new Map<string, DiscountOption>();
+  discounts.forEach((discount) => {
+    const key = getDiscountIdentity(discount);
+    const existing = byKey.get(key);
+    if (!existing) {
+      byKey.set(key, discount);
+      return;
+    }
+    const existingName = (existing.discountName || existing.name || '').trim();
+    const nextName = (discount.discountName || discount.name || '').trim();
+    if (!existingName && nextName) {
+      byKey.set(key, discount);
+    }
+  });
+  return Array.from(byKey.values());
+};
+
 const getCacheKey = (companyId: number) => `${DISCOUNT_CACHE_PREFIX}${companyId}`;
 
 export const loadCachedDiscounts = async (companyId: number): Promise<DiscountOption[]> => {
@@ -84,7 +111,8 @@ export const loadCachedDiscounts = async (companyId: number): Promise<DiscountOp
     const cached = await AsyncStorage.getItem(getCacheKey(companyId));
     if (!cached) return [];
     const parsed = JSON.parse(cached);
-    return Array.isArray(parsed) ? parsed : [];
+    const list = Array.isArray(parsed) ? parsed : [];
+    return dedupeDiscounts(list).filter(isDiscountActive);
   } catch (error) {
     console.error('DiscountService: Failed to read cache:', error);
     return [];
@@ -121,7 +149,8 @@ export const fetchDiscountsForCompany = async (companyId: number): Promise<Disco
       .filter((discount): discount is DiscountOption => Boolean(discount))
       .filter(isDiscountActive);
 
-    const sorted = sortDiscounts(normalized);
+    const unique = dedupeDiscounts(normalized);
+    const sorted = sortDiscounts(unique);
     await AsyncStorage.setItem(getCacheKey(companyId), JSON.stringify(sorted));
     return sorted;
   } catch (error) {

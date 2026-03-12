@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
     View,
     Text,
@@ -39,6 +39,9 @@ interface CartDrawerProps {
     onUpdateQuantity: (cartId: string, quantity: number) => void;
     onRemoveItem: (cartId: string) => void;
     onEditOrderMeta: () => void;
+    onAddGroup?: () => void;
+    showAddGroup?: boolean;
+    onSelectGroup?: (groupType: number, groupLabel?: string) => void;
     onCheckout: () => void;
     onClose: () => void;
 
@@ -64,6 +67,9 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
     onUpdateQuantity,
     onRemoveItem,
     onEditOrderMeta,
+    onAddGroup,
+    showAddGroup,
+    onSelectGroup,
     onCheckout,
     onClose,
     colors,
@@ -71,6 +77,29 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
     const subtotal = getCartSubtotal(cart);
     const discount = getDiscountAmount(subtotal, cart.discount);
     const total = Math.max(subtotal - discount, 0);
+    const { groupedItems, sortedGroupTypes, latestGroupType } = useMemo(() => {
+        const groups = cart.items.reduce((acc: Record<number, Cart['items']>, item) => {
+            const groupType = item.groupType || 1;
+            if (!acc[groupType]) acc[groupType] = [];
+            acc[groupType].push(item);
+            return acc;
+        }, {});
+        const types = Object.keys(groups)
+            .map((key) => Number(key))
+            .sort((a, b) => a - b);
+        const latest = types.length > 0 ? types[types.length - 1] : null;
+        return { groupedItems: groups, sortedGroupTypes: types, latestGroupType: latest };
+    }, [cart.items]);
+    const groupCount = sortedGroupTypes.length;
+    const [expandedGroupType, setExpandedGroupType] = useState<number | null>(latestGroupType ?? null);
+
+    useEffect(() => {
+        if (!groupCount) {
+            setExpandedGroupType(null);
+            return;
+        }
+        setExpandedGroupType(latestGroupType ?? null);
+    }, [groupCount, latestGroupType]);
 
     return (
         <Modal
@@ -183,33 +212,77 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                                     contentContainerStyle={{ paddingHorizontal: 12, paddingVertical: 12 }}
                                     scrollIndicatorInsets={{ right: 4 }}
                                 >
-                                    {cart.items.map((item) => (
-                                        <View
-                                            key={item.cartId}
-                                            style={{
-                                                marginBottom: 12,
-                                                borderRadius: 12,
-                                                backgroundColor: colors.surface,
-                                                borderWidth: 1,
-                                                borderColor: colors.border,
-                                                overflow: 'hidden',
-                                            }}
-                                        >
-                                            <CartItemRow
-                                                item={item}
-                                                isEditing={editingItemNoteId === item.cartId}
-                                                editingNote={editingItemNoteId === item.cartId ? itemNoteDraft : ''}
-                                                onNoteChange={onItemNoteDraftChange}
-                                                onEditNote={() => { }} // Not used in drawer
-                                                onOpenNoteModal={onOpenItemNoteModal}
-                                                onCancelEdit={onCancelItemNoteEdit}
-                                                onSaveNote={onSaveItemNote}
-                                                onUpdateQuantity={onUpdateQuantity}
-                                                onRemoveItem={onRemoveItem}
-                                                colors={colors}
-                                            />
-                                        </View>
-                                    ))}
+                                    {sortedGroupTypes.map((groupType) => {
+                                        const items = groupedItems[groupType] || [];
+                                        const label =
+                                            items.find((item) => item.groupLabel)?.groupLabel ||
+                                            `Gange ${groupType}`;
+                                        const isExpanded = groupCount <= 1 || expandedGroupType === groupType;
+                                        return (
+                                            <View key={`group-${groupType}`} style={{ marginBottom: 14 }}>
+                                                <TouchableOpacity
+                                                    onPress={() => {
+                                                        if (groupCount > 1) {
+                                                            setExpandedGroupType(groupType);
+                                                        }
+                                                        onSelectGroup?.(groupType, label);
+                                                    }}
+                                                    style={{
+                                                        paddingHorizontal: 12,
+                                                        paddingVertical: 8,
+                                                        borderRadius: 10,
+                                                        borderWidth: 1,
+                                                        borderColor: colors.border,
+                                                        backgroundColor: colors.surfaceHover || colors.surface,
+                                                        marginBottom: 8,
+                                                        flexDirection: 'row',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'space-between',
+                                                    }}
+                                                >
+                                                    <Text style={{ color: colors.text, fontWeight: '700' }}>
+                                                        {label}
+                                                    </Text>
+                                                    {groupCount > 1 ? (
+                                                        <MaterialCommunityIcons
+                                                            name={isExpanded ? 'chevron-up' : 'chevron-down'}
+                                                            size={18}
+                                                            color={colors.textSecondary}
+                                                        />
+                                                    ) : null}
+                                                </TouchableOpacity>
+                                                {isExpanded
+                                                    ? items.map((item) => (
+                                                        <View
+                                                            key={item.cartId}
+                                                            style={{
+                                                                marginBottom: 12,
+                                                                borderRadius: 12,
+                                                                backgroundColor: colors.surface,
+                                                                borderWidth: 1,
+                                                                borderColor: colors.border,
+                                                                overflow: 'hidden',
+                                                            }}
+                                                        >
+                                                            <CartItemRow
+                                                                item={item}
+                                                                isEditing={editingItemNoteId === item.cartId}
+                                                                editingNote={editingItemNoteId === item.cartId ? itemNoteDraft : ''}
+                                                                onNoteChange={onItemNoteDraftChange}
+                                                                onEditNote={() => { }}
+                                                                onOpenNoteModal={onOpenItemNoteModal}
+                                                                onCancelEdit={onCancelItemNoteEdit}
+                                                                onSaveNote={onSaveItemNote}
+                                                                onUpdateQuantity={onUpdateQuantity}
+                                                                onRemoveItem={onRemoveItem}
+                                                                colors={colors}
+                                                            />
+                                                        </View>
+                                                    ))
+                                                    : null}
+                                            </View>
+                                        );
+                                    })}
                                 </ScrollView>
 
                                 {/* Enhanced Cart Summary */}
@@ -217,6 +290,8 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                                     cart={cart}
                                     cartQuantity={cartQuantity}
                                     onEditOrderMeta={onEditOrderMeta}
+                                    onAddGroup={onAddGroup}
+                                    showAddGroup={showAddGroup}
                                     onCheckout={onCheckout}
                                     colors={colors}
                                     isOrderNoteOrDiscountPresent={false}

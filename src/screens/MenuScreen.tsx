@@ -20,6 +20,7 @@ import { useMenuCart } from '../hooks/useMenuCart';
 import { useCartDrawerAnimation } from '../hooks/useCartDrawerAnimation';
 import { useCartNotes } from '../hooks/useCartNotes';
 import { useCartFeedback } from '../hooks/useCartFeedback';
+import { useSettings } from '../hooks/useSettings';
 
 // Components
 import {
@@ -31,6 +32,7 @@ import {
 import ItemDetailsModal from '../components/ItemDetailsModal';
 import ItemNoteModal from '../components/ItemNoteModal';
 import CartNoteModal from '../components/CartNoteModal';
+import GroupModal from '../components/GroupModal';
 import {
   getCartSubtotal,
   getDiscountAmount,
@@ -61,11 +63,20 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
   const cartAnimation = useCartDrawerAnimation(cartDrawerWidth);
   const feedback = useCartFeedback();
   const { showToast } = useToast();
+  const settingsData = useSettings();
+  const groupLabelEnabled = settingsData.settings?.enableGroupLabel === true;
 
   // Local state
   const [showItemDetail, setShowItemDetail] = useState(false);
   const [selectedMenuItem, setSelectedMenuItem] = useState<any>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [showGroupModal, setShowGroupModal] = useState(false);
+  const [groupModalMode, setGroupModalMode] = useState<'addGroup' | 'selectForItem' | null>(null);
+  const [pendingGroupItem, setPendingGroupItem] = useState<{
+    rawItem: any;
+    normalizedItem: any;
+    hasVariants: boolean;
+  } | null>(null);
 
   // Cart notes management
   const cartNotes = useCartNotes(cartData.cart, cartData.updateItemNote, cartData.updateDiscount);
@@ -186,11 +197,48 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
 
   // ===== Cart Operation Handlers =====
 
+  const ensureGroupSelection = (payload: {
+    rawItem: any;
+    normalizedItem: any;
+    hasVariants: boolean;
+  }) => {
+    if (!groupLabelEnabled) return true;
+
+    if (cartService.useTempGroupIfAvailable()) {
+      return true;
+    }
+
+    if (cartService.currentGroupIndex && cartData.cart.items.length > 0) {
+      const currentGroup = cartData.cart.items.find(
+        (cartItem) => cartItem.groupType === cartService.currentGroupIndex
+      );
+      if (currentGroup) {
+        cartService.tempNewGroupLabel = currentGroup.groupLabel || '';
+        return true;
+      }
+    }
+
+    setPendingGroupItem(payload);
+    setGroupModalMode('selectForItem');
+    setShowGroupModal(true);
+    return false;
+  };
+
   const addToCart = (item: any) => {
     const normalizedItem = normalizeMenuItemForOptions(item);
     const hasVariants =
       Array.isArray(normalizedItem.menuItemVariants) &&
       normalizedItem.menuItemVariants.length > 0;
+
+    if (
+      !ensureGroupSelection({
+        rawItem: item,
+        normalizedItem,
+        hasVariants,
+      })
+    ) {
+      return;
+    }
 
     if (hasVariants) {
       setSelectedMenuItem(normalizedItem);
@@ -207,6 +255,9 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
     attributeValues?: any[]
   ) => {
     try {
+      if (groupLabelEnabled) {
+        cartService.useTempGroupIfAvailable();
+      }
       const category = menuData.categories[menuData.activeCategory];
       await cartData.addToCartDirect(
         category,
@@ -235,6 +286,56 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
       setShowItemDetail(false);
       setSelectedMenuItem(null);
     }
+  };
+
+  const handleGroupModalSelect = async (label: string) => {
+    const cart = cartData.cart;
+    if (groupModalMode === 'addGroup') {
+      cartService.startNewGroup(cart, label);
+      cartAnimation.closeCartDrawer();
+      setShowGroupModal(false);
+      setGroupModalMode(null);
+      return;
+    }
+
+    if (pendingGroupItem) {
+      cartService.setGroupIndexByLabel(label, cart);
+      const pending = pendingGroupItem;
+      setPendingGroupItem(null);
+      setShowGroupModal(false);
+      setGroupModalMode(null);
+
+      if (pending.hasVariants) {
+        setSelectedMenuItem(pending.normalizedItem);
+        setShowItemDetail(true);
+        return;
+      }
+
+      await handleAddToCartDirect(
+        pending.rawItem,
+        null,
+        null,
+        undefined
+      );
+      return;
+    }
+
+    setShowGroupModal(false);
+    setGroupModalMode(null);
+  };
+
+  const handleAddGroup = () => {
+    const cart = cartData.cart;
+    if (!groupLabelEnabled) {
+      cartService.startNewGroup(cart);
+      return;
+    }
+    setGroupModalMode('addGroup');
+    setShowGroupModal(true);
+  };
+
+  const handleSelectGroup = (groupType: number, groupLabel?: string) => {
+    cartService.setActiveGroup(groupType, groupLabel || '');
   };
 
   const proceedToCheckout = async () => {
@@ -390,6 +491,9 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
           onUpdateQuantity={cartData.updateQuantity}
           onRemoveItem={cartData.removeFromCart}
           onEditOrderMeta={() => cartNotes.setShowCartNoteModal(true)}
+          onAddGroup={handleAddGroup}
+          showAddGroup={groupLabelEnabled}
+          onSelectGroup={handleSelectGroup}
           onCheckout={proceedToCheckout}
           onClose={cartAnimation.closeCartDrawer}
           colors={colors}
@@ -425,6 +529,12 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
         initialDiscount={cartData.cart.discount || null}
         onClose={() => cartNotes.setShowCartNoteModal(false)}
         onSave={handleSaveCartNote}
+      />
+
+      <GroupModal
+        visible={showGroupModal}
+        existingLabels={cartService.getUniqueGroupLabels(cartData.cart)}
+        onSelect={handleGroupModalSelect}
       />
     </View>
   );

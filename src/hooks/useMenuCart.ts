@@ -46,12 +46,16 @@ export const useMenuCart = () => {
   ) => {
     try {
       console.log('useMenuCart: addToCartDirect called:', { itemName: item.name });
+      const groupType = cartService.currentGroupIndex;
+      const groupLabel = cartService.tempNewGroupLabel;
       const updatedCart = await cartService.addToCart(
         category,
         item,
         variant,
         attribute,
-        attributeValues
+        attributeValues,
+        groupType,
+        groupLabel
       );
       setCart(updatedCart);
     } catch (error) {

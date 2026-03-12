@@ -497,7 +497,18 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
       let status = 'available';
 
       if (order) {
-        status = order.orderDetails?.isPaid === 1 ? 'semi-paid' : 'booked';
+        const total = Number(order.orderDetails?.orderTotal ?? 0) || 0;
+        const paymentDetails = Array.isArray((order as any).orderDetails?.orderPaymentDetails)
+          ? (order as any).orderDetails.orderPaymentDetails
+          : [];
+        const paidSum = paymentDetails.reduce(
+          (sum: number, payment: any) => sum + (Number(payment?.paymentTotal) || 0),
+          0
+        );
+        const isSplitOrder = (order as any).orderDetails?.isSplitOrder === true;
+        const isPartialPaid = paidSum > 0 && paidSum < total;
+
+        status = isSplitOrder || isPartialPaid ? 'semi-paid' : 'booked';
       }
 
       return { tableNo, status, order };

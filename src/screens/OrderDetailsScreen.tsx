@@ -273,6 +273,24 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
       ),
     [rawItems],
   );
+  const groupedItems = useMemo(() => {
+    const groups = items.reduce((acc: Record<number, any[]>, item:any) => {
+      const groupType = item.groupType || 1;
+      if (!acc[groupType]) acc[groupType] = [];
+      acc[groupType].push(item);
+      return acc;
+    }, {});
+    const types = Object.keys(groups)
+      .map((key) => Number(key))
+      .sort((a, b) => a - b);
+    return types.map((groupType) => ({
+      groupType,
+      items: groups[groupType],
+      label:
+        groups[groupType].find((item:any) => item.groupLabel)?.groupLabel ||
+        `Gange ${groupType}`,
+    }));
+  }, [items]);
 
   const splitPaymentItems = useMemo(
     () =>
@@ -322,6 +340,10 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
   );
   const [paymentModalVisible, setPaymentModalVisible] = useState(false);
   const [pendingSettle, setPendingSettle] = useState(false);
+  const [expandedGroupType, setExpandedGroupType] = useState<number | null>(null);
+  const groupCount = groupedItems.length;
+  const latestGroupType =
+    groupCount > 0 ? groupedItems[groupCount - 1].groupType : null;
 
   const paymentLabel =
     PAYMENT_METHOD_LABELS[selectedPaymentId ?? paymentProcessorId] || "Not set";
@@ -335,6 +357,14 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
       return () => {};
     }, []),
   );
+
+  useEffect(() => {
+    if (!groupCount) {
+      setExpandedGroupType(null);
+      return;
+    }
+    setExpandedGroupType(latestGroupType);
+  }, [groupCount, latestGroupType]);
 
   useEffect(() => {
     if (!order) return;
@@ -795,6 +825,12 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
             tableNo: orderDetails?.tableNo ?? null,
             orderNumber: order?.customOrderId || order?._id,
             orderDeliveryTypeId,
+          });
+          await lockPayment({
+            ...order,
+            orderDetails: remainingOrderDetails,
+            customOrderId:
+              order?.customOrderId || remainingOrderDetails?.customOrderId,
           });
 
           setWorkingOrderDetails(remainingOrderDetails);
@@ -1285,6 +1321,128 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
 
   const footerHeight = 212;
 
+  const renderItemCard = (it: any) => {
+    const quantity = getCartItemQuantity(it);
+    const itemUnitTotal = getItemUnitTotal(it);
+    const itemLineTotal = getItemLineTotal(it);
+    const optionsSummary = getItemOptionsSummary(it);
+
+    return (
+      <Card
+        key={it.cartId}
+        style={{
+          marginBottom: 10,
+          borderColor: colors.border,
+          backgroundColor: colors.surface,
+        }}
+      >
+        <View style={styles.itemRow}>
+          <View style={{ flex: 1, paddingRight: 10 }}>
+            <Text style={[styles.itemName, { color: colors.text }]}>
+              {it.customId ? `${it.customId}. ` : ""}
+              {it.itemName}
+            </Text>
+
+            {!!optionsSummary && (
+              <Text
+                style={[styles.optionText, { color: colors.textSecondary }]}
+              >
+                {optionsSummary}
+              </Text>
+            )}
+
+            {Array.isArray(it.attributeValues) &&
+              it.attributeValues.length > 0 && (
+                <View style={{ marginTop: 6 }}>
+                  {it.attributeValues.map(
+                    (attributeValue: any, valueIndex: number) => {
+                      const name = getAttributeValueName(attributeValue);
+                      const valueQuantity =
+                        getAttributeValueQuantity(attributeValue);
+                      const valuePrice =
+                        getAttributeValuePrice(attributeValue);
+                      if (!name) return null;
+
+                      return (
+                        <Text
+                          key={`${it.cartId}-value-${valueIndex}`}
+                          style={{
+                            color: colors.textSecondary,
+                            fontSize: 12,
+                            marginTop: 2,
+                          }}
+                        >
+                          • {valueQuantity} x {name}
+                          {valuePrice > 0
+                            ? ` (+${formatCurrency(valuePrice)})`
+                            : ""}
+                        </Text>
+                      );
+                    },
+                  )}
+                </View>
+              )}
+
+            {it.orderItemNote ? (
+              <Text
+                style={{
+                  color: colors.textSecondary,
+                  marginTop: 7,
+                  fontStyle: "italic",
+                  fontSize: 12,
+                }}
+              >
+                Note: {it.orderItemNote}
+              </Text>
+            ) : null}
+          </View>
+
+          <View
+            style={{
+              alignItems: "flex-end",
+              justifyContent: "space-between",
+            }}
+          >
+            <View
+              style={{
+                borderRadius: 999,
+                paddingHorizontal: 8,
+                paddingVertical: 4,
+                backgroundColor: colors.primary + "18",
+              }}
+            >
+              <Text
+                style={{
+                  color: colors.primary,
+                  fontWeight: "700",
+                  fontSize: 11,
+                }}
+              >
+                x{quantity}
+              </Text>
+            </View>
+
+            <View style={{ alignItems: "flex-end", marginTop: 20 }}>
+              <Text style={{ color: colors.textSecondary, fontSize: 11 }}>
+                {formatCurrency(itemUnitTotal)} each
+              </Text>
+              <Text
+                style={{
+                  color: colors.text,
+                  fontWeight: "800",
+                  fontSize: 15,
+                  marginTop: 2,
+                }}
+              >
+                {formatCurrency(itemLineTotal)}
+              </Text>
+            </View>
+          </View>
+        </View>
+      </Card>
+    );
+  };
+
   return (
     <SafeAreaView
       style={{ flex: 1, backgroundColor: colors.background }}
@@ -1473,132 +1631,49 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
               No items in this order
             </Text>
           </Card>
-        ) : activeSection === "items" ? (
-          items.map((it: any) => {
-            const quantity = getCartItemQuantity(it);
-            const itemUnitTotal = getItemUnitTotal(it);
-            const itemLineTotal = getItemLineTotal(it);
-            const optionsSummary = getItemOptionsSummary(it);
+         ) : activeSection === "items" ? (
+          groupedItems.map((group) => {
+            const isExpanded =
+              groupCount <= 1 || expandedGroupType === group.groupType;
 
             return (
-              <Card
-                key={it.cartId}
-                style={{
-                  marginBottom: 10,
-                  borderColor: colors.border,
-                  backgroundColor: colors.surface,
-                }}
-              >
-                <View style={styles.itemRow}>
-                  <View style={{ flex: 1, paddingRight: 10 }}>
-                    <Text style={[styles.itemName, { color: colors.text }]}>
-                      {it.customId ? `${it.customId}. ` : ""}
-                      {it.itemName}
-                    </Text>
+              <View key={`group-${group.groupType}`} style={{ marginBottom: 12 }}>
+                <TouchableOpacity
+                  activeOpacity={groupCount > 1 ? 0.8 : 1}
+                  onPress={() => {
+                    if (groupCount > 1) {
+                      setExpandedGroupType(group.groupType);
+                    }
+                  }}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    paddingHorizontal: 12,
+                    paddingVertical: 8,
+                    borderRadius: 10,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    backgroundColor: colors.surface,
+                    marginBottom: 8,
+                  }}
+                >
+                  <Text style={{ color: colors.text, fontWeight: "700" }}>
+                    {group.label}
+                  </Text>
+                  {groupCount > 1 ? (
+                    <MaterialCommunityIcons
+                      name={isExpanded ? "chevron-up" : "chevron-down"}
+                      size={18}
+                      color={colors.textSecondary}
+                    />
+                  ) : null}
+                </TouchableOpacity>
 
-                    {!!optionsSummary && (
-                      <Text
-                        style={[
-                          styles.optionText,
-                          { color: colors.textSecondary },
-                        ]}
-                      >
-                        {optionsSummary}
-                      </Text>
-                    )}
-
-                    {Array.isArray(it.attributeValues) &&
-                      it.attributeValues.length > 0 && (
-                        <View style={{ marginTop: 6 }}>
-                          {it.attributeValues.map(
-                            (attributeValue: any, valueIndex: number) => {
-                              const name =
-                                getAttributeValueName(attributeValue);
-                              const valueQuantity =
-                                getAttributeValueQuantity(attributeValue);
-                              const valuePrice =
-                                getAttributeValuePrice(attributeValue);
-                              if (!name) return null;
-
-                              return (
-                                <Text
-                                  key={`${it.cartId}-value-${valueIndex}`}
-                                  style={{
-                                    color: colors.textSecondary,
-                                    fontSize: 12,
-                                    marginTop: 2,
-                                  }}
-                                >
-                                  • {valueQuantity} x {name}
-                                  {valuePrice > 0
-                                    ? ` (+${formatCurrency(valuePrice)})`
-                                    : ""}
-                                </Text>
-                              );
-                            },
-                          )}
-                        </View>
-                      )}
-
-                    {it.orderItemNote ? (
-                      <Text
-                        style={{
-                          color: colors.textSecondary,
-                          marginTop: 7,
-                          fontStyle: "italic",
-                          fontSize: 12,
-                        }}
-                      >
-                        Note: {it.orderItemNote}
-                      </Text>
-                    ) : null}
-                  </View>
-
-                  <View
-                    style={{
-                      alignItems: "flex-end",
-                      justifyContent: "space-between",
-                    }}
-                  >
-                    <View
-                      style={{
-                        borderRadius: 999,
-                        paddingHorizontal: 8,
-                        paddingVertical: 4,
-                        backgroundColor: colors.primary + "18",
-                      }}
-                    >
-                      <Text
-                        style={{
-                          color: colors.primary,
-                          fontWeight: "700",
-                          fontSize: 11,
-                        }}
-                      >
-                        x{quantity}
-                      </Text>
-                    </View>
-
-                    <View style={{ alignItems: "flex-end", marginTop: 20 }}>
-                      <Text
-                        style={{ color: colors.textSecondary, fontSize: 11 }}
-                      >
-                        {formatCurrency(itemUnitTotal)} each
-                      </Text>
-                      <Text
-                        style={{
-                          color: colors.text,
-                          fontWeight: "800",
-                          fontSize: 15,
-                          marginTop: 2,
-                        }}
-                      >
-                        {formatCurrency(itemLineTotal)}
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-              </Card>
+                {isExpanded
+                  ? group.items.map((it: any) => renderItemCard(it))
+                  : null}
+              </View>
             );
           })
         ) : activeSection === "notes" ? (

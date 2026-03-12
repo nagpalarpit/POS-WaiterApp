@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
+import React, { useState, useEffect, useRef, useLayoutEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -79,6 +79,10 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
   }, [route.params?.cart]);
 
   useEffect(() => {
+    cartService.loadCart().then(setCheckoutCart).catch(() => {});
+  }, []);
+
+  useEffect(() => {
     return () => {
       if (toastNavTimer.current) clearTimeout(toastNavTimer.current);
     };
@@ -91,6 +95,39 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
     (sum, item) => sum + getCartItemQuantity(item),
     0
   );
+  const groupedItems = useMemo(() => {
+    const groups = checkoutCart.items.reduce(
+      (acc: Record<number, CartItem[]>, item) => {
+        const groupType = item.groupType || 1;
+        if (!acc[groupType]) acc[groupType] = [];
+        acc[groupType].push(item);
+        return acc;
+      },
+      {},
+    );
+    return Object.keys(groups)
+      .map((key) => Number(key))
+      .sort((a, b) => a - b)
+      .map((groupType) => ({
+        groupType,
+        items: groups[groupType],
+        label:
+          groups[groupType].find((item) => item.groupLabel)?.groupLabel ||
+          `Gange ${groupType}`,
+      }));
+  }, [checkoutCart.items]);
+  const [expandedGroupType, setExpandedGroupType] = useState<number | null>(null);
+  const groupCount = groupedItems.length;
+  const latestGroupType =
+    groupCount > 0 ? groupedItems[groupCount - 1].groupType : null;
+
+  useEffect(() => {
+    if (!groupCount) {
+      setExpandedGroupType(null);
+      return;
+    }
+    setExpandedGroupType(latestGroupType);
+  }, [groupCount, latestGroupType]);
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -301,7 +338,46 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
         showsVerticalScrollIndicator={false}
       >
         {checkoutCart.items.length > 0 ? (
-          checkoutCart.items.map((item: CartItem, index: number) => renderOrderItem(item, index))
+          groupedItems.map((group) => {
+            const isExpanded = groupCount <= 1 || expandedGroupType === group.groupType;
+            return (
+              <View key={`group-${group.groupType}`} style={{ marginBottom: 12 }}>
+                <TouchableOpacity
+                  onPress={() => {
+                    if (groupCount > 1) setExpandedGroupType(group.groupType);
+                  }}
+                  style={{
+                    paddingHorizontal: 10,
+                    paddingVertical: 8,
+                    borderRadius: 10,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    backgroundColor: colors.surface,
+                    marginBottom: 8,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                  }}
+                >
+                  <Text style={{ color: colors.text, fontWeight: '700' }}>
+                    {group.label}
+                  </Text>
+                  {groupCount > 1 ? (
+                    <MaterialCommunityIcons
+                      name={isExpanded ? 'chevron-up' : 'chevron-down'}
+                      size={18}
+                      color={colors.textSecondary}
+                    />
+                  ) : null}
+                </TouchableOpacity>
+                {isExpanded
+                  ? group.items.map((item: CartItem, index: number) =>
+                      renderOrderItem(item, index)
+                    )
+                  : null}
+              </View>
+            );
+          })
         ) : (
           <View
             style={[

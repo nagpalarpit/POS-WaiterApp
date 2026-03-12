@@ -101,6 +101,11 @@ const normalizeDiscountFromOrder = (discount: any): CartDiscount | null => {
 };
 
 class CartService {
+  currentGroupIndex = 1;
+  tempGroupIndex = false;
+  tempNewGroup = 1;
+  tempNewGroupLabel = '';
+
   /**
    * Load cart from AsyncStorage
    */
@@ -109,16 +114,22 @@ class CartService {
       const cartData = await AsyncStorage.getItem(CART_STORAGE_KEY);
       if (cartData) {
         const parsed = JSON.parse(cartData);
-        return {
+        const cart = {
           items: Array.isArray(parsed?.items) ? parsed.items : [],
           orderNote: parsed?.orderNote || '',
           discount: parsed?.discount || null,
         };
+        this.syncGroupStateFromCart(cart);
+        return cart;
       }
-      return { items: [], orderNote: '', discount: null };
+      const emptyCart = { items: [], orderNote: '', discount: null };
+      this.syncGroupStateFromCart(emptyCart);
+      return emptyCart;
     } catch (error) {
       console.error('Error loading cart:', error);
-      return { items: [], orderNote: '', discount: null };
+      const emptyCart = { items: [], orderNote: '', discount: null };
+      this.syncGroupStateFromCart(emptyCart);
+      return emptyCart;
     }
   }
 
@@ -142,10 +153,17 @@ class CartService {
     item: any,
     variant?: any,
     attribute?: any,
-    attributeValues?: AttributeValue[]
+    attributeValues?: AttributeValue[],
+    groupType?: number,
+    groupLabel?: string
   ): Promise<Cart> {
     try {
+      const prevGroupType = this.currentGroupIndex;
+      const prevTempGroupIndex = this.tempGroupIndex;
+      const prevTempNewGroup = this.tempNewGroup;
       const cart = await this.loadCart();
+      const resolvedGroupType = groupType ?? this.currentGroupIndex ?? 1;
+      const resolvedGroupLabel = groupLabel ?? this.tempNewGroupLabel;
 
       const cartItem: CartItem = {
         categoryId: category.id,
@@ -156,7 +174,8 @@ class CartService {
         itemPrice: item.price,
         quantity: 1,
         tax: category.tax,
-        groupType: 0,
+        groupType: resolvedGroupType,
+        groupLabel: resolvedGroupLabel || undefined,
       };
 
       // Add variant if provided
@@ -208,6 +227,14 @@ class CartService {
         cart.items.unshift(cartItem);
       }
 
+      this.currentGroupIndex = resolvedGroupType;
+      this.tempNewGroupLabel = resolvedGroupLabel || '';
+      this.tempGroupIndex = prevTempGroupIndex;
+      this.tempNewGroup = prevTempNewGroup;
+      if (!this.tempGroupIndex && prevGroupType) {
+        this.currentGroupIndex = resolvedGroupType || prevGroupType;
+      }
+      this.addGroup(resolvedGroupType, cart);
       await this.saveCart(cart);
       return cart;
     } catch (error) {
@@ -265,6 +292,7 @@ class CartService {
   async clearCart(): Promise<Cart> {
     try {
       const emptyCart: Cart = { items: [], orderNote: '', discount: null };
+      this.syncGroupStateFromCart(emptyCart);
       await this.saveCart(emptyCart);
       return emptyCart;
     } catch (error) {
@@ -488,6 +516,7 @@ class CartService {
         discount: normalizeDiscountFromOrder(orderDetails?.discount),
       };
 
+      this.syncGroupStateFromCart(cart);
       await this.saveCart(cart);
       return cart;
     } catch (error) {
@@ -533,6 +562,118 @@ class CartService {
       hash = hash & hash; // Convert to 32bit integer
     }
     return `cart_${Math.abs(hash).toString(16)}`;
+  }
+
+  getUniqueGroupLabels(cart: Cart): string[] {
+    const labels = cart?.items
+      ?.map((item) => item.groupLabel)
+      .filter((label): label is string => !!label) || [];
+    if (this.tempNewGroupLabel) labels.push(this.tempNewGroupLabel);
+    return Array.from(new Set(labels));
+  }
+
+  setGroupIndexByLabel(groupLabel: string, cart: Cart) {
+    this.tempNewGroupLabel = groupLabel;
+    const existingGroup = cart?.items?.find(
+      (cartItem) => cartItem.groupLabel === groupLabel
+    );
+
+    if (existingGroup) {
+      this.currentGroupIndex = existingGroup.groupType || 1;
+      return;
+    }
+
+    const maxGroupType =
+      cart?.items?.reduce(
+        (max, cartItem) => Math.max(max, cartItem.groupType || 0),
+        0
+      ) || 0;
+    this.currentGroupIndex = maxGroupType + 1;
+    this.tempNewGroup = this.currentGroupIndex;
+  }
+
+  startNewGroup(cart: Cart, groupLabel = '') {
+    const maxGroupType =
+      cart?.items?.reduce(
+        (max, cartItem) => Math.max(max, cartItem.groupType || 0),
+        0
+      ) || 0;
+    this.currentGroupIndex = maxGroupType + 1;
+    this.tempNewGroup = this.currentGroupIndex;
+    this.tempGroupIndex = true;
+    this.tempNewGroupLabel = groupLabel;
+  }
+
+  setActiveGroup(groupType: number, groupLabel = '') {
+    this.currentGroupIndex = groupType || 1;
+    this.tempNewGroup = this.currentGroupIndex;
+    this.tempGroupIndex = false;
+    this.tempNewGroupLabel = groupLabel;
+  }
+
+  useTempGroupIfAvailable() {
+    if (this.tempGroupIndex && this.tempNewGroup >= 1) {
+      this.currentGroupIndex = this.tempNewGroup;
+      return true;
+    }
+    return false;
+  }
+
+  syncGroupStateFromCart(cart: Cart) {
+    if (this.tempGroupIndex || this.tempNewGroupLabel) {
+      return;
+    }
+    if (!cart?.items?.length) {
+      this.currentGroupIndex = 1;
+      this.tempNewGroup = 1;
+      this.tempGroupIndex = false;
+      this.tempNewGroupLabel = '';
+      return;
+    }
+
+    const lastItem = cart.items[cart.items.length - 1];
+    const groupType = lastItem?.groupType || 1;
+    this.currentGroupIndex = groupType;
+    this.tempNewGroup = groupType;
+    this.tempGroupIndex = false;
+    this.tempNewGroupLabel = lastItem?.groupLabel || '';
+  }
+
+  private addGroup(groupIndex: number, cart: Cart) {
+    if (cart?.items?.[cart.items.length - 1]?.groupType === undefined) {
+      cart.items.forEach((item) => {
+        item.groupType = 1;
+      });
+    } else {
+      cart.items.forEach((item) => {
+        if (item?.groupType === undefined) {
+          item.groupType = groupIndex;
+          if (this.tempNewGroupLabel) {
+            item.groupLabel = this.tempNewGroupLabel;
+          }
+        }
+
+        if (item.groupType === this.tempNewGroup) {
+          this.tempGroupIndex = false;
+        }
+      });
+    }
+
+    cart.items.sort((a, b) => (a.groupType || 0) - (b.groupType || 0));
+    this.addGroupLabel(cart);
+  }
+
+  private addGroupLabel(cart: Cart) {
+    if (cart.items.length > 1) {
+      for (let i = 0; i < cart.items.length - 1; i++) {
+        const currentItem = cart.items[i];
+        const nextItem = cart.items[i + 1];
+
+        if (currentItem?.groupType === nextItem?.groupType) {
+          currentItem.groupLabel = nextItem?.groupLabel;
+        }
+      }
+    }
   }
 }
 

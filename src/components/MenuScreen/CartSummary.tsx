@@ -16,6 +16,8 @@ interface CartSummaryProps {
     cartQuantity: number;
     onCheckout: () => void;
     onEditOrderMeta: () => void;
+    onAddGroup?: () => void;
+    showAddGroup?: boolean;
     colors: any;
     isOrderNoteOrDiscountPresent: boolean;
 }
@@ -28,6 +30,8 @@ export const CartSummary: React.FC<CartSummaryProps> = ({
     cartQuantity,
     onCheckout,
     onEditOrderMeta,
+    onAddGroup,
+    showAddGroup = false,
     colors,
     isOrderNoteOrDiscountPresent = true,
 }) => {
@@ -149,6 +153,29 @@ export const CartSummary: React.FC<CartSummaryProps> = ({
                         </TouchableOpacity>
                     )
                 }
+
+                {showAddGroup && (
+                    <TouchableOpacity
+                        onPress={onAddGroup}
+                        style={{
+                            borderWidth: 1,
+                            borderColor: colors.border,
+                            borderRadius: 10,
+                            paddingVertical: 10,
+                            paddingHorizontal: 12,
+                            marginBottom: 12,
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            backgroundColor: colors.surface,
+                        }}
+                    >
+                        <MaterialCommunityIcons name="layers-plus" size={16} color={colors.text} />
+                        <Text style={{ color: colors.text, fontWeight: '600', marginLeft: 6, fontSize: 12 }}>
+                            Add Group
+                        </Text>
+                    </TouchableOpacity>
+                )}
             </ScrollView>
 
             {/* Checkout Button */}
