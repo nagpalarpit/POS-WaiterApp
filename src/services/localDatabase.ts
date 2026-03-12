@@ -73,7 +73,8 @@ class LocalDatabaseService {
   async select(
     collection: string,
     condition: any = { where: {} },
-    attributes: string[] = []
+    attributes: string[] = [],
+    options: { skipAuth?: boolean } = {}
   ): Promise<any[]> {
     try {
       if (!serverConnection.isConnected()) {
@@ -88,7 +89,10 @@ class LocalDatabaseService {
               condition,
               attributes,
             },
-            { timeout: this.LOCAL_REQUEST_TIMEOUT_MS }
+            {
+              timeout: this.LOCAL_REQUEST_TIMEOUT_MS,
+              headers: options.skipAuth ? { 'x-skip-auth': 'true' } : undefined,
+            }
           ),
         `select:${collection}`
       );
@@ -227,12 +231,17 @@ class LocalDatabaseService {
     try {
       // Query local database for matching credentials in "settings" collection
       // Following POS_V2 pattern: condition with 'where' wrapper and email/password fields
-      const results = await this.select('settings', {
-        where: {
-          email: email.toLowerCase(),
-          password,
+      const results = await this.select(
+        'settings',
+        {
+          where: {
+            email: email.toLowerCase(),
+            password,
+          },
         },
-      });
+        [],
+        { skipAuth: true }
+      );
 
       if (!results || results.length === 0) {
         throw new Error('Invalid credentials');

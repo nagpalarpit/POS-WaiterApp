@@ -13,17 +13,26 @@ const TOKEN_KEY = 'local_token';
 // Set up request interceptor to add auth token and POS ID (same as POS_V2)
 localApi.interceptors.request.use(
   async (config) => {
+    const headers: any = config.headers || {};
+    const skipAuth = headers['x-skip-auth'];
+    if (skipAuth) {
+      delete headers['x-skip-auth'];
+      config.headers = headers;
+      return config;
+    }
+
     const token = await AsyncStorage.getItem(TOKEN_KEY);
     if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+      headers.Authorization = `Bearer ${token}`;
     }
 
     // Append POS ID to request headers for local API calls (same header name as POS_V2)
     const posId = posIdService.getPosId();
     if (posId) {
-      config.headers['PosId'] = posId;
+      headers['PosId'] = posId;
     }
 
+    config.headers = headers;
     return config;
   },
   (error) => Promise.reject(error)

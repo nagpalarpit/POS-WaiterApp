@@ -4,7 +4,7 @@ import { API_ENDPOINTS } from "../config/apiEndpoints";
 
 export interface PlaceOrderItemPayload {
   companyId: number;
-  discountId?: number | null;
+  discountId?: number | string | null;
   categoryId: number;
   cartId?: string;
   categoryName: string;
@@ -56,7 +56,7 @@ export interface PlaceOrderDetailsPayload {
   orderTotal: number;
   createdAt: string;
   count: number;
-  discountId?: number | null;
+  discountId?: number | string | null;
   discount?: any;
   user?: any;
   addedBy?: number | null;

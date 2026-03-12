@@ -97,7 +97,7 @@ export const getItemOptionsSummary = (item: CartItem): string => {
 };
 
 export const getDiscountLabel = (discount: CartDiscount): string => {
-  if (discount.discountType === 'PERCENTAGE') {
+  if (discount.discountType === 'PERCENTAGE' || discount.discountType === 'CUSTOM') {
     return `${discount.discountValue}%`;
   }
   return formatCurrency(roundToTwo(discount.discountValue));
@@ -113,7 +113,7 @@ export const getDiscountAmount = (
   const discountValue = Math.max(toNumber(discount.discountValue, 0), 0);
   if (discountValue <= 0 || subTotalValue <= 0) return 0;
 
-  if (discount.discountType === 'PERCENTAGE') {
+  if (discount.discountType === 'PERCENTAGE' || discount.discountType === 'CUSTOM') {
     return roundToTwo(Math.min((subTotalValue * discountValue) / 100, subTotalValue));
   }
 
@@ -121,5 +121,6 @@ export const getDiscountAmount = (
 };
 
 export const getDiscountTypeLabel = (discountType: CartDiscountType): string => {
+  if (discountType === 'CUSTOM') return 'Custom';
   return discountType === 'PERCENTAGE' ? 'Percentage' : 'Flat';
 };

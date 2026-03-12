@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Modal,
   View,
@@ -9,10 +9,12 @@ import {
   ScrollView,
   useWindowDimensions,
   ActivityIndicator,
-} from 'react-native';
-import { useTheme } from '../theme/ThemeProvider';
-import Card from './Card';
-import { formatCurrency } from '../utils/currency';
+} from "react-native";
+import { useTheme } from "../theme/ThemeProvider";
+import Card from "./Card";
+import { formatCurrency } from "../utils/currency";
+import giftCardService from "../services/giftCardService";
+import { useToast } from "./ToastProvider";
 
 type PaymentDetail = {
   paymentProcessorId: number;
@@ -26,13 +28,28 @@ type SplitSelectableItem = {
   unitTotal: number;
 };
 
+type GiftCard = {
+  id?: number | string;
+  couponCode?: string;
+  code?: string;
+  cardCode?: string;
+  giftCardCode?: string;
+  remainingBalance?: number;
+  serviceValuePrice?: number;
+  startDate?: string;
+  expiryDate?: string;
+  [key: string]: any;
+};
+
 type PaymentOption = {
   id: number;
   label: string;
   paymentMethod?: number;
   tip?: number;
-  giftCard?: { code: string; amount: number };
+  giftCard?: GiftCard | null;
+  giftCardTotal?: number;
   cashProvided?: number;
+  isCorporate?: boolean;
   orderPaymentSummary?: { paymentProcessorId: number };
   orderPaymentDetails?: PaymentDetail[];
   isItemSplit?: boolean;
@@ -43,16 +60,60 @@ type PaymentOption = {
 type Props = {
   visible: boolean;
   onClose: () => void;
-  onSelect: (option: PaymentOption & { print?: boolean }) => void | Promise<void>;
+  onSelect: (
+    option: PaymentOption & { print?: boolean },
+  ) => void | Promise<void>;
   orderTotal?: number;
+  companyId?: number;
   splitItems?: SplitSelectableItem[];
   allowSplitOption?: boolean;
 };
 
 const toAmount = (value: string): number => {
-  const parsed = parseFloat(value || '0');
+  const parsed = parseFloat(value || "0");
   if (!Number.isFinite(parsed) || parsed < 0) return 0;
   return parsed;
+};
+
+const toNumber = (value: unknown, fallback = 0): number => {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : fallback;
+  }
+
+  if (typeof value === "string" && value.trim() !== "") {
+    const parsed = parseFloat(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+  }
+
+  return fallback;
+};
+
+const toStartOfDay = (value?: string | number | Date | null): Date | null => {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+};
+
+const formatDate = (date?: Date | null): string => {
+  if (!date) return "";
+  const day = `${date.getDate()}`.padStart(2, "0");
+  const month = `${date.getMonth() + 1}`.padStart(2, "0");
+  const year = date.getFullYear();
+  return `${day}-${month}-${year}`;
+};
+
+const getGiftCardDiscount = (
+  giftCard: GiftCard | null,
+  total: number,
+): number => {
+  if (!giftCard) return 0;
+  const remainingBalance = toNumber((giftCard as any).remainingBalance, 0);
+  const serviceValuePrice = toNumber((giftCard as any).serviceValuePrice, 0);
+  if (remainingBalance <= 0) {
+    return Math.min(serviceValuePrice, total);
+  }
+  return Math.min(remainingBalance, total);
 };
 
 const round2 = (value: number): number => Number(value.toFixed(2));
@@ -68,36 +129,42 @@ export default function PaymentModal({
   onClose,
   onSelect,
   orderTotal = 0,
+  companyId,
   splitItems = [],
   allowSplitOption = true,
 }: Props) {
   const { colors } = useTheme();
+  const { showToast } = useToast();
   const { height: windowHeight } = useWindowDimensions();
 
   const primaryTabs = useMemo(
     () => [
-      { id: 0, label: 'Cash' },
-      { id: 1, label: 'Card' },
-      ...(allowSplitOption ? [{ id: 3, label: 'Split' }] : []),
-      { id: 99, label: 'Other' },
+      { id: 0, label: "Cash" },
+      { id: 1, label: "Card" },
+      ...(allowSplitOption ? [{ id: 3, label: "Split" }] : []),
+      { id: 99, label: "Other" },
     ],
-    [allowSplitOption]
+    [allowSplitOption],
   );
 
   const otherMethods: PaymentOption[] = [
-    { id: 5, label: 'Debitor' },
-    { id: 6, label: 'Liefernado' },
-    { id: 7, label: 'Uber' },
-    { id: 8, label: 'Wolt' },
-    { id: 9, label: 'Bolt' },
-    { id: 10, label: 'Schlemmerblock' },
+    { id: 5, label: "Debitor" },
+    { id: 6, label: "Liefernado" },
+    { id: 7, label: "Uber" },
+    { id: 8, label: "Wolt" },
+    { id: 9, label: "Bolt" },
+    { id: 10, label: "Schlemmerblock" },
   ];
 
   const [activeTab, setActiveTab] = useState<number>(0);
-  const [tipValue, setTipValue] = useState('');
-  const [giftCode, setGiftCode] = useState('');
-  const [giftAmount, setGiftAmount] = useState('');
-  const [cashProvided, setCashProvided] = useState('');
+  const [tipValue, setTipValue] = useState("");
+  const [giftCode, setGiftCode] = useState("");
+  const [splitGiftCode, setSplitGiftCode] = useState("");
+  const [appliedGiftCard, setAppliedGiftCard] = useState<GiftCard | null>(null);
+  const [appliedSplitGiftCard, setAppliedSplitGiftCard] =
+    useState<GiftCard | null>(null);
+  const [isApplyingGiftCard, setIsApplyingGiftCard] = useState(false);
+  const [cashProvided, setCashProvided] = useState("");
   const [selectedOtherMethod, setSelectedOtherMethod] = useState<number>(5);
   const [splitSelections, setSplitSelections] = useState<number[]>([]);
   const [splitPaymentMethod, setSplitPaymentMethod] = useState<number>(0);
@@ -124,23 +191,34 @@ export default function PaymentModal({
   }, [allowSplitOption, activeTab, splitItems]);
 
   const tipNum = toAmount(tipValue);
-  const giftNum = toAmount(giftAmount);
-
   const splitItemTotal = useMemo(() => {
     return round2(
       splitItems.reduce((sum, item, index) => {
-        const selectedQty = Math.max(0, Math.floor(splitSelections[index] || 0));
+        const selectedQty = Math.max(
+          0,
+          Math.floor(splitSelections[index] || 0),
+        );
         return sum + item.unitTotal * selectedQty;
-      }, 0)
+      }, 0),
     );
   }, [splitItems, splitSelections]);
 
   const baseTotal = activeTab === 3 ? splitItemTotal : orderTotal;
   const isSplitMode = activeTab === 3;
+  const fullGiftCardTotal = round2(
+    getGiftCardDiscount(appliedGiftCard, orderTotal),
+  );
+  const splitGiftCardTotal = round2(
+    getGiftCardDiscount(appliedSplitGiftCard, splitItemTotal),
+  );
+  const giftCardTotal = isSplitMode ? splitGiftCardTotal : fullGiftCardTotal;
+  const activeGiftCard = isSplitMode ? appliedSplitGiftCard : appliedGiftCard;
   const useTallSplitModal = isSplitMode && splitItems.length > 5;
-  const splitModalHeight = useTallSplitModal ? windowHeight * 0.95 : windowHeight * 0.86;
+  const splitModalHeight = useTallSplitModal
+    ? windowHeight * 0.95
+    : windowHeight * 0.86;
   const defaultModalHeight = windowHeight * 0.78;
-  const due = Math.max(0, round2(baseTotal + tipNum - giftNum));
+  const due = Math.max(0, round2(baseTotal + tipNum - giftCardTotal));
   const splitRemainingAmount = Math.max(0, round2(orderTotal - splitItemTotal));
 
   const updateSplitSelection = (index: number, delta: number) => {
@@ -154,10 +232,13 @@ export default function PaymentModal({
   };
 
   const reset = () => {
-    setTipValue('');
-    setGiftCode('');
-    setGiftAmount('');
-    setCashProvided('');
+    setTipValue("");
+    setGiftCode("");
+    setSplitGiftCode("");
+    setAppliedGiftCard(null);
+    setAppliedSplitGiftCard(null);
+    setIsApplyingGiftCard(false);
+    setCashProvided("");
     setSelectedOtherMethod(5);
     setSplitSelections(splitItems.map(() => 0));
     setSplitPaymentMethod(0);
@@ -173,24 +254,123 @@ export default function PaymentModal({
     setActiveTab(0);
     setSplitSelections(splitItems.map(() => 0));
     setSplitPaymentMethod(0);
-    setTipValue('');
-    setGiftCode('');
-    setGiftAmount('');
-    setCashProvided('');
+    setTipValue("");
+    setSplitGiftCode("");
+    setAppliedSplitGiftCard(null);
+    setIsApplyingGiftCard(false);
+    setCashProvided("");
+  };
+
+  const getGiftCardLabel = (card: GiftCard | null) => {
+    if (!card) return "Gift card";
+    return (
+      card.couponCode ||
+      card.code ||
+      card.cardCode ||
+      card.giftCardCode ||
+      "Gift card"
+    );
+  };
+
+  const sanitizeGiftCard = (card: GiftCard | null): GiftCard | null => {
+    if (!card || typeof card !== "object") return card;
+    const copy: any = { ...card };
+    if (Array.isArray(copy.logs)) {
+      delete copy.logs;
+    }
+    return copy;
+  };
+
+  const addGiftCard = async (isSplit = false) => {
+    if (isApplyingGiftCard) return;
+    const code = (isSplit ? splitGiftCode : giftCode).trim();
+    if (!code) return;
+    if (!companyId) {
+      showToast("Gift card not available", { type: "error" });
+      return;
+    }
+
+    setIsApplyingGiftCard(true);
+    try {
+      const response = await giftCardService.getCoupons({
+        companyId,
+        couponCode: code,
+      });
+      const data = Array.isArray(response?.data) ? response.data : [];
+      const status = response?.status;
+      if (status && status !== "SUCCESS" && status !== 200) {
+        showToast("Gift card not available", { type: "error" });
+        return;
+      }
+      if (data.length === 0) {
+        showToast("Gift card not available", { type: "error" });
+        return;
+      }
+      const giftCard = data[0];
+      const expiryDate = toStartOfDay(giftCard?.expiryDate);
+      const startDate = toStartOfDay(giftCard?.startDate);
+      const today = toStartOfDay(new Date());
+
+      if (expiryDate && today && expiryDate < today) {
+        showToast("Gift card expired", { type: "error" });
+        return;
+      }
+
+      if (toNumber(giftCard?.remainingBalance, 0) <= 0) {
+        showToast("Remaining balance of this gift card is 0", {
+          type: "error",
+        });
+        return;
+      }
+
+      if (startDate && today && startDate > today) {
+        const startLabel = formatDate(startDate);
+        const endLabel = formatDate(expiryDate);
+        const message = endLabel
+          ? `Gift card available from ${startLabel} to ${endLabel}`
+          : `Gift card available from ${startLabel}`;
+        showToast(message, { type: "error" });
+        return;
+      }
+
+      if (isSplit) {
+        setAppliedSplitGiftCard(giftCard);
+        setSplitGiftCode("");
+      } else {
+        setAppliedGiftCard(giftCard);
+        setGiftCode("");
+      }
+    } catch (error) {
+      console.warn("Gift card fetch failed:", error);
+      showToast("Gift card not available", { type: "error" });
+    } finally {
+      setIsApplyingGiftCard(false);
+    }
+  };
+
+  const removeGiftCard = (isSplit = false) => {
+    if (isSplit) {
+      setAppliedSplitGiftCard(null);
+    } else {
+      setAppliedGiftCard(null);
+    }
   };
 
   const buildSingleMethodPayload = (
     method: number,
-    print: boolean
+    print: boolean,
+    isCorporate?: boolean,
   ): PaymentOption & { print: boolean } => ({
     id: method,
     label:
       method === 99
-        ? 'Other'
-        : primaryTabs.find((tab) => tab.id === method)?.label || 'Payment',
+        ? "Other"
+        : primaryTabs.find((tab) => tab.id === method)?.label || "Payment",
     paymentMethod: method,
     tip: tipNum,
-    giftCard: giftCode ? { code: giftCode, amount: giftNum } : undefined,
+    isCorporate,
+    giftCard: activeGiftCard ? sanitizeGiftCard(activeGiftCard) : undefined,
+    giftCardTotal: activeGiftCard ? giftCardTotal : 0,
     cashProvided: toAmount(cashProvided),
     orderPaymentSummary: { paymentProcessorId: method },
     orderPaymentDetails: [
@@ -202,10 +382,12 @@ export default function PaymentModal({
     print,
   });
 
-  const hasSplitSelection = splitSelections.some((qty) => Math.floor(qty || 0) > 0);
+  const hasSplitSelection = splitSelections.some(
+    (qty) => Math.floor(qty || 0) > 0,
+  );
   const isSplitInvalid = activeTab === 3 && !hasSplitSelection;
 
-  const handleConfirm = async (print = false) => {
+  const handleConfirm = async (print = false, isCorporate?: boolean) => {
     if (isProcessing) return;
     if (activeTab === 3) {
       if (isSplitInvalid) return;
@@ -213,12 +395,16 @@ export default function PaymentModal({
       const splitPaymentTotal = round2(due);
       const payload = {
         id: 3,
-        label: 'Split Payment',
+        label: "Split Payment",
         paymentMethod: splitPaymentMethod,
         tip: tipNum,
-        giftCard: giftCode ? { code: giftCode, amount: giftNum } : undefined,
+        isCorporate,
+        giftCard: activeGiftCard ? sanitizeGiftCard(activeGiftCard) : undefined,
+        giftCardTotal: activeGiftCard ? giftCardTotal : 0,
         isItemSplit: true,
-        splitSelections: splitSelections.map((qty) => Math.max(0, Math.floor(qty || 0))),
+        splitSelections: splitSelections.map((qty) =>
+          Math.max(0, Math.floor(qty || 0)),
+        ),
         splitItemTotal: splitItemTotal,
         orderPaymentSummary: { paymentProcessorId: splitPaymentMethod },
         orderPaymentDetails: [
@@ -234,17 +420,23 @@ export default function PaymentModal({
       } finally {
         setIsProcessing(false);
       }
-      setTipValue('');
-      setGiftCode('');
-      setGiftAmount('');
-      setCashProvided('');
+      setTipValue("");
+      setGiftCode("");
+      setSplitGiftCode("");
+      setAppliedGiftCard(null);
+      setAppliedSplitGiftCard(null);
+      setCashProvided("");
       setSplitSelections(splitItems.map(() => 0));
       return;
     }
 
     if (activeTab === 99) {
       setIsProcessing(true);
-      const payload = buildSingleMethodPayload(selectedOtherMethod, print);
+      const payload = buildSingleMethodPayload(
+        selectedOtherMethod,
+        print,
+        isCorporate,
+      );
       try {
         await Promise.resolve(onSelect(payload));
       } finally {
@@ -255,7 +447,7 @@ export default function PaymentModal({
     }
 
     setIsProcessing(true);
-    const payload = buildSingleMethodPayload(activeTab, print);
+    const payload = buildSingleMethodPayload(activeTab, print, isCorporate);
     try {
       await Promise.resolve(onSelect(payload));
     } finally {
@@ -285,241 +477,443 @@ export default function PaymentModal({
             },
           ]}
         >
-          <View style={[styles.headerRow, { paddingHorizontal: 18, paddingTop: 0 }]}>
+          <View
+            style={[styles.headerRow, { paddingHorizontal: 18, paddingTop: 0 }]}
+          >
             <View style={styles.headerTitleWrap}>
-              <Text style={[styles.title, { color: colors.text }]}>Save & Final Settle</Text>
+              <Text style={[styles.title, { color: colors.text }]}>
+                Save & Final Settle
+              </Text>
             </View>
             <View style={styles.headerActionsWrap}>
               <TouchableOpacity onPress={closeWithReset}>
-                <Text style={{ color: colors.textSecondary, fontSize: 20 }}>x</Text>
+                <Text style={{ color: colors.textSecondary, fontSize: 20 }}>
+                  x
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
 
           <View style={styles.dragIndicatorContainer}>
-            <View style={[styles.dragIndicator, { backgroundColor: colors.border }]} />
+            <View
+              style={[styles.dragIndicator, { backgroundColor: colors.border }]}
+            />
           </View>
           <View style={isSplitMode ? { flex: 1 } : undefined}>
             {!isSplitMode ? (
-            <View style={{ flexDirection: 'row', marginTop: 8, marginBottom: 6, gap: 8 }}>
-              {primaryTabs.map((tab) => (
-                <TouchableOpacity
-                  key={tab.id}
-                  onPress={() => setActiveTab(tab.id)}
-                  style={[
-                    styles.tab,
-                    {
-                      backgroundColor: activeTab === tab.id ? colors.primary : 'transparent',
-                      borderColor: colors.border,
-                    },
-                  ]}
-                >
-                  <Text style={{ color: activeTab === tab.id ? colors.textInverse : colors.text }}>
-                    {tab.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          ) : null}
+              <View
+                style={{
+                  flexDirection: "row",
+                  marginTop: 8,
+                  marginBottom: 6,
+                  gap: 8,
+                }}
+              >
+                {primaryTabs.map((tab) => (
+                  <TouchableOpacity
+                    key={tab.id}
+                    onPress={() => setActiveTab(tab.id)}
+                    style={[
+                      styles.tab,
+                      {
+                        backgroundColor:
+                          activeTab === tab.id ? colors.primary : "transparent",
+                        borderColor: colors.border,
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={{
+                        color:
+                          activeTab === tab.id
+                            ? colors.textInverse
+                            : colors.text,
+                      }}
+                    >
+                      {tab.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            ) : null}
 
-          <ScrollView
-            style={[
-              {
-                marginTop: 6,
-                flex: isSplitMode ? 1 : undefined,
-                maxHeight: isSplitMode ? undefined : 390,
-              },
-            ]}
-            contentContainerStyle={{
-              paddingBottom: isSplitMode ? 8 : 0,
-              flexGrow: 1,
-            }}
-            showsVerticalScrollIndicator={isSplitMode}
-          >
-            {activeTab === 99 ? (
-              <View>
-                <Text style={{ color: colors.textSecondary, marginBottom: 8 }}>Other Payments</Text>
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                  {otherMethods.map((method) => {
-                    const selected = selectedOtherMethod === method.id;
-                    return (
-                      <TouchableOpacity
-                        key={method.id}
-                        onPress={() => setSelectedOtherMethod(method.id)}
+            <ScrollView
+              style={[
+                {
+                  marginTop: 6,
+                  flex: isSplitMode ? 1 : undefined,
+                  maxHeight: isSplitMode ? undefined : 390,
+                },
+              ]}
+              contentContainerStyle={{
+                paddingBottom: isSplitMode ? 8 : 0,
+                flexGrow: 1,
+              }}
+              showsVerticalScrollIndicator={isSplitMode}
+            >
+              {activeTab === 99 ? (
+                <View>
+                  <Text
+                    style={{ color: colors.textSecondary, marginBottom: 8 }}
+                  >
+                    Other Payments
+                  </Text>
+                  <View
+                    style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}
+                  >
+                    {otherMethods.map((method) => {
+                      const selected = selectedOtherMethod === method.id;
+                      return (
+                        <TouchableOpacity
+                          key={method.id}
+                          onPress={() => setSelectedOtherMethod(method.id)}
+                          style={[
+                            styles.pill,
+                            {
+                              borderColor: selected
+                                ? colors.primary
+                                : colors.border,
+                              backgroundColor: selected
+                                ? colors.primary + "15"
+                                : "transparent",
+                            },
+                          ]}
+                        >
+                          <Text
+                            style={{
+                              color: selected ? colors.primary : colors.text,
+                            }}
+                          >
+                            {method.label}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
+              ) : (
+                <View>
+                  {activeTab === 0 && (
+                    <View>
+                      <Text style={{ color: colors.textSecondary }}>
+                        Cash provided
+                      </Text>
+                      <TextInput
+                        keyboardType="numeric"
+                        placeholder="Enter cash amount"
+                        placeholderTextColor={colors.textSecondary}
+                        value={cashProvided}
+                        onChangeText={setCashProvided}
                         style={[
-                          styles.pill,
-                          {
-                            borderColor: selected ? colors.primary : colors.border,
-                            backgroundColor: selected ? colors.primary + '15' : 'transparent',
-                          },
+                          styles.input,
+                          { borderColor: colors.border, color: colors.text },
+                        ]}
+                      />
+
+                      <Text
+                        style={{ color: colors.textSecondary, marginTop: 8 }}
+                      >
+                        Cash to return
+                      </Text>
+                      <View
+                        style={[styles.input, { justifyContent: "center" }]}
+                      >
+                        <Text style={{ color: colors.text }}>
+                          {formatCurrency(
+                            Math.max(0, toAmount(cashProvided) - due),
+                          )}
+                        </Text>
+                      </View>
+                    </View>
+                  )}
+
+                  {activeTab === 1 && (
+                    <View>
+                      <Text style={{ color: colors.textSecondary }}>
+                        Card payment selected
+                      </Text>
+                    </View>
+                  )}
+
+                  {isSplitMode && (
+                    <View>
+                      <Text
+                        style={{ color: colors.textSecondary, marginBottom: 8 }}
+                      >
+                        Split items (pay selected quantity only)
+                      </Text>
+
+                      <View style={styles.splitMethodRow}>
+                        {[
+                          { id: 0, label: "Cash" },
+                          { id: 1, label: "Card" },
+                        ].map((method) => {
+                          const selected = splitPaymentMethod === method.id;
+                          return (
+                            <TouchableOpacity
+                              key={method.id}
+                              onPress={() => setSplitPaymentMethod(method.id)}
+                              style={[
+                                styles.splitMethodBtn,
+                                {
+                                  borderColor: selected
+                                    ? colors.primary
+                                    : colors.border,
+                                  backgroundColor: selected
+                                    ? colors.primary
+                                    : "transparent",
+                                },
+                              ]}
+                            >
+                              <Text
+                                style={{
+                                  color: selected
+                                    ? colors.textInverse
+                                    : colors.text,
+                                }}
+                              >
+                                {method.label}
+                              </Text>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+
+                      {splitItems.length === 0 ? (
+                        <Text
+                          style={{ color: colors.textSecondary, marginTop: 8 }}
+                        >
+                          No items available for split.
+                        </Text>
+                      ) : (
+                        splitItems.map((item, index) => {
+                          const selectedQty = Math.max(
+                            0,
+                            Math.floor(splitSelections[index] || 0),
+                          );
+                          return (
+                            <View
+                              key={item.key || `${index}`}
+                              style={[
+                                styles.splitItemCard,
+                                {
+                                  borderColor: colors.border,
+                                  backgroundColor:
+                                    colors.surfaceHover || colors.surface,
+                                },
+                              ]}
+                            >
+                              <View style={{ flex: 1, paddingRight: 8 }}>
+                                <Text
+                                  style={{
+                                    color: colors.text,
+                                    fontWeight: "700",
+                                  }}
+                                >
+                                  {item.name}
+                                </Text>
+                                <Text
+                                  style={{
+                                    color: colors.textSecondary,
+                                    marginTop: 2,
+                                  }}
+                                >
+                                  Qty: {item.quantity} x{" "}
+                                  {formatCurrency(item.unitTotal)}
+                                </Text>
+                              </View>
+
+                              <View style={styles.splitCounterWrap}>
+                                <TouchableOpacity
+                                  onPress={() =>
+                                    updateSplitSelection(index, -1)
+                                  }
+                                  style={[
+                                    styles.splitCounterBtn,
+                                    { borderColor: colors.border },
+                                  ]}
+                                >
+                                  <Text
+                                    style={{
+                                      color: colors.text,
+                                      fontSize: 18,
+                                      fontWeight: "700",
+                                    }}
+                                  >
+                                    -
+                                  </Text>
+                                </TouchableOpacity>
+                                <Text
+                                  style={{
+                                    color: colors.text,
+                                    width: 28,
+                                    textAlign: "center",
+                                    fontWeight: "700",
+                                  }}
+                                >
+                                  {selectedQty}
+                                </Text>
+                                <TouchableOpacity
+                                  onPress={() => updateSplitSelection(index, 1)}
+                                  style={[
+                                    styles.splitCounterBtn,
+                                    { borderColor: colors.border },
+                                  ]}
+                                >
+                                  <Text
+                                    style={{
+                                      color: colors.text,
+                                      fontSize: 18,
+                                      fontWeight: "700",
+                                    }}
+                                  >
+                                    +
+                                  </Text>
+                                </TouchableOpacity>
+                              </View>
+                            </View>
+                          );
+                        })
+                      )}
+
+                      <View
+                        style={[
+                          styles.splitSummary,
+                          { borderColor: colors.border },
                         ]}
                       >
-                        <Text style={{ color: selected ? colors.primary : colors.text }}>
-                          {method.label}
+                        <Text style={{ color: colors.textSecondary }}>
+                          Selected: {formatCurrency(splitItemTotal)}
                         </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
+                        <Text style={{ color: colors.text, fontWeight: "700" }}>
+                          Remaining: {formatCurrency(splitRemainingAmount)}
+                        </Text>
+                      </View>
+                    </View>
+                  )}
                 </View>
-              </View>
-            ) : (
-              <View>
-                {activeTab === 0 && (
-                  <View>
-                    <Text style={{ color: colors.textSecondary }}>Cash provided</Text>
-                    <TextInput
-                      keyboardType="numeric"
-                      placeholder="Enter cash amount"
-                      placeholderTextColor={colors.textSecondary}
-                      value={cashProvided}
-                      onChangeText={setCashProvided}
-                      style={[styles.input, { borderColor: colors.border, color: colors.text }]}
-                    />
+              )}
 
-                    <Text style={{ color: colors.textSecondary, marginTop: 8 }}>Cash to return</Text>
-                    <View style={[styles.input, { justifyContent: 'center' }]}> 
-                      <Text style={{ color: colors.text }}>
-                        {formatCurrency(Math.max(0, toAmount(cashProvided) - due))}
-                      </Text>
-                    </View>
-                  </View>
-                )}
-
-                {activeTab === 1 && (
-                  <View>
-                    <Text style={{ color: colors.textSecondary }}>Card payment selected</Text>
-                  </View>
-                )}
-
-                {isSplitMode && (
-                  <View>
-                    <Text style={{ color: colors.textSecondary, marginBottom: 8 }}>
-                      Split items (pay selected quantity only)
-                    </Text>
-
-                    <View style={styles.splitMethodRow}>
-                      {[{ id: 0, label: 'Cash' }, { id: 1, label: 'Card' }].map((method) => {
-                        const selected = splitPaymentMethod === method.id;
-                        return (
-                          <TouchableOpacity
-                            key={method.id}
-                            onPress={() => setSplitPaymentMethod(method.id)}
-                            style={[
-                              styles.splitMethodBtn,
-                              {
-                                borderColor: selected ? colors.primary : colors.border,
-                                backgroundColor: selected ? colors.primary : 'transparent',
-                              },
-                            ]}
-                          >
-                            <Text style={{ color: selected ? colors.textInverse : colors.text }}>
-                              {method.label}
-                            </Text>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </View>
-
-                    {splitItems.length === 0 ? (
-                      <Text style={{ color: colors.textSecondary, marginTop: 8 }}>
-                        No items available for split.
-                      </Text>
-                    ) : (
-                      splitItems.map((item, index) => {
-                        const selectedQty = Math.max(0, Math.floor(splitSelections[index] || 0));
-                        return (
-                          <View
-                            key={item.key || `${index}`}
-                            style={[
-                              styles.splitItemCard,
-                              {
-                                borderColor: colors.border,
-                                backgroundColor: colors.surfaceHover || colors.surface,
-                              },
-                            ]}
-                          >
-                            <View style={{ flex: 1, paddingRight: 8 }}>
-                              <Text style={{ color: colors.text, fontWeight: '700' }}>{item.name}</Text>
-                              <Text style={{ color: colors.textSecondary, marginTop: 2 }}>
-                                Qty: {item.quantity} x {formatCurrency(item.unitTotal)}
-                              </Text>
-                            </View>
-
-                            <View style={styles.splitCounterWrap}>
-                              <TouchableOpacity
-                                onPress={() => updateSplitSelection(index, -1)}
-                                style={[styles.splitCounterBtn, { borderColor: colors.border }]}
-                              >
-                                <Text style={{ color: colors.text, fontSize: 18, fontWeight: '700' }}>-</Text>
-                              </TouchableOpacity>
-                              <Text style={{ color: colors.text, width: 28, textAlign: 'center', fontWeight: '700' }}>
-                                {selectedQty}
-                              </Text>
-                              <TouchableOpacity
-                                onPress={() => updateSplitSelection(index, 1)}
-                                style={[styles.splitCounterBtn, { borderColor: colors.border }]}
-                              >
-                                <Text style={{ color: colors.text, fontSize: 18, fontWeight: '700' }}>+</Text>
-                              </TouchableOpacity>
-                            </View>
-                          </View>
-                        );
-                      })
-                    )}
-
-                    <View style={[styles.splitSummary, { borderColor: colors.border }]}> 
-                      <Text style={{ color: colors.textSecondary }}>
-                        Selected: {formatCurrency(splitItemTotal)}
-                      </Text>
-                      <Text style={{ color: colors.text, fontWeight: '700' }}>
-                        Remaining: {formatCurrency(splitRemainingAmount)}
-                      </Text>
-                    </View>
-                  </View>
-                )}
-              </View>
-            )}
-
-            <View style={{ marginTop: 12 }}>
-              <Text style={{ color: colors.textSecondary }}>Add Tip (optional)</Text>
-              <TextInput
-                keyboardType="numeric"
-                placeholder="Enter tip amount"
-                placeholderTextColor={colors.textSecondary}
-                value={tipValue}
-                onChangeText={setTipValue}
-                style={[styles.input, { borderColor: colors.border, color: colors.text }]}
-              />
-            </View>
-
-            <View style={{ marginTop: 12 }}>
-              <Text style={{ color: colors.textSecondary }}>Gift Card (optional)</Text>
-              <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center', marginTop: 8 }}>
-                <TextInput
-                  placeholder="Gift card code"
-                  placeholderTextColor={colors.textSecondary}
-                  value={giftCode}
-                  onChangeText={setGiftCode}
-                  style={[styles.input, { flex: 1, borderColor: colors.border, color: colors.text, marginTop: 0 }]}
-                />
+              <View style={{ marginTop: 12 }}>
+                <Text style={{ color: colors.textSecondary }}>
+                  Add Tip (optional)
+                </Text>
                 <TextInput
                   keyboardType="numeric"
-                  placeholder="Amount"
+                  placeholder="Enter tip amount"
                   placeholderTextColor={colors.textSecondary}
-                  value={giftAmount}
-                  onChangeText={setGiftAmount}
-                  style={[styles.input, { width: 96, borderColor: colors.border, color: colors.text, marginTop: 0 }]}
+                  value={tipValue}
+                  onChangeText={setTipValue}
+                  style={[
+                    styles.input,
+                    { borderColor: colors.border, color: colors.text },
+                  ]}
                 />
               </View>
-            </View>
-          </ScrollView>
+
+              <View style={{ marginTop: 12 }}>
+                <Text style={{ color: colors.textSecondary }}>Gift Card</Text>
+                {activeGiftCard ? (
+                  <View style={styles.giftCardRow}>
+                    <View
+                      style={[
+                        styles.giftCardBadge,
+                        {
+                          borderColor: colors.border,
+                          backgroundColor:
+                            colors.surfaceHover || colors.surface,
+                        },
+                      ]}
+                    >
+                      <Text style={{ color: colors.text, fontWeight: "700" }}>
+                        {getGiftCardLabel(activeGiftCard)}
+                      </Text>
+                      <Text
+                        style={{ color: colors.textSecondary, marginTop: 2 }}
+                      >
+                        Applied: {formatCurrency(giftCardTotal)}
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      onPress={() => removeGiftCard(isSplitMode)}
+                      style={[styles.ghostBtn, { borderColor: colors.border }]}
+                    >
+                      <Text style={{ color: colors.textSecondary }}>
+                        Remove
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <View style={styles.giftCardInputRow}>
+                    <TextInput
+                      placeholder="Gift card code"
+                      placeholderTextColor={colors.textSecondary}
+                      value={isSplitMode ? splitGiftCode : giftCode}
+                      onChangeText={
+                        isSplitMode ? setSplitGiftCode : setGiftCode
+                      }
+                      style={[
+                        styles.input,
+                        styles.giftCardInput,
+                        {
+                          borderColor: colors.border,
+                          color: colors.text,
+                          marginTop: 0,
+                        },
+                      ]}
+                    />
+                    <TouchableOpacity
+                      onPress={() => addGiftCard(isSplitMode)}
+                      disabled={
+                        isApplyingGiftCard ||
+                        !(isSplitMode ? splitGiftCode.trim() : giftCode.trim())
+                      }
+                      style={[
+                        styles.giftCardAddBtn,
+                        {
+                          backgroundColor:
+                            isApplyingGiftCard ||
+                            !(isSplitMode
+                              ? splitGiftCode.trim()
+                              : giftCode.trim())
+                              ? colors.border
+                              : colors.primary,
+                        },
+                      ]}
+                    >
+                      {isApplyingGiftCard ? (
+                        <ActivityIndicator color={colors.textInverse} />
+                      ) : (
+                        <Text style={{ color: colors.textInverse }}>Add</Text>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
+            </ScrollView>
           </View>
 
-          <View
-            style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 }}
-          >
-            <Text style={{ color: colors.text, fontWeight: '700' }}>{formatCurrency(due)}</Text>
-            <View style={{ flexDirection: 'row', gap: 8 }}>
+          <View style={{ marginTop: 12 }}>
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
+              <Text style={{ color: colors.text, fontWeight: "700" }}>
+                {formatCurrency(due)}
+              </Text>
+            </View>
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 8,
+                marginTop: 8,
+                flexWrap: "wrap",
+              }}
+            >
               {isSplitMode ? (
                 <TouchableOpacity
                   onPress={handleSplitBack}
@@ -542,7 +936,12 @@ export default function PaymentModal({
                 disabled={isSplitInvalid || isProcessing}
                 style={[
                   styles.payBtn,
-                  { backgroundColor: isSplitInvalid || isProcessing ? colors.border : colors.primary },
+                  {
+                    backgroundColor:
+                      isSplitInvalid || isProcessing
+                        ? colors.border
+                        : colors.primary,
+                  },
                 ]}
               >
                 {isProcessing ? (
@@ -558,13 +957,43 @@ export default function PaymentModal({
                 disabled={isSplitInvalid || isProcessing}
                 style={[
                   styles.payBtnPrimary,
-                  { backgroundColor: isSplitInvalid || isProcessing ? colors.border : colors.primary },
+                  {
+                    backgroundColor:
+                      isSplitInvalid || isProcessing
+                        ? colors.border
+                        : colors.primary,
+                  },
                 ]}
               >
                 {isProcessing ? (
                   <ActivityIndicator color={colors.textInverse} />
                 ) : (
                   <Text style={{ color: colors.textInverse }}>Pay & Print</Text>
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => {
+                  handleConfirm(true, true);
+                }}
+                disabled={isSplitInvalid || isProcessing}
+                style={[
+                  styles.expenseBtn,
+                  {
+                    backgroundColor:
+                      isSplitInvalid || isProcessing
+                        ? colors.border
+                        : colors.success || colors.secondary || colors.primary,
+                  },
+                ]}
+              >
+                {isProcessing ? (
+                  <ActivityIndicator color={colors.textInverse} />
+                ) : (
+                  <Text
+                    style={{ color: colors.textInverse, fontWeight: "700" }}
+                  >
+                    Betriebsaufwand
+                  </Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -578,15 +1007,15 @@ export default function PaymentModal({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'transparent',
-    justifyContent: 'flex-end',
-    alignItems: 'center',
+    backgroundColor: "transparent",
+    justifyContent: "flex-end",
+    alignItems: "center",
     paddingHorizontal: 12,
     paddingBottom: 0,
   },
   card: {
-    width: '100%',
-    maxHeight: '78%',
+    width: "100%",
+    maxHeight: "78%",
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
     borderRadius: 16,
@@ -595,31 +1024,35 @@ const styles = StyleSheet.create({
     paddingBottom: 22,
     borderWidth: 1,
   },
-  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  headerRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
   headerTitleWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
   },
   headerActionsWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 10,
   },
   title: {
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   splitBackBtn: {
     width: 28,
     height: 28,
     borderRadius: 14,
     borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   dragIndicatorContainer: {
-    alignItems: 'center',
+    alignItems: "center",
     marginTop: 8,
     marginBottom: 6,
   },
@@ -648,11 +1081,50 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginTop: 6,
   },
-  ghostBtn: { paddingHorizontal: 12, paddingVertical: 10, borderRadius: 8, borderWidth: 1 },
+  giftCardRow: {
+    flexDirection: "row",
+    gap: 8,
+    alignItems: "center",
+    marginTop: 8,
+  },
+  giftCardBadge: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+  },
+  giftCardInputRow: {
+    flexDirection: "row",
+    gap: 8,
+    alignItems: "center",
+    marginTop: 8,
+  },
+  giftCardInput: {
+    flex: 1,
+  },
+  giftCardAddBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignSelf: "stretch",
+    justifyContent: "center",
+  },
+  ghostBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
   payBtn: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 8 },
-  payBtnPrimary: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 8 },
+  payBtnPrimary: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  expenseBtn: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 8 },
   splitMethodRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 8,
     marginBottom: 10,
   },
@@ -667,21 +1139,21 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     padding: 10,
     marginBottom: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
   splitCounterWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
   splitCounterBtn: {
     width: 34,
     height: 34,
     borderRadius: 8,
     borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   splitSummary: {
     marginTop: 10,
@@ -689,13 +1161,8 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     paddingHorizontal: 10,
     paddingVertical: 8,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
   },
 });
-
-
-
-
-

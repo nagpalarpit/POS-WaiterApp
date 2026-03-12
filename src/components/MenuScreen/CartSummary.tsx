@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Cart } from '../../services/cartService';
 import {
     getCartSubtotal,
@@ -30,6 +31,7 @@ export const CartSummary: React.FC<CartSummaryProps> = ({
     colors,
     isOrderNoteOrDiscountPresent = true,
 }) => {
+    const insets = useSafeAreaInsets();
     const subtotal = getCartSubtotal(cart);
     const discount = getDiscountAmount(subtotal, cart.discount);
     const total = Math.max(subtotal - discount, 0);
@@ -38,7 +40,8 @@ export const CartSummary: React.FC<CartSummaryProps> = ({
         <View
             style={{
                 paddingHorizontal: 12,
-                paddingVertical: 16,
+                paddingTop: 16,
+                paddingBottom: 16 + insets.bottom,
                 borderTopWidth: 1,
                 borderTopColor: colors.border,
                 backgroundColor: colors.background,

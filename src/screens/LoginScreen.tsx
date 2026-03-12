@@ -1,12 +1,13 @@
-import React, { useState } from 'react';
-import { View, Text, TextInput, Keyboard, Platform, KeyboardAvoidingView, ScrollView } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import React, { useCallback, useState } from 'react';
+import { View, Text, TextInput, Keyboard, Platform, KeyboardAvoidingView, ScrollView, BackHandler } from 'react-native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import PrimaryButton from '../components/PrimaryButton';
 import { useTheme } from '../theme/ThemeProvider';
 import authService from '../services/authService';
 import { useToast } from '../components/ToastProvider';
+import { fetchDiscountsForCompany } from '../services/discountService';
 
 export default function LoginScreen() {
   const navigation = useNavigation();
@@ -15,6 +16,24 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
   const { colors } = useTheme();
   const { showToast } = useToast();
+
+  useFocusEffect(
+    useCallback(() => {
+      const onBackPress = () => true;
+      const backSub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+      const navSub = navigation.addListener('beforeRemove', (e: any) => {
+        const actionType = e?.data?.action?.type;
+        if (actionType === 'GO_BACK' || actionType === 'POP' || actionType === 'POP_TO_TOP') {
+          e.preventDefault();
+        }
+      });
+
+      return () => {
+        backSub.remove();
+        navSub();
+      };
+    }, [navigation])
+  );
 
   const doLogin = async () => {
     if (!username.trim() || !password.trim()) {
@@ -39,6 +58,18 @@ export default function LoginScreen() {
         try {
           await AsyncStorage.setItem('userData', JSON.stringify(result.response.user));
           await AsyncStorage.setItem('authToken', result.response.token);
+          const companyId =
+            Number(
+              result.response.user?.companyId ||
+                result.response.user?.company?.id ||
+                result.response.user?.company?.companyId ||
+                0
+            ) || 0;
+          if (companyId) {
+            fetchDiscountsForCompany(companyId).catch((error) => {
+              console.log('LoginScreen: Unable to preload discounts:', error?.message || error);
+            });
+          }
         } catch (storageError) {
           console.error('Error storing user data:', storageError);
         }

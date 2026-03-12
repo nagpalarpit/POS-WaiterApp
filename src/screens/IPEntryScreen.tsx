@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, Keyboard, Platform, KeyboardAvoidingView, ScrollView } from 'react-native';
-import { useNavigation, useIsFocused } from '@react-navigation/native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { View, Text, TextInput, Keyboard, Platform, KeyboardAvoidingView, ScrollView, BackHandler } from 'react-native';
+import { useNavigation, useIsFocused, useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import PrimaryButton from '../components/PrimaryButton';
@@ -19,6 +19,24 @@ export default function IPEntryScreen() {
     const [debugInfo, setDebugInfo] = useState<string | null>(null);
     const { colors } = useTheme();
     const { showToast } = useToast();
+
+    useFocusEffect(
+        useCallback(() => {
+            const onBackPress = () => true;
+            const backSub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+            const navSub = navigation.addListener('beforeRemove', (e: any) => {
+                const actionType = e?.data?.action?.type;
+                if (actionType === 'GO_BACK' || actionType === 'POP' || actionType === 'POP_TO_TOP') {
+                    e.preventDefault();
+                }
+            });
+
+            return () => {
+                backSub.remove();
+                navSub();
+            };
+        }, [navigation])
+    );
 
     // Initialize with saved server URL on screen focus
     useEffect(() => {

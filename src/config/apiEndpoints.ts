@@ -47,6 +47,10 @@ export const API_ENDPOINTS = {
     UPDATE: `${API_V1}admin/companySettings/edit`,
   },
 
+  giftCard: {
+    GET_ALL: `${API_V1}admin/giftCard/getAllGiftCards`,
+  },
+
   // Local API endpoints for waiter app
   local: {
     // Orders

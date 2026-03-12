@@ -43,7 +43,7 @@ const getOrderType = (deliveryType: number): string => {
  * Convert discount type from cart format to POS_V2 format
  */
 const getPosV2DiscountType = (discountType?: string): number => {
-  return discountType === 'PERCENTAGE' ? 1 : 0;
+  return discountType === 'PERCENTAGE' || discountType === 'CUSTOM' ? 1 : 0;
 };
 
 /**
@@ -62,10 +62,11 @@ export const useOrderSubmit = (
    * Prepare order items from cart
    */
   const prepareOrderItems = (companyId: number): PlaceOrderItemPayload[] => {
+    const discountId = cart.discount?.discountId ?? null;
     return cart.items.map((item: CartItem) => {
       const orderItem: PlaceOrderItemPayload = {
         companyId,
-        discountId: null,
+        discountId,
         categoryId: item.categoryId,
         cartId: item.cartId,
         categoryName: item.categoryName,
@@ -246,7 +247,7 @@ export const useOrderSubmit = (
           orderTotal: total,
           createdAt: existingDetails?.createdAt ?? existingOrder?.createdAt ?? now,
           count: nextCount,
-          discountId: null,
+          discountId: appliedDiscount?.discountId ?? null,
           discount: normalizedDiscount ?? null,
           user: existingDetails?.user ?? userData ?? null,
           addedBy,
@@ -386,7 +387,7 @@ export const useOrderSubmit = (
         orderTotal: total,
         createdAt: now,
         count: 1,
-        discountId: null,
+        discountId: appliedDiscount?.discountId ?? null,
         discount: normalizedDiscount,
         user: userData || null,
         addedBy: Number(userData?.id || 0) || null,

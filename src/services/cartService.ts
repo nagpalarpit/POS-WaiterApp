@@ -12,9 +12,10 @@ export interface AttributeValue {
   attributeValueQuantity?: number;
 }
 
-export type CartDiscountType = 'PERCENTAGE' | 'FLAT';
+export type CartDiscountType = 'PERCENTAGE' | 'FLAT' | 'CUSTOM';
 
 export interface CartDiscount {
+  discountId?: number | string;
   discountName?: string;
   discountType: CartDiscountType;
   discountValue: number;
@@ -80,14 +81,19 @@ const toNumber = (value: unknown, fallback = 0): number => {
 const normalizeDiscountFromOrder = (discount: any): CartDiscount | null => {
   if (!discount) return null;
   const discountType =
-    discount.discountType === 1 ||
-    discount.discountType === '1' ||
-    discount.discountType === 'PERCENTAGE'
-      ? 'PERCENTAGE'
-      : 'FLAT';
+    discount.discountType === 3 ||
+    discount.discountType === '3' ||
+    discount.discountType === 'CUSTOM'
+      ? 'CUSTOM'
+      : discount.discountType === 1 ||
+        discount.discountType === '1' ||
+        discount.discountType === 'PERCENTAGE'
+        ? 'PERCENTAGE'
+        : 'FLAT';
   const discountValue = toNumber(discount.discountValue ?? discount.value, 0);
   if (!discountValue) return null;
   return {
+    discountId: discount.discountId ?? discount.id ?? discount._id,
     discountName: discount.discountName || discount.name || '',
     discountType,
     discountValue,
