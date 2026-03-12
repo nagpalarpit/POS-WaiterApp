@@ -148,7 +148,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                         transform: [{ translateX: cartDrawerTranslateAnim }],
                     }}
                 >
-                    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
+                    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top', 'bottom']}>
                         {/* Enhanced Cart Header */}
                         <View
                             style={{

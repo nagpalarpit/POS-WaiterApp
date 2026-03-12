@@ -45,7 +45,7 @@ export const CartSummary: React.FC<CartSummaryProps> = ({
             style={{
                 paddingHorizontal: 12,
                 paddingTop: 16,
-                paddingBottom: 16 + insets.bottom,
+                paddingBottom: 16 + Math.max(insets.bottom, 24),
                 borderTopWidth: 1,
                 borderTopColor: colors.border,
                 backgroundColor: colors.background,

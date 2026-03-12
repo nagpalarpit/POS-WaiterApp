@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
-import { Animated, Text, StyleSheet } from 'react-native';
+import { Animated, Text, StyleSheet, Modal, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeProvider';
 
@@ -69,29 +69,33 @@ export const ToastProvider = ({ children }: { children: React.ReactNode }) => {
     <ToastContext.Provider value={{ showToast }}>
       {children}
       {message ? (
-        <Animated.View
-          pointerEvents="none"
-          style={[
-            styles.toast,
-            {
-              top: insets.top + 12,
-              backgroundColor: getToastColor(type, colors),
-              opacity: anim,
-              transform: [
+        <Modal transparent visible statusBarTranslucent>
+          <View pointerEvents="none" style={{ flex: 1 }}>
+            <Animated.View
+              pointerEvents="none"
+              style={[
+                styles.toast,
                 {
-                  translateY: anim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [-6, 0],
-                  }),
+                  top: insets.top + 12,
+                  backgroundColor: getToastColor(type, colors),
+                  opacity: anim,
+                  transform: [
+                    {
+                      translateY: anim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [-6, 0],
+                      }),
+                    },
+                  ],
                 },
-              ],
-            },
-          ]}
-        >
-          <Text style={{ color: colors.textInverse || '#fff', fontWeight: '700', fontSize: 12 }}>
-            {message}
-          </Text>
-        </Animated.View>
+              ]}
+            >
+              <Text style={{ color: colors.textInverse || '#fff', fontWeight: '700', fontSize: 12 }}>
+                {message}
+              </Text>
+            </Animated.View>
+          </View>
+        </Modal>
       ) : null}
     </ToastContext.Provider>
   );

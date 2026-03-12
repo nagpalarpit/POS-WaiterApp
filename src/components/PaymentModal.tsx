@@ -9,7 +9,10 @@ import {
   ScrollView,
   useWindowDimensions,
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../theme/ThemeProvider";
 import Card from "./Card";
 import { formatCurrency } from "../utils/currency";
@@ -136,6 +139,7 @@ export default function PaymentModal({
   const { colors } = useTheme();
   const { showToast } = useToast();
   const { height: windowHeight } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
 
   const primaryTabs = useMemo(
     () => [
@@ -465,18 +469,22 @@ export default function PaymentModal({
       allowSwipeDismissal={true}
     >
       <View style={[styles.overlay, { backgroundColor: colors.overlay }]}>
-        <Card
-          padding={0}
-          rounded={16}
-          style={[
-            styles.card,
-            {
-              borderColor: colors.border,
-              maxHeight: isSplitMode ? splitModalHeight : defaultModalHeight,
-              height: isSplitMode ? splitModalHeight : undefined,
-            },
-          ]}
+        <KeyboardAvoidingView
+          style={{ flex: 1, justifyContent: "center" }}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          keyboardVerticalOffset={Platform.OS === "ios" ? 64 : 0}
         >
+          <Card
+            padding={0}
+            rounded={16}
+            style={[
+              styles.card,
+              {
+                borderColor: colors.border,
+                height: isSplitMode ? splitModalHeight : defaultModalHeight,
+              },
+            ]}
+          >
           <View
             style={[styles.headerRow, { paddingHorizontal: 18, paddingTop: 0 }]}
           >
@@ -499,14 +507,16 @@ export default function PaymentModal({
               style={[styles.dragIndicator, { backgroundColor: colors.border }]}
             />
           </View>
-          <View style={isSplitMode ? { flex: 1 } : undefined}>
+          <View style={{ flex: 1 }}>
             {!isSplitMode ? (
               <View
                 style={{
                   flexDirection: "row",
                   marginTop: 8,
                   marginBottom: 6,
-                  gap: 8,
+                  columnGap: 8,
+                  rowGap: 8,
+                  flexWrap: "wrap",
                 }}
               >
                 {primaryTabs.map((tab) => (
@@ -522,17 +532,19 @@ export default function PaymentModal({
                       },
                     ]}
                   >
-                    <Text
-                      style={{
-                        color:
-                          activeTab === tab.id
-                            ? colors.textInverse
-                            : colors.text,
-                      }}
-                    >
-                      {tab.label}
-                    </Text>
-                  </TouchableOpacity>
+                  <Text
+                    style={{
+                      color:
+                        activeTab === tab.id
+                          ? colors.textInverse
+                          : colors.text,
+                      fontWeight: "700",
+                      fontSize: 12,
+                    }}
+                  >
+                    {tab.label}
+                  </Text>
+                </TouchableOpacity>
                 ))}
               </View>
             ) : null}
@@ -541,14 +553,16 @@ export default function PaymentModal({
               style={[
                 {
                   marginTop: 6,
-                  flex: isSplitMode ? 1 : undefined,
-                  maxHeight: isSplitMode ? undefined : 390,
+                  flex: 1,
                 },
               ]}
               contentContainerStyle={{
-                paddingBottom: isSplitMode ? 8 : 0,
+                paddingBottom:
+                  (isSplitMode ? 8 : 0) + Math.max(insets.bottom, 12),
                 flexGrow: 1,
               }}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="on-drag"
               showsVerticalScrollIndicator={isSplitMode}
             >
               {activeTab === 99 ? (
@@ -908,10 +922,12 @@ export default function PaymentModal({
             <View
               style={{
                 flexDirection: "row",
-                alignItems: "center",
-                gap: 8,
+                columnGap: 8,
+                rowGap: 8,
                 marginTop: 8,
                 flexWrap: "wrap",
+                justifyContent: "flex-start",
+                alignItems: "flex-start",
               }}
             >
               {isSplitMode ? (
@@ -990,6 +1006,8 @@ export default function PaymentModal({
                   <ActivityIndicator color={colors.textInverse} />
                 ) : (
                   <Text
+                    numberOfLines={1}
+                    ellipsizeMode="tail"
                     style={{ color: colors.textInverse, fontWeight: "700" }}
                   >
                     Betriebsaufwand
@@ -998,7 +1016,8 @@ export default function PaymentModal({
               </TouchableOpacity>
             </View>
           </View>
-        </Card>
+          </Card>
+        </KeyboardAvoidingView>
       </View>
     </Modal>
   );
@@ -1066,6 +1085,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     borderRadius: 20,
     borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 32,
   },
   pill: {
     paddingVertical: 8,
@@ -1122,7 +1144,13 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 8,
   },
-  expenseBtn: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 8 },
+  expenseBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+    flexShrink: 1,
+    maxWidth: "100%",
+  },
   splitMethodRow: {
     flexDirection: "row",
     gap: 8,

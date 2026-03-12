@@ -124,6 +124,27 @@ export const initOrderSync = () => {
     applyLocks(eventType, orderInfo, payload.posId || 'unknown');
     listeners.forEach((listener) => listener(payload));
   });
+
+  socket.off('waiter-print-status');
+  socket.on('waiter-print-status', (payload: any) => {
+    if (!payload) return;
+    if (payload.posId === deviceId) return;
+    const eventType = payload?.success ? 'PRINT_SUCCESS' : 'PRINT_ERROR';
+    const orderData = {
+      orderInfo: payload?.orderInfo,
+      printMessage: payload?.printMessage,
+      message: payload?.printMessage,
+    };
+    listeners.forEach((listener) =>
+      listener({
+        eventType,
+        orderData,
+        posId: payload?.posId,
+        timestamp: payload?.timestamp,
+        companyId: payload?.companyId,
+      }),
+    );
+  });
 };
 
 export const onOrderSync = (listener: (event: OrderSyncEvent) => void) => {
@@ -157,6 +178,7 @@ export const emitPosPrint = (orderInfo: any, paymentMethod?: number) => {
   const payload = {
     isFinal: true,
     isPrint: true,
+    isWaiterApp: true,
     paymentMethod: paymentMethod ?? orderInfo?.orderPaymentSummary?.paymentProcessorId ?? 0,
     isCorporate: orderInfo?.isCorporate ?? false,
     orderInfo,
@@ -170,6 +192,7 @@ export const emitPosKotPrint = (printOrder: any) => {
   socket.emit('new-order', {
     ...printOrder,
     isPrint: true,
+    isWaiterApp: true,
   });
 };
 

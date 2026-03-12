@@ -16,6 +16,8 @@ import OrderDetailsScreen from '../screens/OrderDetailsScreen';
 import serverConnection from '../services/serverConnection';
 import authService from '../services/authService';
 import posIdService from '../services/posIdService';
+import { initLocalSocket, initCloudSocket } from '../services/socket';
+import { initOrderSync, onOrderSync } from '../services/orderSyncService';
 import { useTheme } from '../theme/ThemeProvider';
 import { useToast } from '../components/ToastProvider';
 
@@ -434,6 +436,7 @@ function CustomDrawerContent(props: DrawerContentComponentProps) {
 
 export default function AppNavigator() {
   const { colors } = useTheme();
+  const { showToast } = useToast();
   const [ready, setReady] = useState(false);
   const [initialRoute, setInitialRoute] = useState<keyof RootDrawerParamList>('IPEntry');
 
@@ -442,8 +445,16 @@ export default function AppNavigator() {
       try {
         const conn = await serverConnection.initializeConnection();
         const token = await AsyncStorage.getItem('token');
+        const localToken = await AsyncStorage.getItem('local_token');
 
-        if (token) {
+        if (token || localToken) {
+          const localSocket = await initLocalSocket();
+          if (localSocket) {
+            initOrderSync();
+          } else {
+            await initCloudSocket();
+            initOrderSync();
+          }
           if (conn.isConnected) setInitialRoute('Main');
           else setInitialRoute('Login');
         } else {
@@ -458,6 +469,26 @@ export default function AppNavigator() {
 
     boot();
   }, []);
+
+  useEffect(() => {
+    const unsubscribe = onOrderSync((payload) => {
+      const eventType = String(payload?.eventType || '').toUpperCase();
+      if (eventType === 'PRINT_SUCCESS') {
+        showToast('Print successful', { type: 'success' });
+        return;
+      }
+      if (eventType === 'PRINT_ERROR') {
+        const message =
+          payload?.orderData?.printMessage ||
+          payload?.orderData?.orderInfo?.printMessage ||
+          payload?.orderData?.message ||
+          'Print failed';
+        showToast(message, { type: 'error' });
+      }
+    });
+
+    return unsubscribe;
+  }, [showToast]);
 
   if (!ready) return null;
 
