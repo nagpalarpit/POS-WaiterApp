@@ -186,7 +186,7 @@ export default function AddExtraModal({ visible, onClose, onSave }: Props) {
               {[ 
                 { id: EXTRA_CATEGORY.FOOD, label: 'Food' },
                 { id: EXTRA_CATEGORY.DRINK, label: 'Drink' },
-                { id: EXTRA_CATEGORY.ZERO, label: '0%' },
+                // { id: EXTRA_CATEGORY.ZERO, label: '0%' },
               ].map((entry) => {
                 const selected = extraCategory === entry.id;
                 return (

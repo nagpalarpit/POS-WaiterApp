@@ -222,11 +222,15 @@ class OrderService {
       raw?.invoiceNumber ??
       settlePayload?.orderInfo?.invoiceNumber;
 
-    const giftCardLogs =
+    let giftCardLogs =
       raw?.giftCardLogs ??
       dataLayer?.giftCardLogs ??
       inner?.giftCardLogs ??
       dataValues?.giftCardLogs;
+
+    if (giftCardLogs && !Array.isArray(giftCardLogs)) {
+      giftCardLogs = [giftCardLogs];
+    }
 
     const orderCustomerDetails =
       raw?.orderCustomerDetails ??
@@ -508,6 +512,19 @@ class OrderService {
         settlePayload,
       );
       return { remote: false, result, error, normalized };
+    }
+  }
+
+  /**
+   * Call remote placeOrder endpoint (used for cancel/remove flow sync).
+   */
+  async placeOrder(orderPayload: any) {
+    try {
+      const res = await api.post(API_ENDPOINTS.order.CREATE, orderPayload);
+      return res?.data ?? res;
+    } catch (error) {
+      console.error("Error placing order:", error);
+      throw error;
     }
   }
 

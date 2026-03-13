@@ -67,6 +67,307 @@ const toNumber = (value: unknown, fallback = 0): number => {
 };
 
 const round2 = (value: number): number => Number(value.toFixed(2));
+const normalizeGiftCardLogs = (value: any) => {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  return Array.isArray(value) ? value : [value];
+};
+const buildDiscountPayload = (
+  source: any,
+  subtotal: number,
+  discountAmount: number,
+) => {
+  const existing = source?.discount ?? source?.orderInfo?.discount;
+  const existingValue = toNumber(existing?.discountValue, 0);
+  if (existingValue > 0) return existing;
+
+  const customValue = toNumber(
+    source?.customDiscountValue ?? source?.orderInfo?.customDiscountValue,
+    0,
+  );
+  if (customValue > 0) {
+    return {
+      ...(existing || {}),
+      discountValue: customValue,
+      discountType: "CUSTOM",
+      discountName: existing?.discountName ?? "Custom",
+    };
+  }
+
+  if (discountAmount > 0 && subtotal > 0) {
+    const percentValue = round2((discountAmount / subtotal) * 100);
+    return {
+      ...(existing || {}),
+      discountValue: percentValue,
+      discountType: "PERCENTAGE",
+      discountName: existing?.discountName ?? "Percentage",
+    };
+  }
+
+  return existing ?? null;
+};
+const normalizeTaxKey = (value: unknown): string | null => {
+  if (value === undefined || value === null) return null;
+  const raw = String(value).trim();
+  if (!raw) return null;
+  if (raw.includes("%")) return raw.replace(/\s+/g, "");
+  const parsed = parseFloat(raw.replace(",", "."));
+  if (Number.isFinite(parsed)) return `${parsed}%`;
+  return raw;
+};
+
+
+const getOrderItemsForTax = (orderDetails: any): any[] => {
+  const items =
+    orderDetails?.orderItem ??
+    orderDetails?.orderItems ??
+    orderDetails?.items ??
+    [];
+  return Array.isArray(items) ? items : [];
+};
+
+const getPosItemToppings = (item: any) => {
+  const toppings: Array<{ price: number; toppingCount: number }> = [];
+
+  if (item?.orderItemVariant) {
+    const attributes = Array.isArray(item?.orderItemVariant?.orderItemVariantAttributes)
+      ? item.orderItemVariant.orderItemVariantAttributes
+      : [];
+    attributes.forEach((attribute: any) => {
+      const values = Array.isArray(attribute?.orderItemVariantAttributeValues)
+        ? attribute.orderItemVariantAttributeValues
+        : [];
+      values.forEach((value: any) => {
+        toppings.push({
+          price: toNumber(value?.unitPrice, 0),
+          toppingCount: Math.max(toNumber(value?.quantity, 1), 1),
+        });
+      });
+    });
+    return toppings;
+  }
+
+  const variants = Array.isArray(item?.orderItemVariants)
+    ? item.orderItemVariants
+    : [];
+  variants.forEach((variant: any) => {
+    const attributes = Array.isArray(variant?.orderItemVariantAttributes)
+      ? variant.orderItemVariantAttributes
+      : [];
+    attributes.forEach((attribute: any) => {
+      const values = Array.isArray(attribute?.orderItemVariantAttributeValues)
+        ? attribute.orderItemVariantAttributeValues
+        : [];
+      values.forEach((value: any) => {
+        toppings.push({
+          price: toNumber(value?.unitPrice, 0),
+          toppingCount: Math.max(toNumber(value?.quantity, 1), 1),
+        });
+      });
+    });
+  });
+
+  return toppings;
+};
+
+const getPosItemUnitPrice = (item: any): number => {
+  const basePrice = toNumber(
+    item?.unitPrice ?? item?.itemPrice ?? item?.price,
+    0,
+  );
+  const variantPrice = toNumber(item?.orderItemVariant?.unitPrice, 0);
+  return basePrice + variantPrice;
+};
+
+const resolveTaxMeta = (
+  orderDetails: any,
+  item: any,
+): { taxKey: string | null; taxAmount: number } => {
+  const taxInfo = item?.tax ?? item?.taxInfo ?? item?.taxObj ?? null;
+  let taxKey = normalizeTaxKey(
+    taxInfo?.name ?? taxInfo?.taxName ?? taxInfo?.percentage,
+  );
+  let taxAmount = toNumber(taxInfo?.flatAmount ?? taxInfo?.taxAmount, 0);
+
+  const parsedKey = taxKey
+    ? parseFloat(taxKey.replace("%", "").replace(",", "."))
+    : Number.NaN;
+
+  if (!taxAmount && Number.isFinite(parsedKey)) {
+    taxAmount = 1 + parsedKey / 100;
+  }
+
+  const orderIdNum = toNumber(
+    orderDetails?.id ?? orderDetails?.orderId ?? orderDetails?.orderInfo?.id,
+    Number.NaN,
+  );
+  if (Number.isFinite(orderIdNum)) {
+    const defaultThreshold = 8162;
+    const deliveryTypeId = Number(
+      orderDetails?.orderDeliveryTypeId ??
+        orderDetails?.orderInfo?.orderDeliveryTypeId ??
+        0,
+    );
+    if (orderIdNum <= defaultThreshold && deliveryTypeId === 0) {
+      taxKey = "19%";
+      taxAmount = 1.19;
+    }
+  }
+
+  return {
+    taxKey,
+    taxAmount: taxAmount || 1,
+  };
+};
+const resolveDiscountAmount = (orderDetails: any, subtotal: number): number => {
+  const explicit = round2(toNumber(orderDetails?.orderDiscountTotal, 0));
+  if (explicit > 0) return explicit;
+
+  const discount = orderDetails?.discount;
+  const customValue = toNumber(
+    orderDetails?.customDiscountValue ?? discount?.customDiscountValue,
+    0,
+  );
+  const discountValue = toNumber(
+    discount?.discountValue ?? discount?.value ?? customValue,
+    0,
+  );
+  if (discountValue <= 0 || subtotal <= 0) return 0;
+
+  const discountType = discount?.discountType;
+  const isPercent =
+    discountType === 1 ||
+    discountType === "1" ||
+    discountType === "PERCENTAGE" ||
+    discountType === "CUSTOM";
+
+  if (isPercent) {
+    return round2(Math.min((subtotal * discountValue) / 100, subtotal));
+  }
+
+  return round2(Math.min(discountValue, subtotal));
+};
+const computeDiscountedTax = (
+  orderDetails: any,
+  subtotal: number,
+  discount: number,
+): number => {
+  const rawTax = toNumber(
+    orderDetails?.orderTaxTotal ?? orderDetails?.orderCartTaxAndChargesTotal,
+    0,
+  );
+  const baseSubtotal = toNumber(
+    orderDetails?.orderSubTotal ?? orderDetails?.orderCartSubTotal,
+    subtotal,
+  );
+  const discountedSubtotal = Math.max(baseSubtotal - discount, 0);
+
+  const fallbackTax = () => {
+    if (rawTax <= 0) return 0;
+    if (baseSubtotal <= 0) return rawTax;
+    if (discountedSubtotal === baseSubtotal) return round2(rawTax);
+    const ratio = discountedSubtotal / baseSubtotal;
+    return round2(rawTax * ratio);
+  };
+
+  const items = getOrderItemsForTax(orderDetails);
+  if (items.length === 0) {
+    return fallbackTax();
+  }
+
+  const discountInfo =
+    orderDetails?.discount ?? orderDetails?.orderInfo?.discount;
+  const discountPercentFromConfig = toNumber(
+    discountInfo?.discountValue,
+    0,
+  );
+  const discountPercent =
+    discountPercentFromConfig > 0
+      ? discountPercentFromConfig
+      : baseSubtotal > 0 && discount > 0
+        ? (discount / baseSubtotal) * 100
+        : 0;
+  const deliveryCharge = toNumber(orderDetails?.deliveryCharge, 0);
+  const orderTotalForDelivery = Math.max(
+    toNumber(orderDetails?.orderTotal, discountedSubtotal),
+    0,
+  );
+
+  const taxes: Record<string, { itemTotal: number; taxAmount: number }> = {};
+  let foodDeliveryChargeSum = 0;
+  let drinkDeliveryChargeSum = 0;
+
+  items.forEach((item: any) => {
+    const quantity = Math.max(toNumber(item?.quantity, 0), 0);
+    if (quantity <= 0) return;
+
+    const toppings = getPosItemToppings(item);
+    const toppingsPrice = toppings.reduce(
+      (acc: number, current) =>
+        acc + current.price * (current.toppingCount || 1),
+      0,
+    );
+
+    const unitTotal = getPosItemUnitPrice(item) + toppingsPrice;
+    const grossBeforeDiscount = unitTotal * quantity;
+    const discountAmount =
+      discountPercent > 0
+        ? (discountPercent / 100) * grossBeforeDiscount
+        : 0;
+    const grossAfterDiscount = grossBeforeDiscount - discountAmount;
+
+    const { taxKey, taxAmount } = resolveTaxMeta(orderDetails, item);
+    if (!taxKey) return;
+
+    if (!taxes[taxKey]) {
+      taxes[taxKey] = {
+        itemTotal: 0,
+        taxAmount,
+      };
+    }
+
+    taxes[taxKey].itemTotal += grossAfterDiscount;
+
+    if (deliveryCharge > 0) {
+      const percentage =
+        ((grossBeforeDiscount / (orderTotalForDelivery || 1)) * 100) || 0;
+      const chargePart = deliveryCharge * (percentage / 100);
+      if (taxKey === "7%") {
+        foodDeliveryChargeSum += chargePart;
+      } else {
+        drinkDeliveryChargeSum += chargePart;
+      }
+    }
+  });
+
+  if (taxes["7%"]) {
+    taxes["7%"].itemTotal += foodDeliveryChargeSum;
+  }
+  if (taxes["19%"]) {
+    taxes["19%"].itemTotal += drinkDeliveryChargeSum;
+  }
+
+  let totalTax = 0;
+  Object.keys(taxes).forEach((key) => {
+    const taxItem = taxes[key];
+    if (!taxItem || taxItem.itemTotal <= 0) return;
+    const parsedTax = parseFloat(key.replace("%", "").replace(",", "."));
+    const taxAmount =
+      taxItem.taxAmount ||
+      (Number.isFinite(parsedTax) ? 1 + parsedTax / 100 : 1);
+    const isZeroTax =
+      (!Number.isNaN(parsedTax) && parsedTax === 0) || taxAmount === 1;
+    if (!isZeroTax) {
+      totalTax += taxItem.itemTotal - taxItem.itemTotal / taxAmount;
+    }
+  });
+
+  const roundedTotalTax = round2(totalTax);
+  if (roundedTotalTax === 0 && rawTax > 0) {
+    return fallbackTax();
+  }
+  return roundedTotalTax;
+};
 
 const mergeCartItems = (cartItems: any[] = []) => {
   const mergedItems: Record<string, any> = {};
@@ -388,10 +689,9 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
   const totals = useMemo(() => {
     const od = displayedOrderDetails || {};
     const subtotal = Number(od.orderSubTotal ?? od.orderCartSubTotal ?? 0) || 0;
-    const discount = Number(od.orderDiscountTotal ?? 0) || 0;
-    const tax =
-      Number(od.orderTaxTotal ?? od.orderCartTaxAndChargesTotal ?? 0) || 0;
-    const total = Number(od.orderTotal ?? subtotal - discount + tax) || 0;
+    const discount = resolveDiscountAmount(od, subtotal);
+    const tax = computeDiscountedTax(od, subtotal, discount);
+    const total = round2(Math.max(subtotal - discount, 0));
     return { subtotal, discount, tax, total };
   }, [displayedOrderDetails]);
 
@@ -530,6 +830,86 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
         isPaid: 0,
       };
 
+      const deliveryTypeId = toNumber(
+        orderDetails?.orderDeliveryTypeId ?? order?.orderDeliveryTypeId ?? 0,
+        0,
+      );
+      const orderType =
+        orderDetails?.orderType ||
+        (deliveryTypeId === 1
+          ? "delivery"
+          : deliveryTypeId === 2
+            ? "pickup"
+            : deliveryTypeId === 3
+              ? "kiosk"
+              : "table");
+      const baseOrderId =
+        order?._id ||
+        order?.id ||
+        order?.orderId ||
+        orderDetails?.localOrderId ||
+        "";
+      const customOrderId =
+        order?.customOrderId ||
+        orderDetails?.customOrderId ||
+        orderDetails?.orderNumber ||
+        baseOrderId;
+
+      const customerIdValue = toNumber(orderDetails?.customerId, 0);
+      const placeOrderPayload: any = {
+        ...orderDetails,
+        companyId,
+        orderDeliveryTypeId: deliveryTypeId,
+        orderType,
+        isPickup: orderDetails?.isPickup ?? deliveryTypeId === 2,
+        currency: orderDetails?.currency || "EUR",
+        isPriceIncludingTax: orderDetails?.isPriceIncludingTax ?? false,
+        orderSubTotal: toNumber(orderDetails?.orderSubTotal, 0),
+        orderTaxTotal: toNumber(orderDetails?.orderTaxTotal, 0),
+        orderCartTaxAndChargesTotal: toNumber(
+          orderDetails?.orderCartTaxAndChargesTotal,
+          0,
+        ),
+        orderPromoCodeDiscountTotal: toNumber(
+          orderDetails?.orderPromoCodeDiscountTotal,
+          0,
+        ),
+        orderDiscountTotal: toNumber(orderDetails?.orderDiscountTotal, 0),
+        orderTotal: toNumber(orderDetails?.orderTotal, 0),
+        orderNotes: orderDetails?.orderNotes || "",
+        countryCode: orderDetails?.countryCode || "IN",
+        count: toNumber(orderDetails?.count, orderItems.length || 1),
+        customerId: customerIdValue > 0 ? customerIdValue : undefined,
+        userEmail: orderDetails?.userEmail || "",
+        userFirstName: orderDetails?.userFirstName || "",
+        userLastName: orderDetails?.userLastName || "",
+        userMobile: orderDetails?.userMobile ?? null,
+        customerAddressId: orderDetails?.customerAddressId ?? null,
+        addresses: orderDetails?.addresses || [],
+        addedBy: orderDetails?.addedBy ?? null,
+        posId: orderDetails?.posId || "",
+        orderItem: orderItems,
+        id: null,
+        customOrderId,
+        localOrderId: baseOrderId,
+        orderStatusId: ORDER_STATUS.CANCELED,
+        reason: trimmed,
+        isDeleted: false,
+        paymentMethod: 0,
+        canceledObj,
+        canceledCount,
+        canceledOrderPayment,
+      };
+
+      Object.keys(placeOrderPayload).forEach((key) => {
+        if (
+          placeOrderPayload[key] === undefined ||
+          placeOrderPayload[key] === null
+        ) {
+          delete placeOrderPayload[key];
+        }
+      });
+
       if (!orderDetails?.isTscOffline) {
         const tscArray = Array.isArray(orderDetails?.tsc)
           ? orderDetails.tsc
@@ -611,6 +991,32 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
           orderItem: orderItems,
         },
       });
+
+      orderService
+        .placeOrder(placeOrderPayload)
+        .then((response) => {
+          const status =
+            response?.status ||
+            response?.data?.status ||
+            response?.data?.data?.status;
+          if (status === "SUCCESS") {
+            const tsc =
+              response?.data?.tsc ||
+              response?.data?.data?.tsc ||
+              response?.dataValues?.tsc;
+            if (tsc) {
+              orderService.updateOrder(`${orderId}`, {
+                orderDetails: {
+                  ...updatedDetails,
+                  tsc,
+                },
+              });
+            }
+          }
+        })
+        .catch((err) => {
+          console.warn("Cancel order sync failed:", err);
+        });
 
       await emitOrderSync("ORDER_CANCELLED", {
         tableNo: orderDetails?.tableNo ?? null,
@@ -746,18 +1152,17 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
       let payableSubTotal = round2(
         toNumber(orderDetails?.orderSubTotal, totals.subtotal),
       );
-      let payableDiscount = round2(
-        toNumber(orderDetails?.orderDiscountTotal, totals.discount),
+      let payableDiscount = resolveDiscountAmount(
+        orderDetails,
+        payableSubTotal,
       );
-      let payableTax = round2(
-        toNumber(
-          orderDetails?.orderTaxTotal ??
-            orderDetails?.orderCartTaxAndChargesTotal,
-          totals.tax,
-        ),
+      let payableTax = computeDiscountedTax(
+        orderDetails,
+        payableSubTotal,
+        payableDiscount,
       );
       let payableTotal = round2(
-        toNumber(orderDetails?.orderTotal, totals.total),
+        Math.max(payableSubTotal - payableDiscount, 0),
       );
       let payableCount = toNumber(
         orderDetails?.count,
@@ -837,15 +1242,14 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
         );
         const effectiveSubTotal =
           sourceSubTotal > 0 ? sourceSubTotal : baseSubTotal;
-        const sourceDiscount = round2(
-          toNumber(orderDetails?.orderDiscountTotal, totals.discount),
+        const sourceDiscount = resolveDiscountAmount(
+          orderDetails,
+          sourceSubTotal,
         );
-        const sourceTax = round2(
-          toNumber(
-            orderDetails?.orderTaxTotal ??
-              orderDetails?.orderCartTaxAndChargesTotal,
-            totals.tax,
-          ),
+        const sourceTax = computeDiscountedTax(
+          orderDetails,
+          sourceSubTotal,
+          sourceDiscount,
         );
         const splitRatio =
           effectiveSubTotal > 0
@@ -857,10 +1261,10 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
         const remainingDiscount = round2(sourceDiscount - selectedDiscount);
         const remainingTax = round2(sourceTax - selectedTax);
         const selectedTotal = round2(
-          Math.max(0, selectedSubTotal - selectedDiscount + selectedTax),
+          Math.max(0, selectedSubTotal - selectedDiscount),
         );
         const remainingTotal = round2(
-          Math.max(0, remainingSubTotal - remainingDiscount + remainingTax),
+          Math.max(0, remainingSubTotal - remainingDiscount),
         );
         const splitDeliveryCharge =
           remainingOrderItems.length > 0 ? 0 : deliveryCharge;
@@ -945,6 +1349,22 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
           deliveryCharge: splitDeliveryCharge,
           isSplitOrder: true,
         };
+
+        const splitDiscountPayload = buildDiscountPayload(
+          orderDetails,
+          selectedSubTotal,
+          selectedDiscount,
+        );
+        if (splitDiscountPayload) {
+          splitOrderInfo.discount = splitDiscountPayload;
+          if (
+            splitDiscountPayload.discountType === "CUSTOM" &&
+            splitOrderInfo.customDiscountValue == null
+          ) {
+            splitOrderInfo.customDiscountValue =
+              splitDiscountPayload.discountValue;
+          }
+        }
 
         if (giftCard) {
           splitOrderInfo.giftCard = giftCard;
@@ -1047,6 +1467,22 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
             isPaid: 0,
             deliveryCharge,
           };
+
+          const remainingDiscountPayload = buildDiscountPayload(
+            orderDetails,
+            remainingSubTotal,
+            remainingDiscount,
+          );
+          if (remainingDiscountPayload) {
+            remainingOrderDetails.discount = remainingDiscountPayload;
+            if (
+              remainingDiscountPayload.discountType === "CUSTOM" &&
+              remainingOrderDetails.customDiscountValue == null
+            ) {
+              remainingOrderDetails.customDiscountValue =
+                remainingDiscountPayload.discountValue;
+            }
+          }
 
           await orderService.updateOrder(`${localOrderId}`, {
             orderStatusId: ORDER_STATUS.PENDING,
@@ -1359,11 +1795,29 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
                     settledRow?.orderPaymentDetails ??
                     settledDataValues?.orderPaymentDetails ??
                     existingOrderDetails?.orderPaymentDetails,
-                  giftCardLogs:
-                    settledRow?.giftCardLogs ??
-                    settledDataValues?.giftCardLogs ??
-                    existingOrderDetails?.giftCardLogs ??
+                  giftCard:
+                    settledRow?.giftCard ??
+                    settledDataValues?.giftCard ??
+                    existingOrderDetails?.giftCard ??
                     null,
+                  appliedGiftCard:
+                    settledRow?.appliedGiftCard ??
+                    settledDataValues?.appliedGiftCard ??
+                    existingOrderDetails?.appliedGiftCard ??
+                    null,
+                  giftCardTotal:
+                    toNumber(
+                      settledRow?.giftCardTotal ??
+                        settledDataValues?.giftCardTotal ??
+                        existingOrderDetails?.giftCardTotal,
+                      0,
+                    ) || 0,
+                  giftCardLogs: normalizeGiftCardLogs(
+                    settledRow?.giftCardLogs ??
+                      settledDataValues?.giftCardLogs ??
+                      existingOrderDetails?.giftCardLogs ??
+                      null,
+                  ),
                   orderCustomerDetails:
                     settledRow?.orderCustomerDetails ??
                     settledDataValues?.orderCustomerDetails ??
@@ -1489,6 +1943,21 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
         orderInfo.isSplitOrder = true;
       }
 
+      const resolvedDiscountPayload = buildDiscountPayload(
+        orderDetails,
+        payableSubTotal,
+        payableDiscount,
+      );
+      if (resolvedDiscountPayload) {
+        orderInfo.discount = resolvedDiscountPayload;
+        if (
+          resolvedDiscountPayload.discountType === "CUSTOM" &&
+          orderInfo.customDiscountValue == null
+        ) {
+          orderInfo.customDiscountValue = resolvedDiscountPayload.discountValue;
+        }
+      }
+
       orderInfo.orderPaymentSummary = orderPaymentSummary;
       orderInfo.orderPaymentDetails = orderPaymentDetails;
 
@@ -1533,11 +2002,39 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
           orderInfo.invoiceNumber = normalized.invoiceNumber;
         }
         if (normalized.giftCardLogs !== undefined) {
-          orderInfo.giftCardLogs = normalized.giftCardLogs;
+          orderInfo.giftCardLogs = normalizeGiftCardLogs(
+            normalized.giftCardLogs,
+          );
         }
         if (normalized.orderCustomerDetails !== undefined) {
           orderInfo.orderCustomerDetails = normalized.orderCustomerDetails;
         }
+      }
+
+      // Ensure local order captures gift card data after settlement
+      try {
+        const orderId =
+          order?._id || order?.id || order?.orderId || orderDetails?.localOrderId;
+        if (orderId) {
+          await orderService.updateOrder(`${orderId}`, {
+            orderStatusId: ORDER_STATUS.DELIVERED,
+            updatedAt: orderInfo.updatedAt ?? now,
+            orderDetails: {
+              ...orderInfo,
+            },
+            settleInfo: {
+              ...(order?.settleInfo || {}),
+              orderInfo: {
+                ...(order?.settleInfo?.orderInfo || {}),
+                ...orderInfo,
+              },
+            },
+            isSynced: true,
+          });
+          setWorkingOrderDetails({ ...orderInfo });
+        }
+      } catch (localErr) {
+        console.warn("Local order update after settle failed:", localErr);
       }
       if (option?.print) {
         emitPosPrint(orderInfo, selectedPaymentMethod);

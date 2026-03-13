@@ -15,11 +15,14 @@ type LockInfo = {
 };
 
 const LOCK_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const PRINT_TTL_MS = 5 * 60 * 1000;
 
 const tableLocks = new Map<number, LockInfo>();
 const orderLocks = new Map<string, LockInfo>();
 const listeners = new Set<(event: OrderSyncEvent) => void>();
 let connectionListenersAttached = false;
+const pendingPrintRequests = new Map<string, number>();
+const handledPrintResults = new Map<string, number>();
 
 const deviceId = (() => {
   const ts = Date.now();
@@ -55,6 +58,49 @@ const pruneLocks = () => {
 const resetLockState = () => {
   tableLocks.clear();
   orderLocks.clear();
+};
+
+const prunePrintRequests = () => {
+  const now = Date.now();
+  for (const [key, ts] of pendingPrintRequests.entries()) {
+    if (now - ts > PRINT_TTL_MS) pendingPrintRequests.delete(key);
+  }
+  for (const [key, ts] of handledPrintResults.entries()) {
+    if (now - ts > PRINT_TTL_MS) handledPrintResults.delete(key);
+  }
+};
+
+const createPrintRequestId = () => {
+  const ts = Date.now();
+  const rand = Math.random().toString(36).slice(2, 9);
+  return `print_${ts}_${rand}`;
+};
+
+const registerPrintRequest = () => {
+  const requestId = createPrintRequestId();
+  pendingPrintRequests.set(requestId, Date.now());
+  prunePrintRequests();
+  return requestId;
+};
+
+const extractPrintRequestId = (payload: any): string | null => {
+  const id =
+    payload?.printRequestId ||
+    payload?.orderData?.printRequestId ||
+    payload?.orderData?.orderInfo?.printRequestId ||
+    payload?.orderInfo?.printRequestId ||
+    null;
+  return id ? String(id) : null;
+};
+
+const shouldHandlePrintResult = (requestId?: string | null): boolean => {
+  if (!requestId) return false;
+  prunePrintRequests();
+  if (!pendingPrintRequests.has(requestId)) return false;
+  if (handledPrintResults.has(requestId)) return false;
+  pendingPrintRequests.delete(requestId);
+  handledPrintResults.set(requestId, Date.now());
+  return true;
 };
 
 const extractOrderInfo = (orderData: any) =>
@@ -138,6 +184,10 @@ export const initOrderSync = () => {
     if (!payload) return;
     if (payload.posId === deviceId) return;
     const eventType = payload.eventType || 'ORDER_SYNC';
+    if (eventType === 'PRINT_SUCCESS' || eventType === 'PRINT_ERROR') {
+      const requestId = extractPrintRequestId(payload);
+      if (!shouldHandlePrintResult(requestId)) return;
+    }
     const orderInfo = extractOrderInfo(payload.orderData);
     applyLocks(eventType, orderInfo, payload.posId || 'unknown');
     listeners.forEach((listener) => listener(payload));
@@ -147,9 +197,12 @@ export const initOrderSync = () => {
   socket.on('waiter-print-status', (payload: any) => {
     if (!payload) return;
     if (payload.posId === deviceId) return;
+    const requestId = extractPrintRequestId(payload);
+    if (!shouldHandlePrintResult(requestId)) return;
     const eventType = payload?.success ? 'PRINT_SUCCESS' : 'PRINT_ERROR';
     const orderData = {
       orderInfo: payload?.orderInfo,
+      printRequestId: requestId,
       printMessage: payload?.printMessage,
       message: payload?.printMessage,
     };
@@ -193,13 +246,16 @@ export const emitOrderSync = async (
 export const emitPosPrint = (orderInfo: any, paymentMethod?: number) => {
   const socket = getSocket();
   if (!socket) return;
+  const printRequestId = registerPrintRequest();
+  const orderInfoWithRequest = { ...orderInfo, printRequestId };
   const payload = {
     isFinal: true,
     isPrint: true,
     isWaiterApp: true,
     paymentMethod: paymentMethod ?? orderInfo?.orderPaymentSummary?.paymentProcessorId ?? 0,
     isCorporate: orderInfo?.isCorporate ?? false,
-    orderInfo,
+    orderInfo: orderInfoWithRequest,
+    printRequestId,
   };
   socket.emit('new-order', payload);
 };
@@ -207,6 +263,8 @@ export const emitPosPrint = (orderInfo: any, paymentMethod?: number) => {
 export const emitPosPrintPreview = (orderInfo: any, paymentMethod?: number) => {
   const socket = getSocket();
   if (!socket) return;
+  const printRequestId = registerPrintRequest();
+  const orderInfoWithRequest = { ...orderInfo, printRequestId };
   const payload = {
     isFinal: true,
     isPrint: true,
@@ -214,7 +272,8 @@ export const emitPosPrintPreview = (orderInfo: any, paymentMethod?: number) => {
     preview: true,
     paymentMethod: paymentMethod ?? orderInfo?.orderPaymentSummary?.paymentProcessorId ?? 0,
     isCorporate: orderInfo?.isCorporate ?? false,
-    orderInfo,
+    orderInfo: orderInfoWithRequest,
+    printRequestId,
   };
   socket.emit('new-order', payload);
 };
@@ -222,6 +281,7 @@ export const emitPosPrintPreview = (orderInfo: any, paymentMethod?: number) => {
 export const emitPosCancelPrint = (order: any) => {
   const socket = getSocket();
   if (!socket || !order) return;
+  const printRequestId = registerPrintRequest();
   const orderDetails = order?.orderDetails || order;
   const orderItems = Array.isArray(orderDetails?.orderItem)
     ? orderDetails.orderItem
@@ -231,6 +291,7 @@ export const emitPosCancelPrint = (order: any) => {
   const normalizedDetails = {
     ...orderDetails,
     orderItem: orderItems,
+    printRequestId,
   };
   const payload = {
     ...order,
@@ -238,6 +299,7 @@ export const emitPosCancelPrint = (order: any) => {
     isCanceled: true,
     isPrint: true,
     isWaiterApp: true,
+    printRequestId,
   };
   socket.emit('new-order', payload);
 };
@@ -245,10 +307,17 @@ export const emitPosCancelPrint = (order: any) => {
 export const emitPosKotPrint = (printOrder: any) => {
   const socket = getSocket();
   if (!socket) return;
+  const printRequestId = registerPrintRequest();
+  const orderInfoWithRequest = {
+    ...(printOrder?.orderInfo || {}),
+    printRequestId,
+  };
   socket.emit('new-order', {
     ...printOrder,
     isPrint: true,
     isWaiterApp: true,
+    printRequestId,
+    orderInfo: orderInfoWithRequest,
   });
 };
 
