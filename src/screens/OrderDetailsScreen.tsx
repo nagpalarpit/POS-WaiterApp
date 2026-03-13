@@ -1,4 +1,4 @@
-import React, {
+﻿import React, {
   useMemo,
   useState,
   useEffect,
@@ -36,15 +36,22 @@ import {
   getItemUnitTotal,
 } from "../utils/cartCalculations";
 import PaymentModal from "../components/PaymentModal";
+import PinModal from "../components/PinModal";
+import CancelOrderModal from "../components/CancelOrderModal";
 import { formatCurrency } from "../utils/currency";
 import {
   emitOrderSync,
+  emitPosCancelPrint,
   emitPosPrint,
+  emitPosPrintPreview,
   lockOrder,
   lockPayment,
   unlockOrder,
 } from "../services/orderSyncService";
 import { useToast } from "../components/ToastProvider";
+
+const TSC_OFFLINE_MESSAGE =
+  "Active TSS not found for the given POS and company.";
 
 const toNumber = (value: unknown, fallback = 0): number => {
   if (typeof value === "number") {
@@ -60,6 +67,58 @@ const toNumber = (value: unknown, fallback = 0): number => {
 };
 
 const round2 = (value: number): number => Number(value.toFixed(2));
+
+const mergeCartItems = (cartItems: any[] = []) => {
+  const mergedItems: Record<string, any> = {};
+  cartItems.forEach((item: any) => {
+    if (!item) return;
+    const key = item.cartId || item.itemId || item.menuItemId || item._id;
+    if (mergedItems[key]) {
+      mergedItems[key].quantity += toNumber(item.quantity, 0);
+    } else {
+      mergedItems[key] = { ...item };
+    }
+  });
+  return Object.values(mergedItems);
+};
+
+const getCanceledPayment = (items: any[] = []) => {
+  let canceledOrderPayment = 0;
+  items.forEach((raw) => {
+    if (!raw) return;
+    const item = {
+      ...raw,
+      itemPrice: toNumber(raw?.unitPrice ?? raw?.itemPrice, 0),
+      quantity: toNumber(raw?.quantity, 0),
+      variantPrice: toNumber(
+        raw?.orderItemVariant?.unitPrice ?? raw?.variantPrice,
+        0,
+      ),
+      attributeValues:
+        raw?.orderItemVariant?.orderItemVariantAttributes?.[0]?.orderItemVariantAttributeValues?.map(
+          (x: any) => ({
+            ...x,
+            attributeValuePrice: toNumber(x?.unitPrice, 0),
+            quantity: toNumber(x?.quantity, 1),
+          }),
+        ) ||
+        raw?.attributeValues ||
+        [],
+    };
+
+    let total = item.itemPrice + (item.variantPrice || 0);
+    total =
+      item.attributeValues?.reduce(
+        (acc: number, current: any) =>
+          acc +
+          toNumber(current?.attributeValuePrice ?? current?.price, 0) *
+            toNumber(current?.quantity, 1),
+        total,
+      ) || total;
+    canceledOrderPayment += total * toNumber(item.quantity, 0);
+  });
+  return canceledOrderPayment;
+};
 
 const normalizeAttributeValues = (values: any[] = []) => {
   return values.filter(Boolean).map((value: any) => ({
@@ -217,7 +276,7 @@ const formatTimestamp = (timestamp?: string) => {
   if (!timestamp) return "N/A";
   const date = new Date(timestamp);
   if (Number.isNaN(date.getTime())) return "N/A";
-  return `${date.toLocaleDateString()} Ã¢â‚¬Â¢ ${date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+  return `${date.toLocaleDateString()} • ${date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
 };
 
 export default function OrderDetailsScreen({ navigation, route }: any) {
@@ -230,6 +289,9 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
   const [marking, setMarking] = useState(false);
   const editingRef = useRef(false);
   const { showToast } = useToast();
+  const [pinModalVisible, setPinModalVisible] = useState(false);
+  const [cancelModalVisible, setCancelModalVisible] = useState(false);
+  const [canceling, setCanceling] = useState(false);
 
   const PAYMENT_METHOD_LABELS: Record<number, string> = {
     0: "Cash",
@@ -274,7 +336,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
     [rawItems],
   );
   const groupedItems = useMemo(() => {
-    const groups = items.reduce((acc: Record<number, any[]>, item:any) => {
+    const groups = items.reduce((acc: Record<number, any[]>, item: any) => {
       const groupType = item.groupType || 1;
       if (!acc[groupType]) acc[groupType] = [];
       acc[groupType].push(item);
@@ -287,7 +349,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
       groupType,
       items: groups[groupType],
       label:
-        groups[groupType].find((item:any) => item.groupLabel)?.groupLabel ||
+        groups[groupType].find((item: any) => item.groupLabel)?.groupLabel ||
         `Gange ${groupType}`,
     }));
   }, [items]);
@@ -340,7 +402,9 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
   );
   const [paymentModalVisible, setPaymentModalVisible] = useState(false);
   const [pendingSettle, setPendingSettle] = useState(false);
-  const [expandedGroupType, setExpandedGroupType] = useState<number | null>(null);
+  const [expandedGroupType, setExpandedGroupType] = useState<number | null>(
+    null,
+  );
   const groupCount = groupedItems.length;
   const latestGroupType =
     groupCount > 0 ? groupedItems[groupCount - 1].groupType : null;
@@ -350,6 +414,23 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
   const orderStatusLabel = getOrderStatusLabel(order);
   const statusTone = getStatusTone(orderStatusLabel, colors);
   const isPaid = displayedOrderDetails?.isPaid === 1;
+  const statusId = displayedOrderDetails?.orderStatusId ?? order?.orderStatusId;
+  const isOrderPaid = isPaid || statusId === ORDER_STATUS.DELIVERED;
+  const hasSplitPaidItems = useMemo(
+    () => items.some((item: any) => toNumber(item?.splitPaidQuantity, 0) > 0),
+    [items],
+  );
+  const resolvedPaymentMethod = toNumber(
+    displayedOrderDetails?.paymentMethod ?? paymentProcessorId,
+    0,
+  );
+  const isSplitPaymentMethod =
+    resolvedPaymentMethod === 3 || paymentProcessorId === 3;
+  const hideDeleteForSplit =
+    displayedOrderDetails?.isSplitOrder === true &&
+    isSplitPaymentMethod &&
+    hasSplitPaidItems &&
+    !isOrderPaid;
 
   useFocusEffect(
     useCallback(() => {
@@ -389,6 +470,165 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
       existingOrder: order,
       tableArea: displayedOrderDetails?.tableArea ?? null,
     });
+  };
+
+  const handleDeletePress = () => {
+    if (isOrderPaid) {
+      showToast("error", "Paid orders cannot be cancelled");
+      return;
+    }
+    if (canceling) return;
+    setPinModalVisible(true);
+  };
+
+  const handlePinVerified = () => {
+    setPinModalVisible(false);
+    setCancelModalVisible(true);
+  };
+
+  const cancelOrder = async (reason: string) => {
+    if (!order) return;
+    const trimmed = reason.trim();
+    if (!trimmed) {
+      showToast("error", "Please enter a reason");
+      return;
+    }
+    if (canceling) return;
+
+    setCanceling(true);
+    try {
+      const now = new Date().toISOString();
+      const orderDetails = displayedOrderDetails || {};
+      const companyId =
+        Number(order.companyId || orderDetails?.companyId || 0) || 0;
+      const orderItems = Array.isArray(orderDetails?.orderItem)
+        ? orderDetails.orderItem
+        : Array.isArray(orderDetails?.orderItems)
+          ? orderDetails.orderItems
+          : [];
+
+      const canceledObj = mergeCartItems([
+        ...(orderDetails?.canceledObj || []),
+        ...orderItems,
+      ]);
+      const canceledCount = canceledObj.reduce(
+        (acc: number, item: any) => acc + toNumber(item?.quantity, 0),
+        0,
+      );
+      const canceledOrderPayment = getCanceledPayment(canceledObj);
+
+      const updatedDetails: any = {
+        ...orderDetails,
+        orderStatusId: ORDER_STATUS.CANCELED,
+        updatedAt: now,
+        reason: trimmed,
+        isDeleted: false,
+        paymentMethod: 0,
+        canceledObj,
+        canceledCount,
+        canceledOrderPayment,
+        isPaid: 0,
+      };
+
+      if (!orderDetails?.isTscOffline) {
+        const tscArray = Array.isArray(orderDetails?.tsc)
+          ? orderDetails.tsc
+          : [];
+        let maxRevision = 0;
+        let tscGuid: string | undefined;
+
+        tscArray.forEach((item: any) => {
+          if (item?.success === true) {
+            maxRevision = Math.max(
+              maxRevision,
+              toNumber(item?.data?.revision, 0),
+            );
+            if (item?.data?._id) {
+              tscGuid = item.data._id;
+            }
+          }
+        });
+
+        try {
+          const tscRes = await tscService.updateTransaction({
+            _id: order?._id || order?.id,
+            customOrderId:
+              order?.customOrderId ||
+              orderDetails?.customOrderId ||
+              orderDetails?.orderNumber ||
+              "",
+            orderDetails: {
+              ...updatedDetails,
+              orderStatusId: ORDER_STATUS.CANCELED,
+            },
+            companyId,
+            revision: maxRevision + 1 || 1,
+            guid: tscGuid,
+            state: "CANCELLED",
+          });
+          const tscData = tscRes?.data?.data ?? tscRes?.data ?? [];
+          const tscEntries = Array.isArray(tscData)
+            ? tscData
+            : [tscData].filter(Boolean);
+          const lastObj = tscEntries[tscEntries.length - 1];
+
+          if (!lastObj?.success) {
+            updatedDetails.isTscOffline = true;
+            if (lastObj?.data === TSC_OFFLINE_MESSAGE) {
+              showToast("error", "TSC offline. Please check connection.");
+            }
+          } else {
+            updatedDetails.tsc = [...tscArray, ...tscEntries];
+          }
+        } catch (error) {
+          console.error("Error updating TSC transaction:", error);
+          updatedDetails.isTscOffline = true;
+        }
+      }
+
+      const updatePayload: any = {
+        orderStatusId: ORDER_STATUS.CANCELED,
+        orderDetails: updatedDetails,
+        reason: trimmed,
+        canceledObj,
+        canceledCount,
+        canceledOrderPayment,
+        updatedAt: now,
+      };
+
+      const orderId =
+        order?._id || order?.id || order?.orderId || orderDetails?.localOrderId;
+      if (!orderId) {
+        throw new Error("Order id missing");
+      }
+
+      await orderService.updateOrder(`${orderId}`, updatePayload);
+
+      emitPosCancelPrint({
+        ...order,
+        orderDetails: {
+          ...updatedDetails,
+          orderItem: orderItems,
+        },
+      });
+
+      await emitOrderSync("ORDER_CANCELLED", {
+        tableNo: orderDetails?.tableNo ?? null,
+        orderNumber: order?.customOrderId || order?._id,
+        orderDeliveryTypeId:
+          orderDetails?.orderDeliveryTypeId ?? order?.orderDeliveryTypeId ?? 0,
+      });
+      await unlockOrder(order);
+
+      showToast("success", "Order cancelled successfully");
+      setCancelModalVisible(false);
+      navigation.goBack();
+    } catch (error) {
+      console.error("Cancel order failed:", error);
+      showToast("error", "Unable to cancel order");
+    } finally {
+      setCanceling(false);
+    }
   };
 
   const settleOrderWithPayment = async (option: any) => {
@@ -838,7 +1078,10 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
             (sum: number, item: any) => sum + toNumber(item?.quantity, 0),
             0,
           );
-          showToast('success', `Split payment saved (${paidItemQty} item${paidItemQty === 1 ? "" : "s"} paid)`);
+          showToast(
+            "success",
+            `Split payment saved (${paidItemQty} item${paidItemQty === 1 ? "" : "s"} paid)`,
+          );
           setMarking(false);
           return { keepModalOpen: true };
         }
@@ -1183,7 +1426,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
           orderDeliveryTypeId,
         });
 
-        showToast('success', "Split payment completed");
+        showToast("success", "Split payment completed");
         await unlockOrder(order);
         setMarking(false);
         navigation.goBack();
@@ -1311,8 +1554,42 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
     } catch (err) {
       setMarking(false);
       console.error("Error settling order after payment selection:", err);
-      showToast('error', "Unable to complete payment");
+      showToast("error", "Unable to complete payment");
       return { keepModalOpen: false };
+    }
+  };
+
+  const handlePrintPreview = async (option: any) => {
+    try {
+      const orderDetails = displayedOrderDetails || {};
+      const paymentMethod = toNumber(option?.paymentMethod ?? option?.id, 0);
+      const orderItems = Array.isArray(orderDetails?.orderItem)
+        ? orderDetails.orderItem
+        : Array.isArray(orderDetails?.orderItems)
+          ? orderDetails.orderItems
+          : [];
+      const previewOrderInfo: any = {
+        ...orderDetails,
+        orderItem: orderItems,
+        invoiceNumber: "printPreview",
+        paymentMethod,
+        isPrint: true,
+        printReceipt: true,
+        tip: toNumber(option?.tip, 0),
+        giftCard: option?.giftCard ?? null,
+        appliedGiftCard: option?.giftCard ?? null,
+        giftCardTotal: toNumber(option?.giftCardTotal, 0),
+        deliveryCharge: toNumber(orderDetails?.deliveryCharge, 0),
+        orderPaymentSummary:
+          option?.orderPaymentSummary ?? { paymentProcessorId: paymentMethod },
+        orderPaymentDetails: Array.isArray(option?.orderPaymentDetails)
+          ? option.orderPaymentDetails
+          : undefined,
+      };
+      emitPosPrintPreview(previewOrderInfo, paymentMethod);
+    } catch (error) {
+      console.error("Print preview failed:", error);
+      showToast("error", "Unable to generate print preview");
     }
   };
 
@@ -1356,8 +1633,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
                       const name = getAttributeValueName(attributeValue);
                       const valueQuantity =
                         getAttributeValueQuantity(attributeValue);
-                      const valuePrice =
-                        getAttributeValuePrice(attributeValue);
+                      const valuePrice = getAttributeValuePrice(attributeValue);
                       if (!name) return null;
 
                       return (
@@ -1369,7 +1645,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
                             marginTop: 2,
                           }}
                         >
-                          Ã¢â‚¬Â¢ {valueQuantity} x {name}
+                          • {valueQuantity} x {name}
                           {valuePrice > 0
                             ? ` (+${formatCurrency(valuePrice)})`
                             : ""}
@@ -1581,7 +1857,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
           </View>
 
           <View style={{ flexDirection: "row", marginTop: 12, gap: 8 }}>
-            {(["items", "notes", "payment"] as const).map((section) => {
+            {(["items", "notes"] as const).map((section) => {
               const selected = activeSection === section;
               return (
                 <TouchableOpacity
@@ -1604,11 +1880,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
                       fontSize: 12,
                     }}
                   >
-                    {section === "items"
-                      ? "Items"
-                      : section === "notes"
-                        ? "Notes"
-                        : "Payment"}
+                    {section === "items" ? "Items" : "Notes"}
                   </Text>
                 </TouchableOpacity>
               );
@@ -1628,13 +1900,16 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
               No items in this order
             </Text>
           </Card>
-         ) : activeSection === "items" ? (
+        ) : activeSection === "items" ? (
           groupedItems.map((group) => {
             const isExpanded =
               groupCount <= 1 || expandedGroupType === group.groupType;
 
             return (
-              <View key={`group-${group.groupType}`} style={{ marginBottom: 12 }}>
+              <View
+                key={`group-${group.groupType}`}
+                style={{ marginBottom: 12 }}
+              >
                 <TouchableOpacity
                   activeOpacity={groupCount > 1 ? 0.8 : 1}
                   onPress={() => {
@@ -1790,6 +2065,8 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
           setPaymentModalVisible(false);
           setPendingSettle(false);
         }}
+        onPrintPreview={handlePrintPreview}
+        hidePrintPreview={hideDeleteForSplit}
         onSelect={async (option: any) => {
           setSelectedPaymentId(
             toNumber(option?.paymentMethod ?? option?.id, 0),
@@ -1814,6 +2091,19 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
         companyId={resolvedCompanyId}
         splitItems={splitPaymentItems}
         allowSplitOption={allowSplitOption}
+      />
+
+      <PinModal
+        visible={pinModalVisible}
+        onClose={() => setPinModalVisible(false)}
+        onVerified={handlePinVerified}
+      />
+
+      <CancelOrderModal
+        visible={cancelModalVisible}
+        onClose={() => setCancelModalVisible(false)}
+        onConfirm={cancelOrder}
+        loading={canceling}
       />
 
       <View
@@ -1877,6 +2167,25 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
         </View>
 
         <View style={{ flexDirection: "row", gap: 8, marginTop: 10 }}>
+          {!hideDeleteForSplit ? (
+            <TouchableOpacity
+              onPress={handleDeletePress}
+              disabled={isOrderPaid || canceling}
+              style={[
+                styles.footerIconBtn,
+                {
+                  backgroundColor:
+                    isOrderPaid || canceling ? colors.border : colors.error,
+                },
+              ]}
+            >
+              <MaterialCommunityIcons
+                name="trash-can-outline"
+                size={18}
+                color={colors.textInverse || "#fff"}
+              />
+            </TouchableOpacity>
+          ) : null}
           <TouchableOpacity
             onPress={onEdit}
             style={[
@@ -2030,8 +2339,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  footerIconBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
 });
-
-
-
-

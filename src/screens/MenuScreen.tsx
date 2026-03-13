@@ -105,13 +105,26 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
       try {
         const orderCart = await cartService.setCartFromOrder(existingOrder);
         cartData.setCart(orderCart);
+
+        const isTableOrder =
+          !!tableNo &&
+          (deliveryType === 0 ||
+            existingOrder?.orderDetails?.orderDeliveryTypeId === 0);
+
+        if (isTableOrder && orderCart.items.length > 0) {
+          const lastItem = orderCart.items[orderCart.items.length - 1];
+          const groupType = lastItem?.groupType || 1;
+          const groupLabel = lastItem?.groupLabel || '';
+          cartService.setActiveGroup(groupType, groupLabel);
+        }
+
         await lockOrder(existingOrder);
       } catch (error) {
         console.error('MenuScreen: Failed to hydrate cart from existing order', error);
       }
     };
     hydrateCart();
-  }, [existingOrder, cartData.setCart]);
+  }, [existingOrder, cartData.setCart, tableNo, deliveryType]);
 
   useEffect(() => {
     if (existingOrder) return;

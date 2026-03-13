@@ -204,6 +204,44 @@ export const emitPosPrint = (orderInfo: any, paymentMethod?: number) => {
   socket.emit('new-order', payload);
 };
 
+export const emitPosPrintPreview = (orderInfo: any, paymentMethod?: number) => {
+  const socket = getSocket();
+  if (!socket) return;
+  const payload = {
+    isFinal: true,
+    isPrint: true,
+    isWaiterApp: true,
+    preview: true,
+    paymentMethod: paymentMethod ?? orderInfo?.orderPaymentSummary?.paymentProcessorId ?? 0,
+    isCorporate: orderInfo?.isCorporate ?? false,
+    orderInfo,
+  };
+  socket.emit('new-order', payload);
+};
+
+export const emitPosCancelPrint = (order: any) => {
+  const socket = getSocket();
+  if (!socket || !order) return;
+  const orderDetails = order?.orderDetails || order;
+  const orderItems = Array.isArray(orderDetails?.orderItem)
+    ? orderDetails.orderItem
+    : Array.isArray(orderDetails?.orderItems)
+      ? orderDetails.orderItems
+      : [];
+  const normalizedDetails = {
+    ...orderDetails,
+    orderItem: orderItems,
+  };
+  const payload = {
+    ...order,
+    orderDetails: normalizedDetails,
+    isCanceled: true,
+    isPrint: true,
+    isWaiterApp: true,
+  };
+  socket.emit('new-order', payload);
+};
+
 export const emitPosKotPrint = (printOrder: any) => {
   const socket = getSocket();
   if (!socket) return;

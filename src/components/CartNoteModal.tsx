@@ -250,7 +250,7 @@ export default function CartNoteModal({ visible, initialNote = '', initialDiscou
                                                 }}
                                             >
                                                 <Text style={{ color: selected ? colors.primary : colors.text, fontWeight: '600', fontSize: 12 }}>
-                                                    {label} Ã‚Â· {getDiscountValueLabel(discount)}
+                                                    {label} · {getDiscountValueLabel(discount)}
                                                 </Text>
                                             </TouchableOpacity>
                                         );

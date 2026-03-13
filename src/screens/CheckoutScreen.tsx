@@ -289,7 +289,7 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
                   key={`${item.cartId}-value-${valueIndex}`}
                   style={{ color: colors.textSecondary, fontSize: 12, marginTop: 2 }}
                 >
-                  Ã¢â‚¬Â¢ {valueQuantity} x {name}
+                  • {valueQuantity} x {name}
                   {valuePrice > 0 ? ` (+${formatCurrency(valuePrice)})` : ''}
                 </Text>
               );
@@ -316,7 +316,7 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
 
         <View style={[styles.itemTotalRow, { borderTopColor: colors.border }]}>
           <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
-            {formatCurrency(itemUnitTotal)} Ãƒâ€” {quantity}
+            {formatCurrency(itemUnitTotal)} × {quantity}
           </Text>
           <Text style={{ color: colors.text, fontSize: 15, fontWeight: '800' }}>
             {formatCurrency(itemLineTotal)}

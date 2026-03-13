@@ -66,6 +66,10 @@ type Props = {
   onSelect: (
     option: PaymentOption & { print?: boolean },
   ) => void | Promise<void>;
+  onPrintPreview?: (
+    option: PaymentOption & { print?: boolean; preview?: boolean },
+  ) => void | Promise<void>;
+  hidePrintPreview?: boolean;
   orderTotal?: number;
   companyId?: number;
   splitItems?: SplitSelectableItem[];
@@ -131,6 +135,8 @@ export default function PaymentModal({
   visible,
   onClose,
   onSelect,
+  onPrintPreview,
+  hidePrintPreview = false,
   orderTotal = 0,
   companyId,
   splitItems = [],
@@ -138,7 +144,7 @@ export default function PaymentModal({
 }: Props) {
   const { colors } = useTheme();
   const { showToast } = useToast();
-  const { height: windowHeight } = useWindowDimensions();
+  const { height: windowHeight, width: windowWidth } = useWindowDimensions();
   const insets = useSafeAreaInsets();
 
   const primaryTabs = useMemo(
@@ -209,6 +215,7 @@ export default function PaymentModal({
 
   const baseTotal = activeTab === 3 ? splitItemTotal : orderTotal;
   const isSplitMode = activeTab === 3;
+  const showPrintPreview = !isSplitMode && !hidePrintPreview;
   const fullGiftCardTotal = round2(
     getGiftCardDiscount(appliedGiftCard, orderTotal),
   );
@@ -458,6 +465,28 @@ export default function PaymentModal({
     reset();
   };
 
+  const handlePrintPreview = async () => {
+    if (isProcessing) return;
+    const method = activeTab === 99 ? selectedOtherMethod : activeTab;
+    const payload = buildSingleMethodPayload(method, true);
+    const previewPayload = {
+      ...payload,
+      preview: true,
+      isPrintPreview: true,
+    };
+    if (onPrintPreview) {
+      setIsProcessing(true);
+      try {
+        await Promise.resolve(onPrintPreview(previewPayload));
+      } finally {
+        setIsProcessing(false);
+      }
+      return;
+    }
+  };
+
+  const modalWidth = Math.min(windowWidth - 16, 520);
+
   return (
     <Modal
       visible={visible}
@@ -480,6 +509,7 @@ export default function PaymentModal({
               {
                 borderColor: colors.border,
                 height: isSplitMode ? splitModalHeight : defaultModalHeight,
+                width: modalWidth,
               },
             ]}
           >
@@ -943,6 +973,28 @@ export default function PaymentModal({
                   <Text style={{ color: colors.textSecondary }}>Cancel</Text>
                 </TouchableOpacity>
               )}
+              {showPrintPreview ? (
+                <TouchableOpacity
+                  onPress={handlePrintPreview}
+                  disabled={isProcessing}
+                  style={[
+                    styles.payBtnPrimary,
+                    {
+                      backgroundColor: isProcessing
+                        ? colors.border
+                        : colors.primary,
+                    },
+                  ]}
+                >
+                  {isProcessing ? (
+                    <ActivityIndicator color={colors.textInverse} />
+                  ) : (
+                    <Text style={{ color: colors.textInverse }}>
+                      Print Preview
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              ) : null}
               <TouchableOpacity
                 onPress={() => {
                   handleConfirm(false);
@@ -985,33 +1037,35 @@ export default function PaymentModal({
                   <Text style={{ color: colors.textInverse }}>Pay & Print</Text>
                 )}
               </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => {
-                  handleConfirm(true, true);
-                }}
-                disabled={isSplitInvalid || isProcessing}
-                style={[
-                  styles.expenseBtn,
-                  {
-                    backgroundColor:
-                      isSplitInvalid || isProcessing
-                        ? colors.border
-                        : colors.success || colors.secondary || colors.primary,
-                  },
-                ]}
-              >
-                {isProcessing ? (
-                  <ActivityIndicator color={colors.textInverse} />
-                ) : (
-                  <Text
-                    numberOfLines={1}
-                    ellipsizeMode="tail"
-                    style={{ color: colors.textInverse, fontWeight: "700" }}
-                  >
-                    Betriebsaufwand
-                  </Text>
-                )}
-              </TouchableOpacity>
+              {!isSplitMode ? (
+                <TouchableOpacity
+                  onPress={() => {
+                    handleConfirm(true, true);
+                  }}
+                  disabled={isSplitInvalid || isProcessing}
+                  style={[
+                    styles.expenseBtn,
+                    {
+                      backgroundColor:
+                        isSplitInvalid || isProcessing
+                          ? colors.border
+                          : colors.success || colors.secondary || colors.primary,
+                    },
+                  ]}
+                >
+                  {isProcessing ? (
+                    <ActivityIndicator color={colors.textInverse} />
+                  ) : (
+                    <Text
+                      numberOfLines={1}
+                      ellipsizeMode="tail"
+                      style={{ color: colors.textInverse, fontWeight: "700" }}
+                    >
+                      Betriebsaufwand
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              ) : null}
             </View>
           </View>
           </Card>
@@ -1027,7 +1081,7 @@ const styles = StyleSheet.create({
     backgroundColor: "transparent",
     justifyContent: "flex-end",
     alignItems: "center",
-    paddingHorizontal: 12,
+    paddingHorizontal: 8,
     paddingBottom: 0,
   },
   card: {
@@ -1141,6 +1195,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 8,
+  },
+  previewBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 999,
+    borderWidth: 1,
   },
   expenseBtn: {
     paddingHorizontal: 16,
