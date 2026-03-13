@@ -152,19 +152,19 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
       setCheckoutCart(refreshedCart);
       cartNotes.setShowCartNoteModal(false);
     } catch (err) {
-      showToast('Failed to save cart note', { type: 'error' });
+      showToast('error', 'Failed to save cart note');
     }
   };
 
   const handlePlaceOrder = async () => {
     try {
       if (!checkoutCart.items?.length) {
-        showToast('Please add items before placing order', { type: 'error' });
+        showToast('error', 'Please add items before placing order');
         return;
       }
 
       if (deliveryType === 0 && !tableNo) {
-        showToast('Please select table', { type: 'error' });
+        showToast('error', 'Please select table');
         return;
       }
 
@@ -216,7 +216,7 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
       } else if (tableNo) {
         await unlockTable(tableNo);
       }
-      showToast(existingOrder ? 'Order updated successfully' : 'Order placed successfully', { type: 'success' });
+      showToast('success', existingOrder ? 'Order updated successfully' : 'Order placed successfully');
       if (toastNavTimer.current) clearTimeout(toastNavTimer.current);
       toastNavTimer.current = setTimeout(() => {
         navigation.navigate('Dashboard');
@@ -226,7 +226,7 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
         (error as any)?.response?.data?.message ||
         (error as any)?.message ||
         'Failed to place order';
-      showToast(message, { type: 'error' });
+      showToast('error', message);
       console.error('Error placing order:', error);
     }
   };
@@ -289,7 +289,7 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
                   key={`${item.cartId}-value-${valueIndex}`}
                   style={{ color: colors.textSecondary, fontSize: 12, marginTop: 2 }}
                 >
-                  • {valueQuantity} x {name}
+                  Ã¢â‚¬Â¢ {valueQuantity} x {name}
                   {valuePrice > 0 ? ` (+${formatCurrency(valuePrice)})` : ''}
                 </Text>
               );
@@ -316,7 +316,7 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
 
         <View style={[styles.itemTotalRow, { borderTopColor: colors.border }]}>
           <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
-            {formatCurrency(itemUnitTotal)} × {quantity}
+            {formatCurrency(itemUnitTotal)} Ãƒâ€” {quantity}
           </Text>
           <Text style={{ color: colors.text, fontSize: 15, fontWeight: '800' }}>
             {formatCurrency(itemLineTotal)}

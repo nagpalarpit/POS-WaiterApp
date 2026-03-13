@@ -36,6 +36,49 @@ export const useOrdersData = () => {
   const [pickupOrders, setPickupOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const toNumber = (value: unknown, fallback = 0): number => {
+    if (typeof value === 'number') return Number.isFinite(value) ? value : fallback;
+    if (typeof value === 'string' && value.trim() !== '') {
+      const parsed = parseFloat(value);
+      return Number.isFinite(parsed) ? parsed : fallback;
+    }
+    return fallback;
+  };
+
+  const hasRemainingItems = (order: Order): boolean => {
+    const items = (order as any)?.orderDetails?.orderItem;
+    if (!Array.isArray(items)) return false;
+    return items.some((item: any) => toNumber(item?.quantity, 0) > 0);
+  };
+
+  const isOrderActive = (order: Order): boolean => {
+    const rootStatusId = (order as any)?.orderStatusId;
+    const detailStatusId = (order as any)?.orderDetails?.orderStatusId;
+    const isPaidFlag = (order as any)?.orderDetails?.isPaid === 1;
+    const isSplitOrder = (order as any)?.orderDetails?.isSplitOrder === true;
+
+    const isDeliveredBoth =
+      rootStatusId === ORDER_STATUS.DELIVERED &&
+      detailStatusId === ORDER_STATUS.DELIVERED;
+
+    const isPendingRoot = rootStatusId === ORDER_STATUS.PENDING;
+
+    // POS partial split can mark orderDetails as DELIVERED while root stays PENDING.
+    // Treat such orders as active if they still have remaining items and are not paid.
+    const isActiveSplitRemainder =
+      isPendingRoot &&
+      detailStatusId === ORDER_STATUS.DELIVERED &&
+      isSplitOrder &&
+      !isPaidFlag &&
+      hasRemainingItems(order);
+
+    if (isPaidFlag) return false;
+    if (isActiveSplitRemainder) return true;
+    if (isDeliveredBoth) return false;
+
+    return true;
+  };
+
   /**
    * Fetch all orders from local database
    */
@@ -59,13 +102,7 @@ export const useOrdersData = () => {
       });
 
       if (orders && Array.isArray(orders)) {
-        const activeOrders = orders.filter((o: Order) => {
-          const statusId = o.orderDetails?.orderStatusId ?? o.orderStatusId;
-          const isPaid =
-            statusId === ORDER_STATUS.DELIVERED ||
-            o.orderDetails?.isPaid === 1;
-          return !isPaid;
-        });
+        const activeOrders = orders.filter((o: Order) => isOrderActive(o));
 
         setAllOrders(activeOrders);
 
@@ -121,4 +158,3 @@ export const useOrdersData = () => {
     fetchOrders,
   };
 };
-

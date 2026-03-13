@@ -146,14 +146,11 @@ function CustomDrawerContent(props: DrawerContentComponentProps) {
       setIsOnline(status.isConnected);
 
       if (!status.isConnected) {
-        showToast(
-          'Unable to connect to the local server. Update IP settings and try again.',
-          { type: 'error' },
-        );
+        showToast('error', 'Unable to connect to the local server. Update IP settings and try again.');
       }
     } catch (error) {
       setIsOnline(false);
-      showToast('There was an issue updating server connection status.', { type: 'error' });
+      showToast('error', 'There was an issue updating server connection status.');
     } finally {
       setUpdatingConnection(false);
     }
@@ -177,7 +174,7 @@ function CustomDrawerContent(props: DrawerContentComponentProps) {
       await AsyncStorage.clear();
       clearWebStorage();
     } catch (error) {
-      showToast('Unable to logout. Please try again.', { type: 'error' });
+      showToast('error', 'Unable to logout. Please try again.');
     } finally {
       setIsLoggingOut(false);
       props.navigation.closeDrawer();
@@ -474,7 +471,7 @@ export default function AppNavigator() {
     const unsubscribe = onOrderSync((payload) => {
       const eventType = String(payload?.eventType || '').toUpperCase();
       if (eventType === 'PRINT_SUCCESS') {
-        showToast('Print successful', { type: 'success' });
+        showToast('success', 'Print successful');
         return;
       }
       if (eventType === 'PRINT_ERROR') {
@@ -483,7 +480,7 @@ export default function AppNavigator() {
           payload?.orderData?.orderInfo?.printMessage ||
           payload?.orderData?.message ||
           'Print failed';
-        showToast(message, { type: 'error' });
+        showToast('error', message);
       }
     });
 
@@ -516,3 +513,5 @@ export default function AppNavigator() {
     </NavigationContainer>
   );
 }
+
+

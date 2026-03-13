@@ -61,7 +61,7 @@ export default function IPEntryScreen() {
         const trimmedPort = port.trim();
 
         if (!trimmedIp) {
-            showToast('Please enter server IP', { type: 'error' });
+            showToast('error', 'Please enter server IP');
             return;
         }
 
@@ -95,14 +95,11 @@ export default function IPEntryScreen() {
             } else {
                 const lastError = serverConnection.getLastError();
                 setDebugInfo(lastError ? `Failed: ${lastError}` : 'Failed: unknown error');
-                showToast(
-                    'Unable to reach the POS server. Please check the IP address and port are correct and try again.',
-                    { type: 'error' },
-                );
+                showToast('error', 'Unable to reach the POS server. Please check the IP address and port are correct and try again.');
             }
         } catch (err: any) {
             setDebugInfo(err?.message ? `Error: ${err.message}` : 'Error: unknown');
-            showToast(err.message || 'Unable to reach server', { type: 'error' });
+            showToast('error', err.message || 'Unable to reach server');
         } finally {
             setLoading(false);
         }
@@ -174,3 +171,5 @@ export default function IPEntryScreen() {
         </SafeAreaView>
     );
 }
+
+

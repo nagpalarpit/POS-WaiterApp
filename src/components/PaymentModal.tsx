@@ -290,7 +290,7 @@ export default function PaymentModal({
     const code = (isSplit ? splitGiftCode : giftCode).trim();
     if (!code) return;
     if (!companyId) {
-      showToast("Gift card not available", { type: "error" });
+      showToast('error', "Gift card not available");
       return;
     }
 
@@ -303,11 +303,11 @@ export default function PaymentModal({
       const data = Array.isArray(response?.data) ? response.data : [];
       const status = response?.status;
       if (status && status !== "SUCCESS" && status !== 200) {
-        showToast("Gift card not available", { type: "error" });
+        showToast('error', "Gift card not available");
         return;
       }
       if (data.length === 0) {
-        showToast("Gift card not available", { type: "error" });
+        showToast('error', "Gift card not available");
         return;
       }
       const giftCard = data[0];
@@ -316,14 +316,12 @@ export default function PaymentModal({
       const today = toStartOfDay(new Date());
 
       if (expiryDate && today && expiryDate < today) {
-        showToast("Gift card expired", { type: "error" });
+        showToast('error', "Gift card expired");
         return;
       }
 
       if (toNumber(giftCard?.remainingBalance, 0) <= 0) {
-        showToast("Remaining balance of this gift card is 0", {
-          type: "error",
-        });
+        showToast('error', "Remaining balance of this gift card is 0");
         return;
       }
 
@@ -333,7 +331,7 @@ export default function PaymentModal({
         const message = endLabel
           ? `Gift card available from ${startLabel} to ${endLabel}`
           : `Gift card available from ${startLabel}`;
-        showToast(message, { type: "error" });
+        showToast('error', message);
         return;
       }
 
@@ -346,7 +344,7 @@ export default function PaymentModal({
       }
     } catch (error) {
       console.warn("Gift card fetch failed:", error);
-      showToast("Gift card not available", { type: "error" });
+      showToast('error', "Gift card not available");
     } finally {
       setIsApplyingGiftCard(false);
     }
@@ -1194,3 +1192,4 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
 });
+

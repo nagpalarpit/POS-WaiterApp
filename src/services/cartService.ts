@@ -106,6 +106,13 @@ class CartService {
   tempNewGroup = 1;
   tempNewGroupLabel = '';
 
+  resetGroupState() {
+    this.currentGroupIndex = 1;
+    this.tempNewGroup = 1;
+    this.tempGroupIndex = false;
+    this.tempNewGroupLabel = '';
+  }
+
   /**
    * Load cart from AsyncStorage
    */
@@ -620,14 +627,11 @@ class CartService {
   }
 
   syncGroupStateFromCart(cart: Cart) {
-    if (this.tempGroupIndex || this.tempNewGroupLabel) {
+    if (!cart?.items?.length) {
+      this.resetGroupState();
       return;
     }
-    if (!cart?.items?.length) {
-      this.currentGroupIndex = 1;
-      this.tempNewGroup = 1;
-      this.tempGroupIndex = false;
-      this.tempNewGroupLabel = '';
+    if (this.tempGroupIndex || this.tempNewGroupLabel) {
       return;
     }
 

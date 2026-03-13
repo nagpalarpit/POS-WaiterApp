@@ -101,7 +101,7 @@ export const useCartNotes = (cart: Cart, onSaveNote: any, onSaveDiscount: any) =
       }
 
       if (discountTypeDraft === 'PERCENTAGE' && discountValue > 100) {
-        showToast('Percentage discount cannot exceed 100.', { type: 'error' });
+        showToast('error', 'Percentage discount cannot exceed 100.');
         return;
       }
 

@@ -147,7 +147,7 @@ export default function CartNoteModal({ visible, initialNote = '', initialDiscou
         }
 
         if (discountChanged && !pinVerified) {
-            showToast('Please enter PIN to apply discount.', { type: 'error' });
+            showToast('error', 'Please enter PIN to apply discount.');
             return false;
         }
 
@@ -155,11 +155,11 @@ export default function CartNoteModal({ visible, initialNote = '', initialDiscou
         if (selectedDiscount.discountType === 'CUSTOM') {
             const parsed = parseFloat(customDiscountValue || '0');
             if (!Number.isFinite(parsed) || parsed <= 0) {
-                showToast('Enter a valid custom discount percentage.', { type: 'error' });
+                showToast('error', 'Enter a valid custom discount percentage.');
                 return false;
             }
             if (parsed > 100) {
-                showToast('Custom discount cannot exceed 100%.', { type: 'error' });
+                showToast('error', 'Custom discount cannot exceed 100%.');
                 return false;
             }
             discountValue = parsed;
@@ -250,7 +250,7 @@ export default function CartNoteModal({ visible, initialNote = '', initialDiscou
                                                 }}
                                             >
                                                 <Text style={{ color: selected ? colors.primary : colors.text, fontWeight: '600', fontSize: 12 }}>
-                                                    {label} · {getDiscountValueLabel(discount)}
+                                                    {label} Ã‚Â· {getDiscountValueLabel(discount)}
                                                 </Text>
                                             </TouchableOpacity>
                                         );

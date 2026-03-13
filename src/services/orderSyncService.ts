@@ -19,6 +19,7 @@ const LOCK_TTL_MS = 5 * 60 * 1000; // 5 minutes
 const tableLocks = new Map<number, LockInfo>();
 const orderLocks = new Map<string, LockInfo>();
 const listeners = new Set<(event: OrderSyncEvent) => void>();
+let connectionListenersAttached = false;
 
 const deviceId = (() => {
   const ts = Date.now();
@@ -49,6 +50,11 @@ const pruneLocks = () => {
       orderLocks.delete(key);
     }
   }
+};
+
+const resetLockState = () => {
+  tableLocks.clear();
+  orderLocks.clear();
 };
 
 const extractOrderInfo = (orderData: any) =>
@@ -114,6 +120,18 @@ const resolveCompanyId = async (): Promise<number> => {
 export const initOrderSync = () => {
   const socket = getSocket();
   if (!socket) return;
+
+  resetLockState();
+
+  if (!connectionListenersAttached) {
+    socket.on('connect', () => {
+      resetLockState();
+    });
+    socket.on('disconnect', () => {
+      resetLockState();
+    });
+    connectionListenersAttached = true;
+  }
 
   socket.off('pos-order-sync');
   socket.on('pos-order-sync', (payload: OrderSyncEvent) => {

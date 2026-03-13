@@ -53,7 +53,7 @@ export default function PinModal({ visible, onClose, onVerified }: Props) {
 
       const res = await localDatabase.select('settings', { where });
       if (!Array.isArray(res) || res.length === 0) {
-        showToast('Wrong PIN', { type: 'error' });
+        showToast('error', 'Wrong PIN');
         return;
       }
 
@@ -61,7 +61,7 @@ export default function PinModal({ visible, onClose, onVerified }: Props) {
       onClose();
     } catch (error) {
       console.error('PinModal: Failed to verify pin', error);
-      showToast('Unable to verify PIN', { type: 'error' });
+      showToast('error', 'Unable to verify PIN');
     } finally {
       setChecking(false);
     }

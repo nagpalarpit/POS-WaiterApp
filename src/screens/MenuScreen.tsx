@@ -38,7 +38,7 @@ import {
   getDiscountAmount,
 } from '../utils/cartCalculations';
 import cartService from '../services/cartService';
-import { lockOrder, lockTable, unlockTable } from '../services/orderSyncService';
+import { lockOrder, lockTable, unlockOrder, unlockTable } from '../services/orderSyncService';
 import { useToast } from '../components/ToastProvider';
 
 const { width } = Dimensions.get('window');
@@ -120,13 +120,19 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
   }, [existingOrder, tableNo]);
 
   useEffect(() => {
-    if (existingOrder || !tableNo) return;
+    if (!existingOrder && !tableNo) return;
     const unsubscribe = navigation.addListener('beforeRemove', (e: any) => {
       const action = e?.data?.action;
       if (action?.type === 'NAVIGATE' && action?.payload?.name === 'Checkout') {
         return;
       }
-      unlockTable(tableNo);
+      if (existingOrder) {
+        unlockOrder(existingOrder);
+        return;
+      }
+      if (tableNo) {
+        unlockTable(tableNo);
+      }
     });
     return unsubscribe;
   }, [navigation, existingOrder, tableNo]);
@@ -267,7 +273,7 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
         attributeValues
       );
     } catch (error) {
-      showToast('Failed to add item to cart', { type: 'error' });
+      showToast('error', 'Failed to add item to cart');
     }
   };
 
@@ -340,7 +346,7 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
 
   const proceedToCheckout = async () => {
     if (cartData.cart.items.length === 0) {
-      showToast('Please add items to cart', { type: 'error' });
+      showToast('error', 'Please add items to cart');
       return;
     }
 
@@ -367,7 +373,7 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
       }
       cartNotes.setShowCartNoteModal(false);
     } catch (err) {
-      showToast('Failed to save cart note', { type: 'error' });
+      showToast('error', 'Failed to save cart note');
     }
   };
 
@@ -484,7 +490,7 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
                 );
                 cartNotes.cancelItemNoteEdit();
               } catch (err) {
-                showToast('Failed to save item note', { type: 'error' });
+                showToast('error', 'Failed to save item note');
               }
             }
           }}

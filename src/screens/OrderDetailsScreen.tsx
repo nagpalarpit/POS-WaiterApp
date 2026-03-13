@@ -217,7 +217,7 @@ const formatTimestamp = (timestamp?: string) => {
   if (!timestamp) return "N/A";
   const date = new Date(timestamp);
   if (Number.isNaN(date.getTime())) return "N/A";
-  return `${date.toLocaleDateString()} • ${date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+  return `${date.toLocaleDateString()} Ã¢â‚¬Â¢ ${date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
 };
 
 export default function OrderDetailsScreen({ navigation, route }: any) {
@@ -838,10 +838,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
             (sum: number, item: any) => sum + toNumber(item?.quantity, 0),
             0,
           );
-          showToast(
-            `Split payment saved (${paidItemQty} item${paidItemQty === 1 ? "" : "s"} paid)`,
-            { type: "success" },
-          );
+          showToast('success', `Split payment saved (${paidItemQty} item${paidItemQty === 1 ? "" : "s"} paid)`);
           setMarking(false);
           return { keepModalOpen: true };
         }
@@ -1186,7 +1183,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
           orderDeliveryTypeId,
         });
 
-        showToast("Split payment completed", { type: "success" });
+        showToast('success', "Split payment completed");
         await unlockOrder(order);
         setMarking(false);
         navigation.goBack();
@@ -1314,7 +1311,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
     } catch (err) {
       setMarking(false);
       console.error("Error settling order after payment selection:", err);
-      showToast("Unable to complete payment", { type: "error" });
+      showToast('error', "Unable to complete payment");
       return { keepModalOpen: false };
     }
   };
@@ -1372,7 +1369,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
                             marginTop: 2,
                           }}
                         >
-                          • {valueQuantity} x {name}
+                          Ã¢â‚¬Â¢ {valueQuantity} x {name}
                           {valuePrice > 0
                             ? ` (+${formatCurrency(valuePrice)})`
                             : ""}
@@ -2034,3 +2031,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 });
+
+
+
+

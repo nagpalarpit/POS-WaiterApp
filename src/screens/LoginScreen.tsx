@@ -37,7 +37,7 @@ export default function LoginScreen() {
 
   const doLogin = async () => {
     if (!username.trim() || !password.trim()) {
-      showToast('Please enter username and password', { type: 'error' });
+      showToast('error', 'Please enter username and password');
       return;
     }
 
@@ -77,10 +77,10 @@ export default function LoginScreen() {
         // Navigate to Dashboard (reset stack so Dashboard becomes the root)
         navigation.reset({ index: 0, routes: [{ name: 'Main' as never }] });
       } else {
-        showToast(result.error || 'Unable to authenticate', { type: 'error' });
+        showToast('error', result.error || 'Unable to authenticate');
       }
     } catch (err: any) {
-      showToast(err.message || 'An unexpected error occurred', { type: 'error' });
+      showToast('error', err.message || 'An unexpected error occurred');
     } finally {
       setLoading(false);
     }

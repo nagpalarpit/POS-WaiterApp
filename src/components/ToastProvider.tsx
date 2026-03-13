@@ -1,16 +1,12 @@
-import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
-import { Animated, Text, StyleSheet, Modal, View } from 'react-native';
+import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
+import { Modal, Text, StyleSheet, View, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeProvider';
 
 type ToastType = 'success' | 'error' | 'info';
-type ToastOptions = {
-  type?: ToastType;
-  durationMs?: number;
-};
 
 type ToastContextValue = {
-  showToast: (message: string, options?: ToastOptions) => void;
+  showToast: (type: ToastType, message: string) => void;
 };
 
 const ToastContext = createContext<ToastContextValue | null>(null);
@@ -26,77 +22,57 @@ export const ToastProvider = ({ children }: { children: React.ReactNode }) => {
   const insets = useSafeAreaInsets();
   const [message, setMessage] = useState('');
   const [type, setType] = useState<ToastType>('info');
-  const anim = useRef(new Animated.Value(0)).current;
-  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [visible, setVisible] = useState(false);
 
-  useEffect(() => {
-    return () => {
-      if (hideTimer.current) clearTimeout(hideTimer.current);
-    };
+  const closeModal = useCallback(() => {
+    setVisible(false);
+    setMessage('');
   }, []);
 
-  const showToast = useCallback(
-    (msg: string, options?: ToastOptions) => {
-      if (!msg) return;
-      const nextType = options?.type || 'info';
-      const durationMs = options?.durationMs ?? 1400;
+  const showToast = useCallback((nextType: ToastType, msg: string) => {
+    if (!msg) return;
+    setType(nextType || 'info');
+    setMessage(msg);
+    setVisible(true);
+  }, []);
 
-      setMessage(msg);
-      setType(nextType);
-
-      anim.stopAnimation();
-      Animated.timing(anim, {
-        toValue: 1,
-        duration: 180,
-        useNativeDriver: true,
-      }).start(() => {
-        if (hideTimer.current) clearTimeout(hideTimer.current);
-        hideTimer.current = setTimeout(() => {
-          Animated.timing(anim, {
-            toValue: 0,
-            duration: 200,
-            useNativeDriver: true,
-          }).start(() => {
-            setMessage('');
-          });
-        }, durationMs);
-      });
-    },
-    [anim],
-  );
+  const headerLabel = useMemo(() => type.toUpperCase(), [type]);
 
   return (
     <ToastContext.Provider value={{ showToast }}>
       {children}
-      {message ? (
-        <Modal transparent visible statusBarTranslucent>
-          <View pointerEvents="none" style={{ flex: 1 }}>
-            <Animated.View
-              pointerEvents="none"
+      <Modal
+        transparent
+        visible={visible}
+        statusBarTranslucent
+        onRequestClose={closeModal}
+        animationType="fade"
+      >
+        <View style={styles.overlay}>
+          <View style={[styles.card, { backgroundColor: colors.surface || '#fff' }]}>
+            <Text style={[styles.header, { color: getToastColor(type, colors) }]}> 
+              {headerLabel}
+            </Text>
+            <Text style={[styles.message, { color: colors.text }]}> 
+              {message}
+            </Text>
+            <TouchableOpacity
+              onPress={closeModal}
               style={[
-                styles.toast,
+                styles.button,
                 {
-                  top: insets.top + 12,
-                  backgroundColor: getToastColor(type, colors),
-                  opacity: anim,
-                  transform: [
-                    {
-                      translateY: anim.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [-6, 0],
-                      }),
-                    },
-                  ],
+                  backgroundColor: colors.primary,
+                  marginBottom: Math.max(insets.bottom, 12),
                 },
               ]}
             >
-              <Text style={{ color: colors.textInverse || '#fff', fontWeight: '700', fontSize: 12 }}>
-                {message}
+              <Text style={[styles.buttonText, { color: colors.textInverse || '#fff' }]}> 
+                OK
               </Text>
-            </Animated.View>
+            </TouchableOpacity>
           </View>
-        </Modal>
-      ) : null}
+        </View>
+      </Modal>
     </ToastContext.Provider>
   );
 };
@@ -110,15 +86,46 @@ export const useToast = (): ToastContextValue => {
 };
 
 const styles = StyleSheet.create({
-  toast: {
-    position: 'absolute',
-    left: 16,
-    right: 16,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: 14,
-    zIndex: 9999,
-    elevation: 8,
+  overlay: {
+    flex: 1,
     alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.35)',
+    paddingHorizontal: 20,
+  },
+  card: {
+    width: '100%',
+    maxWidth: 420,
+    borderRadius: 18,
+    paddingHorizontal: 20,
+    paddingTop: 18,
+    paddingBottom: 6,
+    alignItems: 'center',
+  },
+  header: {
+    fontSize: 14,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+    marginBottom: 10,
+  },
+  message: {
+    fontSize: 16,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginBottom: 18,
+  },
+  button: {
+    minWidth: 120,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 24,
+    borderRadius: 24,
+    alignSelf: 'center',
+  },
+  buttonText: {
+    fontSize: 14,
+    fontWeight: '700',
+    letterSpacing: 0.6,
   },
 });

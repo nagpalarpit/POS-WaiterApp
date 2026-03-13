@@ -9,6 +9,7 @@ import { getOrderStatusLabel } from '../utils/orderUtils';
 import { formatCurrency } from '../utils/currency';
 import { isOrderLocked, isTableLocked, lockOrder, lockTable } from '../services/orderSyncService';
 import { useToast } from '../components/ToastProvider';
+import cartService from '../services/cartService';
 
 // Hooks
 import { useOrdersData, DELIVERY_TYPE, Order } from '../hooks/useOrdersData';
@@ -310,6 +311,10 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
    */
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
+      AsyncStorage.removeItem('cart').catch((error) => {
+        console.warn('Failed to clear cart on dashboard focus:', error);
+      });
+      cartService.resetGroupState();
       ordersData.fetchOrders();
     });
     return unsubscribe;
@@ -523,10 +528,7 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
               if (table.order) {
                 if (isOrderLocked(table.order)) {
                   const label = getOrderDisplayLabel(table.order);
-                  showToast(
-                    `${label} is being handled on another device. Please try later.`,
-                    { type: 'error' },
-                  );
+                  showToast('error', `${label} is being handled on another device. Please try later.`);
                   return;
                 }
                 lockOrder(table.order);
@@ -535,7 +537,7 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
               }
 
               if (isTableLocked(table.tableNo)) {
-                showToast(`Table ${table.tableNo} is currently selected on another device.`, { type: 'error' });
+                showToast('error', `Table ${table.tableNo} is currently selected on another device.`);
                 return;
               }
 
@@ -603,7 +605,7 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
       onPress={() => {
         if (isOrderLocked(order)) {
           const label = getOrderDisplayLabel(order);
-          showToast(`${label} is being handled on another device. Please try later.`, { type: 'error' });
+          showToast('error', `${label} is being handled on another device. Please try later.`);
           return;
         }
         lockOrder(order);
@@ -868,4 +870,6 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
     </ScrollView>
   );
 }
+
+
 
