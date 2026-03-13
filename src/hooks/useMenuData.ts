@@ -111,6 +111,7 @@ export const normalizeMenuItemForOptions = (item: MenuItem): MenuItem => ({
  */
 export const useMenuData = () => {
   const [categories, setCategories] = useState<MenuCategory[]>([]);
+  const [cartCategories, setCartCategories] = useState<MenuCategory[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState(0);
 
@@ -150,14 +151,9 @@ export const useMenuData = () => {
 
         console.log('MenuData: Processed categories:', menuCategories.length);
 
-        // Filter out 'cart' and 'voucher' category types
-        const filteredCategories = menuCategories.filter(
-          (cat: any) => cat.categoryType !== 'cart' && cat.categoryType !== 'voucher'
-        );
-
         // Deduplicate categories and items
         const categoryMap = new Map<string, MenuCategory>();
-        filteredCategories.forEach((category: MenuCategory, categoryIndex: number) => {
+        menuCategories.forEach((category: MenuCategory, categoryIndex: number) => {
           const categoryKey = getCategoryIdentity(category, categoryIndex);
           const existingCategory = categoryMap.get(categoryKey);
           const incomingItems = Array.isArray(category.menuItems) ? category.menuItems : [];
@@ -187,19 +183,28 @@ export const useMenuData = () => {
         });
 
         const normalizedCategories = Array.from(categoryMap.values());
-        setCategories(normalizedCategories);
-        if (normalizedCategories.length > 0) {
+        const menuDisplayCategories = normalizedCategories.filter(
+          (cat: any) => cat.categoryType !== 'cart' && cat.categoryType !== 'voucher'
+        );
+        const cartExtraCategories = normalizedCategories.filter(
+          (cat: any) => cat.categoryType === 'cart'
+        );
+        setCategories(menuDisplayCategories);
+        setCartCategories(cartExtraCategories);
+        if (menuDisplayCategories.length > 0) {
           setActiveCategory(0);
         }
 
-        console.log('MenuData: Categories loaded:', normalizedCategories.length);
+        console.log('MenuData: Categories loaded:', menuDisplayCategories.length);
       } else {
         console.warn('MenuData: No menu data returned');
         setCategories([]);
+        setCartCategories([]);
       }
     } catch (error) {
       console.error('MenuData: Error loading menu:', error);
       setCategories([]);
+      setCartCategories([]);
     } finally {
       setLoading(false);
     }
@@ -211,6 +216,7 @@ export const useMenuData = () => {
 
   return {
     categories,
+    cartCategories,
     setCategories,
     loading,
     setLoading,

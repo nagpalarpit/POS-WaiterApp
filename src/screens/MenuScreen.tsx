@@ -33,9 +33,12 @@ import ItemDetailsModal from '../components/ItemDetailsModal';
 import ItemNoteModal from '../components/ItemNoteModal';
 import CartNoteModal from '../components/CartNoteModal';
 import GroupModal from '../components/GroupModal';
+import PinModal from '../components/PinModal';
+import AddExtraModal from '../components/AddExtraModal';
 import {
   getCartSubtotal,
   getDiscountAmount,
+  getCartItemQuantity,
 } from '../utils/cartCalculations';
 import cartService from '../services/cartService';
 import { lockOrder, lockTable, unlockOrder, unlockTable } from '../services/orderSyncService';
@@ -77,6 +80,7 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
     normalizedItem: any;
     hasVariants: boolean;
   } | null>(null);
+  const [showAddExtraModal, setShowAddExtraModal] = useState(false);
 
   // Cart notes management
   const cartNotes = useCartNotes(cartData.cart, cartData.updateItemNote, cartData.updateDiscount);
@@ -98,6 +102,62 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
     if (deliveryType === 2) return 'shopping-outline';
     return 'silverware-fork-knife';
   }, [tableNo, deliveryType]);
+
+  const [decreasePinChecked, setDecreasePinChecked] = useState(false);
+  const [pinModalVisible, setPinModalVisible] = useState(false);
+  const pendingDecreaseRef = useRef<
+    { type: 'update' | 'remove'; cartId: string; quantity?: number } | null
+  >(null);
+
+  const getExtrasCategoryPercent = (category: any): number | null => {
+    const rawValues = [
+      category?.tax?.percentage,
+      category?.tax?.name,
+      category?.name,
+    ];
+    let percent: number | null = null;
+    let hasZero = false;
+    for (const raw of rawValues) {
+      if (raw == null) continue;
+      if (typeof raw === 'number') {
+        if (raw > 0) {
+          percent = Math.round(raw);
+          break;
+        }
+        if (raw === 0) hasZero = true;
+        continue;
+      }
+      const match = String(raw).match(/(\d+)\s*%/);
+      if (match) {
+        percent = parseInt(match[1], 10);
+        break;
+      }
+    }
+    if (percent == null && hasZero) percent = 0;
+    return percent;
+  };
+
+  const getCategoryByExtraCategory = (extraCategory?: number) => {
+    const categories = menuData.cartCategories || [];
+    if (!categories.length) return null;
+    if (!extraCategory) return categories[0];
+
+    const targetPercentage =
+      extraCategory === 1 ? 7 : extraCategory === 2 ? 19 : 0;
+
+    const match = categories.find((category) => {
+      const pct = getExtrasCategoryPercent(category);
+      if (pct == null) return false;
+      return Math.round(pct) === targetPercentage;
+    });
+
+    return match || categories[0];
+  };
+
+  useEffect(() => {
+    setDecreasePinChecked(false);
+    pendingDecreaseRef.current = null;
+  }, [existingOrder?._id, existingOrder?.id]);
 
   useEffect(() => {
     if (!existingOrder) return;
@@ -149,6 +209,50 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
     });
     return unsubscribe;
   }, [navigation, existingOrder, tableNo]);
+
+  const shouldRequireDecreasePin = (cartId: string, nextQty?: number) => {
+    if (!existingOrder) return false;
+    const item = cartData.cart.items.find((entry) => entry.cartId === cartId);
+    if (!item) return false;
+    const isOldItem = item.isOld === true || item.oldQuantity != null;
+    if (!isOldItem) return false;
+    if (nextQty == null) return true;
+    const currentQty = getCartItemQuantity(item);
+    return nextQty < currentQty;
+  };
+
+  const handleUpdateQuantity = async (cartId: string, quantity: number) => {
+    if (!decreasePinChecked && shouldRequireDecreasePin(cartId, quantity)) {
+      pendingDecreaseRef.current = { type: 'update', cartId, quantity };
+      setPinModalVisible(true);
+      return;
+    }
+    await cartData.updateQuantity(cartId, quantity);
+  };
+
+  const handleRemoveItem = async (cartId: string) => {
+    if (!decreasePinChecked && shouldRequireDecreasePin(cartId)) {
+      pendingDecreaseRef.current = { type: 'remove', cartId };
+      setPinModalVisible(true);
+      return;
+    }
+    await cartData.removeFromCart(cartId);
+  };
+
+  const handlePinVerified = async () => {
+    setPinModalVisible(false);
+    setDecreasePinChecked(true);
+    const pending = pendingDecreaseRef.current;
+    pendingDecreaseRef.current = null;
+    if (!pending) return;
+    if (pending.type === 'update' && typeof pending.quantity === 'number') {
+      await cartData.updateQuantity(pending.cartId, pending.quantity);
+      return;
+    }
+    if (pending.type === 'remove') {
+      await cartData.removeFromCart(pending.cartId);
+    }
+  };
 
   const activeCategory = menuData.categories[menuData.activeCategory];
   const filteredItemsCount = useMemo(() => {
@@ -204,12 +308,20 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
         </TouchableOpacity>
       ),
       headerRight: () => (
-        <TouchableOpacity
-          onPress={() => cartNotes.setShowCartNoteModal(true)}
-          style={{ padding: 8,}}
-        >
-          <MaterialCommunityIcons name="note-edit-outline" size={20} color={colors.text} />
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <TouchableOpacity
+            onPress={() => setShowAddExtraModal(true)}
+            style={{ padding: 8 }}
+          >
+            <MaterialCommunityIcons name="plus-box-outline" size={20} color={colors.text} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => cartNotes.setShowCartNoteModal(true)}
+            style={{ padding: 8 }}
+          >
+            <MaterialCommunityIcons name="note-edit-outline" size={20} color={colors.text} />
+          </TouchableOpacity>
+        </View>
       ),
     });
   }, [navigation, colors, tableNo, deliveryType, cartNotes]);
@@ -355,6 +467,47 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
 
   const handleSelectGroup = (groupType: number, groupLabel?: string) => {
     cartService.setActiveGroup(groupType, groupLabel || '');
+  };
+
+  const handleAddExtraSave = async (payload: {
+    itemName: string;
+    price: number;
+    extraCategory: number;
+  }) => {
+    const categories = menuData.cartCategories || [];
+    if (!categories.length) {
+      showToast('error', 'Extras are not configured.');
+      return;
+    }
+    const categoryToUse = getCategoryByExtraCategory(payload.extraCategory);
+    if (!categoryToUse) {
+      showToast('error', 'No extras category found.');
+      return;
+    }
+    const itemId = categoryToUse?.menuItems?.[0]?.id;
+    if (!itemId) {
+      showToast('error', 'No extra items configured.');
+      return;
+    }
+
+    const item = {
+      id: itemId,
+      customId: 0,
+      name: payload.itemName,
+      price: payload.price,
+      isExtraItem: true,
+      extraCategory: payload.extraCategory,
+    };
+
+    try {
+      if (groupLabelEnabled) {
+        cartService.useTempGroupIfAvailable();
+      }
+      await cartData.addToCartDirect(categoryToUse, item, null, null, undefined);
+      setShowAddExtraModal(false);
+    } catch (error) {
+      showToast('error', 'Failed to add extra item');
+    }
   };
 
   const proceedToCheckout = async () => {
@@ -507,8 +660,8 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
               }
             }
           }}
-          onUpdateQuantity={cartData.updateQuantity}
-          onRemoveItem={cartData.removeFromCart}
+          onUpdateQuantity={handleUpdateQuantity}
+          onRemoveItem={handleRemoveItem}
           onEditOrderMeta={() => cartNotes.setShowCartNoteModal(true)}
           onAddGroup={handleAddGroup}
           showAddGroup={groupLabelEnabled}
@@ -548,6 +701,21 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
         initialDiscount={cartData.cart.discount || null}
         onClose={() => cartNotes.setShowCartNoteModal(false)}
         onSave={handleSaveCartNote}
+      />
+
+      <AddExtraModal
+        visible={showAddExtraModal}
+        onClose={() => setShowAddExtraModal(false)}
+        onSave={handleAddExtraSave}
+      />
+
+      <PinModal
+        visible={pinModalVisible}
+        onClose={() => {
+          setPinModalVisible(false);
+          pendingDecreaseRef.current = null;
+        }}
+        onVerified={handlePinVerified}
       />
 
       <GroupModal

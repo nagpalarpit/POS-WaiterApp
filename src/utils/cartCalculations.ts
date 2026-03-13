@@ -51,7 +51,6 @@ export const getAttributeValuePrice = (attributeValue: AttributeValue): number =
 export const getItemUnitTotal = (item: CartItem): number => {
   let total = toNumber(item.itemPrice, 0);
   total += toNumber(item.variantPrice, 0);
-  total += toNumber(item.attributePrice, 0);
 
   if (Array.isArray(item.attributeValues) && item.attributeValues.length > 0) {
     item.attributeValues.forEach((attributeValue) => {

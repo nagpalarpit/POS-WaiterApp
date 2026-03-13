@@ -45,6 +45,15 @@ const getServiceTypeLabel = (deliveryType: number, tableNo: number | null) => {
   return 'Walk-in';
 };
 
+const toNumber = (value: unknown, fallback = 0): number => {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : fallback;
+  if (typeof value === 'string' && value.trim() !== '') {
+    const parsed = parseFloat(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+  }
+  return fallback;
+};
+
 export default function CheckoutScreen({ navigation, route }: CheckoutScreenProps) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
@@ -173,6 +182,66 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
         Animated.timing(placeAnim, { toValue: 1, duration: 250, useNativeDriver: true }),
       ]).start();
 
+      const resolveDeltaPrintItems = (
+        items: CartItem[],
+        removedSeed: CartItem[] = [],
+      ) => {
+        const added: CartItem[] = [];
+        const removed: CartItem[] = [...removedSeed];
+
+        const pushRemoved = (item: CartItem, qty: number) => {
+          if (qty <= 0) return;
+          const existingIndex = removed.findIndex(
+            (entry) => entry.cartId === item.cartId,
+          );
+          if (existingIndex > -1) {
+            removed[existingIndex].quantity += qty;
+            return;
+          }
+          removed.push({
+            ...item,
+            quantity: qty,
+            isOld: false,
+            oldQuantity: undefined,
+          });
+        };
+
+        items.forEach((item) => {
+          const isOld = item.isOld === true;
+          const oldQty =
+            item.oldQuantity != null ? toNumber(item.oldQuantity, 0) : null;
+          const currentQty = toNumber(item.quantity, 0);
+
+          if (isOld && oldQty == null) {
+            return;
+          }
+
+          if (oldQty != null) {
+            const delta = currentQty - oldQty;
+            if (delta > 0) {
+              added.push({ ...item, quantity: delta, isOld: false, oldQuantity: undefined });
+            } else if (delta < 0) {
+              pushRemoved(item, Math.abs(delta));
+            }
+            return;
+          }
+
+          added.push(item);
+        });
+
+        return { added, removed };
+      };
+
+      const { added: printSourceItems, removed: removedSourceItems } =
+        existingOrder
+          ? resolveDeltaPrintItems(
+              checkoutCart.items,
+              Array.isArray(checkoutCart.removedItems)
+                ? checkoutCart.removedItems
+                : [],
+            )
+          : { added: checkoutCart.items, removed: [] };
+
       const submitResult = await orderSubmit.submitOrder(0);
       const submittedOrder = submitResult?.order;
       const orderInfo = {
@@ -191,23 +260,46 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
       );
       if (submittedOrder) {
         const orderDetails = submittedOrder.orderDetails || submittedOrder;
-        const items =
-          orderDetails?.orderItem ||
-          orderDetails?.orderItems ||
-          [];
-        if (Array.isArray(items) && items.length > 0) {
+        const companyId =
+          orderDetails?.companyId ||
+          existingOrder?.companyId ||
+          existingOrder?.orderDetails?.companyId ||
+          0;
+        const printItems =
+          printSourceItems.length > 0
+            ? orderSubmit.prepareOrderItems(companyId, printSourceItems)
+            : [];
+        const canceledItems =
+          removedSourceItems.length > 0
+            ? orderSubmit.prepareOrderItems(companyId, removedSourceItems)
+            : [];
+        const orderInfoForPrint = {
+          ...orderDetails,
+          orderNumber:
+            orderDetails?.customOrderId ||
+            submittedOrder?.customOrderId ||
+            submittedOrder?._id ||
+            submittedOrder?.id,
+        };
+        const canceledPrintObj =
+          canceledItems.length > 0
+            ? {
+                items: canceledItems,
+                isOrderDetails: true,
+                currentUser: orderDetails?.user ?? submittedOrder?.user ?? null,
+                orderInfo: {
+                  ...orderInfoForPrint,
+                  orderNumber: `${orderInfoForPrint.orderNumber}-C`,
+                },
+              }
+            : undefined;
+        if (printItems.length > 0 || canceledPrintObj) {
           emitPosKotPrint({
-            items,
+            items: printItems,
+            canceledObj: canceledPrintObj,
             isOrderDetails: true,
             currentUser: orderDetails?.user ?? submittedOrder?.user ?? null,
-            orderInfo: {
-              ...orderDetails,
-              orderNumber:
-                orderDetails?.customOrderId ||
-                submittedOrder?.customOrderId ||
-                submittedOrder?._id ||
-                submittedOrder?.id,
-            },
+            orderInfo: orderInfoForPrint,
           });
         }
       }

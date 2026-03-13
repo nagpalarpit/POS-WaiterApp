@@ -244,10 +244,6 @@ export default function ItemDetailsModal({
             total += parseFloat(selectedVariant.price.toString());
         }
 
-        if (selectedAttribute?.price) {
-            total += parseFloat(selectedAttribute.price.toString());
-        }
-
         selectedAttributeValues.forEach((av: any) => {
             if (av.price) {
                 total += parseFloat(av.price.toString()) * (av.quantity || 1);

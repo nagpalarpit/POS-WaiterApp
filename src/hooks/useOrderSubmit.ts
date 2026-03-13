@@ -61,9 +61,13 @@ export const useOrderSubmit = (
   /**
    * Prepare order items from cart
    */
-  const prepareOrderItems = (companyId: number): PlaceOrderItemPayload[] => {
+  const prepareOrderItems = (
+    companyId: number,
+    itemsOverride?: CartItem[],
+  ): PlaceOrderItemPayload[] => {
     const discountId = cart.discount?.discountId ?? null;
-    return cart.items.map((item: CartItem) => {
+    const sourceItems = itemsOverride ?? cart.items;
+    return sourceItems.map((item: CartItem) => {
       const orderItem: PlaceOrderItemPayload = {
         companyId,
         discountId,
@@ -81,6 +85,9 @@ export const useOrderSubmit = (
         tax: item.tax,
         splitPaidQuantity: 0,
       };
+      if (item.extraCategory !== undefined && item.extraCategory !== null) {
+        orderItem.extraCategory = item.extraCategory;
+      }
 
       if (item.variantId) {
         orderItem.orderItemVariant = {

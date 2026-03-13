@@ -31,6 +31,8 @@ export interface CartItem {
   itemId: number;
   itemName: string;
   itemPrice: number;
+  isExtraItem?: boolean;
+  extraCategory?: number;
   
   // Variant
   variantId?: number;
@@ -59,6 +61,7 @@ export interface CartItem {
 
 export interface Cart {
   items: CartItem[];
+  removedItems?: CartItem[];
   orderNote?: string;
   discount?: CartDiscount | null;
 }
@@ -123,18 +126,19 @@ class CartService {
         const parsed = JSON.parse(cartData);
         const cart = {
           items: Array.isArray(parsed?.items) ? parsed.items : [],
+          removedItems: Array.isArray(parsed?.removedItems) ? parsed.removedItems : [],
           orderNote: parsed?.orderNote || '',
           discount: parsed?.discount || null,
         };
         this.syncGroupStateFromCart(cart);
         return cart;
       }
-      const emptyCart = { items: [], orderNote: '', discount: null };
+      const emptyCart = { items: [], removedItems: [], orderNote: '', discount: null };
       this.syncGroupStateFromCart(emptyCart);
       return emptyCart;
     } catch (error) {
       console.error('Error loading cart:', error);
-      const emptyCart = { items: [], orderNote: '', discount: null };
+      const emptyCart = { items: [], removedItems: [], orderNote: '', discount: null };
       this.syncGroupStateFromCart(emptyCart);
       return emptyCart;
     }
@@ -184,6 +188,12 @@ class CartService {
         groupType: resolvedGroupType,
         groupLabel: resolvedGroupLabel || undefined,
       };
+      if (item?.isExtraItem) {
+        cartItem.isExtraItem = true;
+      }
+      if (item?.extraCategory !== undefined && item?.extraCategory !== null) {
+        cartItem.extraCategory = item.extraCategory;
+      }
 
       // Add variant if provided
       if (variant) {
@@ -228,10 +238,23 @@ class CartService {
 
       if (existingIndex > -1) {
         // Item exists, increase quantity
+        if (cart.items[existingIndex].isOld && cart.items[existingIndex].oldQuantity == null) {
+          cart.items[existingIndex].oldQuantity = cart.items[existingIndex].quantity;
+          cart.items[existingIndex].isOld = false;
+        }
         cart.items[existingIndex].quantity += 1;
+        this.reduceRemovedItems(cart, cart.items[existingIndex].cartId, 1);
+        if (
+          cart.items[existingIndex].oldQuantity != null &&
+          cart.items[existingIndex].quantity === cart.items[existingIndex].oldQuantity
+        ) {
+          cart.items[existingIndex].isOld = true;
+          delete cart.items[existingIndex].oldQuantity;
+        }
       } else {
         // New item, add to front
         cart.items.unshift(cartItem);
+        this.reduceRemovedItems(cart, cartItem.cartId, 1);
       }
 
       this.currentGroupIndex = resolvedGroupType;
@@ -263,7 +286,23 @@ class CartService {
 
       const item = cart.items.find((i) => i.cartId === cartId);
       if (item) {
+        const prevQuantity = item.quantity;
+        if (item.isOld && item.oldQuantity == null && quantity !== prevQuantity) {
+          item.oldQuantity = prevQuantity;
+          item.isOld = false;
+        }
         item.quantity = quantity;
+        if (quantity > prevQuantity) {
+          this.reduceRemovedItems(cart, item.cartId, quantity - prevQuantity);
+        }
+        if (item.oldQuantity != null) {
+          if (item.quantity === item.oldQuantity) {
+            item.isOld = true;
+            delete item.oldQuantity;
+          } else {
+            item.isOld = false;
+          }
+        }
       }
 
       await this.saveCart(cart);
@@ -280,6 +319,31 @@ class CartService {
   async removeFromCart(cartId: string): Promise<Cart> {
     try {
       const cart = await this.loadCart();
+      const existing = cart.items.find((i) => i.cartId === cartId);
+      if (existing && (existing.isOld || existing.oldQuantity != null)) {
+        const removedQty =
+          existing.oldQuantity != null
+            ? toNumber(existing.oldQuantity, 0)
+            : toNumber(existing.quantity, 0);
+        if (removedQty > 0) {
+          if (!Array.isArray(cart.removedItems)) {
+            cart.removedItems = [];
+          }
+          const removedIndex = cart.removedItems.findIndex(
+            (item) => item.cartId === existing.cartId
+          );
+          if (removedIndex > -1) {
+            cart.removedItems[removedIndex].quantity += removedQty;
+          } else {
+            cart.removedItems.push({
+              ...existing,
+              quantity: removedQty,
+              isOld: false,
+              oldQuantity: undefined,
+            });
+          }
+        }
+      }
       cart.items = cart.items.filter((i) => i.cartId !== cartId);
       if (cart.items.length === 0) {
         cart.orderNote = '';
@@ -293,12 +357,26 @@ class CartService {
     }
   }
 
+  private reduceRemovedItems(cart: Cart, cartId?: string, deltaQty: number = 1) {
+    if (!cartId || deltaQty <= 0) return;
+    if (!Array.isArray(cart.removedItems) || cart.removedItems.length === 0) return;
+    const index = cart.removedItems.findIndex((item) => item.cartId === cartId);
+    if (index === -1) return;
+    cart.removedItems[index].quantity = Math.max(
+      0,
+      toNumber(cart.removedItems[index].quantity, 0) - deltaQty,
+    );
+    if (cart.removedItems[index].quantity <= 0) {
+      cart.removedItems.splice(index, 1);
+    }
+  }
+
   /**
    * Clear cart
    */
   async clearCart(): Promise<Cart> {
     try {
-      const emptyCart: Cart = { items: [], orderNote: '', discount: null };
+      const emptyCart: Cart = { items: [], removedItems: [], orderNote: '', discount: null };
       this.syncGroupStateFromCart(emptyCart);
       await this.saveCart(emptyCart);
       return emptyCart;
@@ -317,10 +395,6 @@ class CartService {
 
       if (item.variantPrice) {
         itemTotal += item.variantPrice;
-      }
-
-      if (item.attributePrice) {
-        itemTotal += item.attributePrice;
       }
 
       if (item.attributeValues && item.attributeValues.length > 0) {
@@ -476,9 +550,14 @@ class CartService {
           tax: item.tax ?? item.taxInfo ?? item.taxObj ?? null,
           groupType: item.groupType ?? 0,
           groupLabel: item.groupLabel ?? '',
-          isOld: item.isOld,
-          oldQuantity: item.oldQuantity,
+          isOld: true,
         };
+        if (item?.isExtraItem) {
+          cartItem.isExtraItem = true;
+        }
+        if (item?.extraCategory !== undefined && item?.extraCategory !== null) {
+          cartItem.extraCategory = item.extraCategory;
+        }
 
         if (variant) {
           cartItem.variantId =
@@ -519,6 +598,7 @@ class CartService {
 
       const cart: Cart = {
         items,
+        removedItems: [],
         orderNote: orderDetails?.orderNotes || '',
         discount: normalizeDiscountFromOrder(orderDetails?.discount),
       };
