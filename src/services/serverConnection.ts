@@ -55,25 +55,50 @@ class ServerConnectionService {
    */
   async initializeConnection(): Promise<ServerConnectionStatus> {
     try {
-      const baseUrl = await AsyncStorage.getItem(LOCAL_BASE_URL);
-      
-      if (baseUrl) {
-        const isConnected = await this.checkLocalServerConnection(baseUrl);
+      return await this.refreshConnectionStatus();
+    } catch (error) {
+      console.log('Error initializing connection:', error);
+      return this.connectionStatus;
+    }
+  }
+
+  /**
+   * Refresh connection status using stored or provided base URL
+   */
+  async refreshConnectionStatus(baseUrl?: string | null): Promise<ServerConnectionStatus> {
+    try {
+      const storedBaseUrl = baseUrl || (await AsyncStorage.getItem(LOCAL_BASE_URL));
+
+      if (!storedBaseUrl) {
         this.connectionStatus = {
-          isConnected,
-          baseUrl: isConnected ? baseUrl : null,
+          isConnected: false,
+          baseUrl: null,
           lastChecked: Date.now(),
         };
-
-        await AsyncStorage.setItem(
-          CONNECTION_STATUS_KEY,
-          JSON.stringify(isConnected)
-        );
+        await AsyncStorage.setItem(CONNECTION_STATUS_KEY, 'false');
+        return this.connectionStatus;
       }
+
+      const isConnected = await this.checkLocalServerConnection(storedBaseUrl);
+      this.connectionStatus = {
+        isConnected,
+        baseUrl: storedBaseUrl,
+        lastChecked: Date.now(),
+      };
+
+      await AsyncStorage.setItem(
+        CONNECTION_STATUS_KEY,
+        JSON.stringify(isConnected)
+      );
 
       return this.connectionStatus;
     } catch (error) {
-      console.log('Error initializing connection:', error);
+      console.log('Error refreshing connection:', error);
+      this.connectionStatus = {
+        isConnected: false,
+        baseUrl: this.connectionStatus.baseUrl,
+        lastChecked: Date.now(),
+      };
       return this.connectionStatus;
     }
   }

@@ -8,6 +8,7 @@ import { useTheme } from '../theme/ThemeProvider';
 import serverConnection from '../services/serverConnection';
 import { setLocalBaseUrl } from '../services/localApi';
 import { useToast } from '../components/ToastProvider';
+import { useConnection } from '../contexts/ConnectionProvider';
 
 export default function IPEntryScreen() {
     const navigation = useNavigation();
@@ -19,6 +20,7 @@ export default function IPEntryScreen() {
     const [debugInfo, setDebugInfo] = useState<string | null>(null);
     const { colors } = useTheme();
     const { showToast } = useToast();
+    const { refreshLocalServerStatus } = useConnection();
 
     useFocusEffect(
         useCallback(() => {
@@ -82,6 +84,7 @@ export default function IPEntryScreen() {
                 await setLocalBaseUrl(host);
                 // Backward compatibility for modules still using legacy storage.
                 await AsyncStorage.setItem('BASE_URL', host);
+                await refreshLocalServerStatus();
 
                 // Fetch POS ID when available, but do not block navigation.
                 try {

@@ -49,6 +49,7 @@ import {
   unlockOrder,
 } from "../services/orderSyncService";
 import { useToast } from "../components/ToastProvider";
+import { useConnection } from "../contexts/ConnectionProvider";
 
 const TSC_OFFLINE_MESSAGE =
   "Active TSS not found for the given POS and company.";
@@ -590,6 +591,21 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
   const [marking, setMarking] = useState(false);
   const editingRef = useRef(false);
   const { showToast } = useToast();
+  const {
+    canModifyOrders,
+    isInternetReachable,
+    isLocalServerReachable,
+    reconnectLocalServer,
+    isCheckingLocal,
+  } = useConnection();
+  const isReadOnly = !canModifyOrders;
+  const isLocalServerDisconnected = !isLocalServerReachable;
+  const showLocalServerOfflineNotice = isInternetReachable && isLocalServerDisconnected;
+  const ensureCanModify = (message?: string) => {
+    if (canModifyOrders) return true;
+    showToast("error", message || "Local server is offline. Orders are view-only.");
+    return false;
+  };
   const [pinModalVisible, setPinModalVisible] = useState(false);
   const [cancelModalVisible, setCancelModalVisible] = useState(false);
   const [canceling, setCanceling] = useState(false);
@@ -762,6 +778,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
   }, [order?._id, order?.id]);
 
   const onEdit = () => {
+    if (!ensureCanModify()) return;
     editingRef.current = true;
     lockOrder(order);
     navigation.navigate("Menu", {
@@ -773,6 +790,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
   };
 
   const handleDeletePress = () => {
+    if (!ensureCanModify()) return;
     if (isOrderPaid) {
       showToast("error", "Paid orders cannot be cancelled");
       return;
@@ -788,6 +806,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
 
   const cancelOrder = async (reason: string) => {
     if (!order) return;
+    if (!ensureCanModify()) return;
     const trimmed = reason.trim();
     if (!trimmed) {
       showToast("error", "Please enter a reason");
@@ -1039,6 +1058,9 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
 
   const settleOrderWithPayment = async (option: any) => {
     try {
+      if (!ensureCanModify()) {
+        return { success: false, keepModalOpen: false };
+      }
       setMarking(true);
       const now = new Date().toISOString();
       const selectedPaymentMethod = toNumber(
@@ -1979,10 +2001,56 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
         orderInfo,
       };
 
+      const allowOfflineFallback = isLocalServerReachable && !isInternetReachable;
       const settleRes = await orderService.settleOrder(
         order._id || order.id || order.orderId,
         settlePayload,
+        allowOfflineFallback,
       );
+      if (settleRes?.remote === false && settleRes?.isNetworkError && allowOfflineFallback) {
+        const offlineOrderInfo = {
+          ...orderInfo,
+          isTscOffline: true,
+        };
+        try {
+          const orderId =
+            order?._id || order?.id || order?.orderId || orderDetails?.localOrderId;
+          if (orderId) {
+            await orderService.updateOrder(`${orderId}`, {
+              orderStatusId: ORDER_STATUS.DELIVERED,
+              updatedAt: offlineOrderInfo.updatedAt ?? now,
+              orderDetails: {
+                ...offlineOrderInfo,
+                isTscOffline: true,
+              },
+              settleInfo: {
+                ...settlePayload,
+                isTscOffline: true,
+                orderInfo: {
+                  ...offlineOrderInfo,
+                  isTscOffline: true,
+                },
+              },
+              isSynced: false,
+            });
+            setWorkingOrderDetails({ ...offlineOrderInfo });
+          }
+        } catch (localErr) {
+          console.warn("Offline settle local update failed:", localErr);
+        }
+        if (option?.print) {
+          emitPosPrint(offlineOrderInfo, selectedPaymentMethod);
+        }
+        await emitOrderSync("ORDER_PAID", {
+          tableNo: orderDetails?.tableNo ?? null,
+          orderNumber: order?.customOrderId || order?._id,
+          orderDeliveryTypeId,
+        });
+        await unlockOrder(order);
+        setMarking(false);
+        navigation.goBack();
+        return { keepModalOpen: false };
+      }
       const normalized = settleRes?.normalized;
       console.log(normalized);
       if (normalized) {
@@ -2054,6 +2122,29 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
       showToast("error", "Unable to complete payment");
       return { keepModalOpen: false };
     }
+  };
+
+  const handleReconnectLocal = async () => {
+    const ok = await reconnectLocalServer();
+    if (!ok) {
+      showToast(
+        "error",
+        "Unable to reconnect to the local server. Check the IP/port and try again.",
+      );
+      return;
+    }
+    showToast("success", "Connected to the local server.");
+  };
+
+  const handleOpenPaymentModal = () => {
+    if (isLocalServerDisconnected) {
+      showToast(
+        "error",
+        "Local server is disconnected. Payments are disabled until it reconnects.",
+      );
+      return;
+    }
+    setPaymentModalVisible(true);
   };
 
   const handlePrintPreview = async (option: any) => {
@@ -2506,7 +2597,55 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
             </View>
           </Card>
         ) : (
-          <Card style={{ padding: 12, borderColor: colors.border }}>
+          <>
+            {showLocalServerOfflineNotice ? (
+              <Card
+                rounded={14}
+                style={{
+                  padding: 12,
+                  borderColor: colors.warning,
+                  backgroundColor: colors.warning + "12",
+                  marginBottom: 10,
+                }}
+              >
+                <Text style={{ color: colors.text, fontWeight: "800" }}>
+                  Local server disconnected
+                </Text>
+                <Text style={{ color: colors.textSecondary, marginTop: 6 }}>
+                  Internet is available, but the POS server on your local
+                  network is unreachable. Payments are disabled until the local
+                  server reconnects.
+                </Text>
+                <TouchableOpacity
+                  onPress={handleReconnectLocal}
+                  disabled={isCheckingLocal}
+                  style={{
+                    marginTop: 10,
+                    alignSelf: "flex-start",
+                    paddingHorizontal: 12,
+                    paddingVertical: 8,
+                    borderRadius: 999,
+                    backgroundColor: colors.primary,
+                    opacity: isCheckingLocal ? 0.6 : 1,
+                  }}
+                >
+                  {isCheckingLocal ? (
+                    <Text
+                      style={{ color: colors.textInverse || "#fff", fontWeight: "700" }}
+                    >
+                      Connecting...
+                    </Text>
+                  ) : (
+                    <Text
+                      style={{ color: colors.textInverse || "#fff", fontWeight: "700" }}
+                    >
+                      Connect
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              </Card>
+            ) : null}
+            <Card style={{ padding: 12, borderColor: colors.border }}>
             <Text
               style={{ color: colors.text, fontWeight: "700", marginBottom: 8 }}
             >
@@ -2527,12 +2666,14 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
               </Text>
             </View>
             <TouchableOpacity
-              onPress={() => setPaymentModalVisible(true)}
+              onPress={handleOpenPaymentModal}
+              disabled={isLocalServerDisconnected}
               style={[
                 styles.changePaymentBtn,
                 {
                   borderColor: colors.border,
                   backgroundColor: colors.surfaceHover || colors.background,
+                  opacity: isLocalServerDisconnected ? 0.6 : 1,
                 },
               ]}
             >
@@ -2553,6 +2694,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
               </Text>
             </TouchableOpacity>
           </Card>
+          </>
         )}
       </ScrollView>
 
@@ -2564,6 +2706,20 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
         }}
         onPrintPreview={handlePrintPreview}
         hidePrintPreview={hideDeleteForSplit}
+        isBlocked={isLocalServerDisconnected}
+        blockTitle={
+          showLocalServerOfflineNotice
+            ? "Local Server Disconnected"
+            : "Local Server Unavailable"
+        }
+        blockMessage={
+          showLocalServerOfflineNotice
+            ? "Internet is available, but the local POS server is disconnected. Reconnect to continue payment."
+            : "Local server is disconnected. Payments are disabled until it reconnects."
+        }
+        onReconnect={isLocalServerDisconnected ? handleReconnectLocal : undefined}
+        reconnectLabel="Connect"
+        isReconnecting={isCheckingLocal}
         onSelect={async (option: any) => {
           setSelectedPaymentId(
             toNumber(option?.paymentMethod ?? option?.id, 0),
@@ -2667,12 +2823,12 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
           {!hideDeleteForSplit ? (
             <TouchableOpacity
               onPress={handleDeletePress}
-              disabled={isOrderPaid || canceling}
+              disabled={isOrderPaid || canceling || isReadOnly}
               style={[
                 styles.footerIconBtn,
                 {
                   backgroundColor:
-                    isOrderPaid || canceling ? colors.border : colors.error,
+                    isOrderPaid || canceling || isReadOnly ? colors.border : colors.error,
                 },
               ]}
             >
@@ -2685,11 +2841,13 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
           ) : null}
           <TouchableOpacity
             onPress={onEdit}
+            disabled={isReadOnly}
             style={[
               styles.footerBtn,
               {
                 borderColor: colors.border,
                 backgroundColor: colors.surface,
+                opacity: isReadOnly ? 0.6 : 1,
               },
             ]}
           >
@@ -2717,12 +2875,12 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
               setPendingSettle(true);
               setPaymentModalVisible(true);
             }}
-            disabled={marking || isPaid}
+            disabled={marking || isPaid || isReadOnly}
             style={[
               styles.footerBtnPrimary,
               {
                 backgroundColor:
-                  marking || isPaid ? colors.border : colors.primary,
+                  marking || isPaid || isReadOnly ? colors.border : colors.primary,
               },
             ]}
           >

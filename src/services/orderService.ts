@@ -77,6 +77,20 @@ export interface CreateOrderPayload {
 class OrderService {
   private static readonly ORDER_STATUS_DELIVERED = 5;
 
+  private isNetworkError(error: any): boolean {
+    const code = `${error?.code || ''}`.toUpperCase();
+    const message = `${error?.message || ''}`.toLowerCase();
+    const hasNoResponse = !error?.response;
+    return (
+      code === 'ECONNABORTED' ||
+      code === 'ETIMEDOUT' ||
+      code === 'ERR_NETWORK' ||
+      message.includes('network') ||
+      message.includes('timeout') ||
+      hasNoResponse
+    );
+  }
+
   private isNotFoundError(error: any): boolean {
     return (
       error?.response?.status === 404 ||
@@ -467,7 +481,7 @@ class OrderService {
    * Call remote settle endpoint and persist server response to local DB.
    * Falls back to local-only mark if network call fails.
    */
-  async settleOrder(orderId: string, settlePayload: any) {
+  async settleOrder(orderId: string, settlePayload: any, allowOfflineFallback: boolean = false) {
     try {
       // POST to remote settle endpoint
       const res = await api.post(API_ENDPOINTS.order.SETTLE, settlePayload);
@@ -493,8 +507,12 @@ class OrderService {
       );
       return { remote: true, result, data, normalized };
     } catch (error) {
+      if (!this.isNetworkError(error) || !allowOfflineFallback) {
+        throw error;
+      }
+
       console.warn(
-        "Remote settle failed, falling back to local mark as paid:",
+        "Remote settle failed (network), falling back to local mark as paid:",
         error,
       );
       // fallback: mark locally as paid with provided payment summary if available
@@ -511,7 +529,13 @@ class OrderService {
         fallbackPaymentSummary,
         settlePayload,
       );
-      return { remote: false, result, error, normalized };
+      return {
+        remote: false,
+        result,
+        error,
+        normalized,
+        isNetworkError: true,
+      };
     }
   }
 

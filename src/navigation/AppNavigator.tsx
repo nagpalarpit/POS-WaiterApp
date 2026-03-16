@@ -20,6 +20,7 @@ import { initLocalSocket, initCloudSocket } from '../services/socket';
 import { initOrderSync, onOrderSync } from '../services/orderSyncService';
 import { useTheme } from '../theme/ThemeProvider';
 import { useToast } from '../components/ToastProvider';
+import { useConnection } from '../contexts/ConnectionProvider';
 
 export type RootStackParamList = {
   IPEntry: undefined;
@@ -76,7 +77,6 @@ function MainStack() {
 
 function CustomDrawerContent(props: DrawerContentComponentProps) {
   const { colors } = useTheme();
-  const [isOnline, setIsOnline] = useState(serverConnection.isConnected());
   const [updatingConnection, setUpdatingConnection] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [drawerUser, setDrawerUser] = useState<DrawerUser>({
@@ -84,10 +84,8 @@ function CustomDrawerContent(props: DrawerContentComponentProps) {
     subtitle: 'POS Waiter App',
   });
   const { showToast } = useToast();
-
-  useEffect(() => {
-    setIsOnline(serverConnection.isConnected());
-  }, []);
+  const { isLocalServerReachable, refreshLocalServerStatus } = useConnection();
+  const isOnline = isLocalServerReachable;
 
   useEffect(() => {
     const hydrateDrawer = async () => {
@@ -105,7 +103,6 @@ function CustomDrawerContent(props: DrawerContentComponentProps) {
           displayName: name || companyName || 'Waiter',
           subtitle: email || companyName || 'POS Waiter App',
         });
-        setIsOnline(serverConnection.isConnected());
       } catch (error) {
         setDrawerUser({
           displayName: 'Waiter',
@@ -138,18 +135,18 @@ function CustomDrawerContent(props: DrawerContentComponentProps) {
 
       if (!nextValue) {
         await serverConnection.disconnect();
-        setIsOnline(false);
+        await refreshLocalServerStatus();
         return;
       }
 
       const status = await serverConnection.initializeConnection();
-      setIsOnline(status.isConnected);
+      await refreshLocalServerStatus();
 
       if (!status.isConnected) {
         showToast('error', 'Unable to connect to the local server. Update IP settings and try again.');
       }
     } catch (error) {
-      setIsOnline(false);
+      await refreshLocalServerStatus();
       showToast('error', 'There was an issue updating server connection status.');
     } finally {
       setUpdatingConnection(false);

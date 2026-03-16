@@ -6,6 +6,8 @@ import { setServerBaseUrlFromStorage } from './src/services/api';
 import { setLocalBaseUrlFromStorage } from './src/services/localApi';
 import { ThemeProvider } from './src/theme/ThemeProvider';
 import { ToastProvider } from './src/components/ToastProvider';
+import { ConnectionProvider } from './src/contexts/ConnectionProvider';
+import ConnectionBanner from './src/components/ConnectionBanner';
 
 export default function App() {
   useEffect(() => {
@@ -18,7 +20,10 @@ export default function App() {
     <ThemeProvider>
       <SafeAreaProvider>
         <ToastProvider>
-          <AppNavigator />
+          <ConnectionProvider>
+            <ConnectionBanner />
+            <AppNavigator />
+          </ConnectionProvider>
         </ToastProvider>
       </SafeAreaProvider>
     </ThemeProvider>

@@ -4,6 +4,7 @@ import orderService, { PlaceOrderItemPayload } from '../services/orderService';
 import cartService, { Cart, CartItem, AttributeValue } from '../services/cartService';
 import posIdService from '../services/posIdService';
 import tscService from '../services/tscService';
+import { useConnection } from '../contexts/ConnectionProvider';
 import {
   getAttributeValueName,
   getAttributeValuePrice,
@@ -57,6 +58,7 @@ export const useOrderSubmit = (
   existingOrder?: any
 ) => {
   const [loading, setLoading] = useState(false);
+  const { canModifyOrders } = useConnection();
 
   /**
    * Prepare order items from cart
@@ -148,6 +150,9 @@ export const useOrderSubmit = (
    */
   const submitOrder = async (tax: number): Promise<{ success: boolean; order?: any }> => {
     try {
+      if (!canModifyOrders) {
+        throw new Error('Local server is offline. Orders are view-only until reconnected.');
+      }
       if (!cart.items?.length) {
         throw new Error('No items in cart');
       }

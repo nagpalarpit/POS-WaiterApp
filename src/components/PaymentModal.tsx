@@ -74,6 +74,12 @@ type Props = {
   companyId?: number;
   splitItems?: SplitSelectableItem[];
   allowSplitOption?: boolean;
+  isBlocked?: boolean;
+  blockTitle?: string;
+  blockMessage?: string;
+  onReconnect?: () => void | Promise<void>;
+  reconnectLabel?: string;
+  isReconnecting?: boolean;
 };
 
 const toAmount = (value: string): number => {
@@ -141,6 +147,12 @@ export default function PaymentModal({
   companyId,
   splitItems = [],
   allowSplitOption = true,
+  isBlocked = false,
+  blockTitle = "Local Server Offline",
+  blockMessage = "Internet is available, but the local server is disconnected. Reconnect to continue payment.",
+  onReconnect,
+  reconnectLabel = "Connect",
+  isReconnecting = false,
 }: Props) {
   const { colors } = useTheme();
   const { showToast } = useToast();
@@ -179,6 +191,7 @@ export default function PaymentModal({
   const [splitSelections, setSplitSelections] = useState<number[]>([]);
   const [splitPaymentMethod, setSplitPaymentMethod] = useState<number>(0);
   const [isProcessing, setIsProcessing] = useState(false);
+  const blockInteractions = isBlocked === true;
 
   useEffect(() => {
     if (!visible) return;
@@ -293,6 +306,7 @@ export default function PaymentModal({
   };
 
   const addGiftCard = async (isSplit = false) => {
+    if (blockInteractions) return;
     if (isApplyingGiftCard) return;
     const code = (isSplit ? splitGiftCode : giftCode).trim();
     if (!code) return;
@@ -358,6 +372,7 @@ export default function PaymentModal({
   };
 
   const removeGiftCard = (isSplit = false) => {
+    if (blockInteractions) return;
     if (isSplit) {
       setAppliedSplitGiftCard(null);
     } else {
@@ -397,6 +412,7 @@ export default function PaymentModal({
   const isSplitInvalid = activeTab === 3 && !hasSplitSelection;
 
   const handleConfirm = async (print = false, isCorporate?: boolean) => {
+    if (blockInteractions) return;
     if (isProcessing) return;
     if (activeTab === 3) {
       if (isSplitInvalid) return;
@@ -466,6 +482,7 @@ export default function PaymentModal({
   };
 
   const handlePrintPreview = async () => {
+    if (blockInteractions) return;
     if (isProcessing) return;
     const method = activeTab === 99 ? selectedOtherMethod : activeTab;
     const payload = buildSingleMethodPayload(method, true);
@@ -530,6 +547,51 @@ export default function PaymentModal({
             </View>
           </View>
 
+          {blockInteractions ? (
+            <View
+              style={[
+                styles.blockBanner,
+                {
+                  borderColor: colors.warning || colors.error,
+                  backgroundColor:
+                    (colors.warning || colors.error) + "14",
+                },
+              ]}
+            >
+              <Text style={{ color: colors.text, fontWeight: "800" }}>
+                {blockTitle}
+              </Text>
+              <Text style={{ color: colors.textSecondary, marginTop: 4 }}>
+                {blockMessage}
+              </Text>
+              {onReconnect ? (
+                <TouchableOpacity
+                  onPress={() => onReconnect()}
+                  disabled={isReconnecting}
+                  style={[
+                    styles.blockBannerBtn,
+                    {
+                      backgroundColor: colors.primary,
+                      opacity: isReconnecting ? 0.6 : 1,
+                    },
+                  ]}
+                >
+                  {isReconnecting ? (
+                    <ActivityIndicator color={colors.textInverse} />
+                  ) : (
+                    <Text style={{ color: colors.textInverse, fontWeight: "700" }}>
+                      {reconnectLabel}
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              ) : null}
+            </View>
+          ) : null}
+
+          <View
+            style={{ flex: 1, opacity: blockInteractions ? 0.5 : 1 }}
+            pointerEvents={blockInteractions ? "none" : "auto"}
+          >
           <View style={styles.dragIndicatorContainer}>
             <View
               style={[styles.dragIndicator, { backgroundColor: colors.border }]}
@@ -976,13 +1038,14 @@ export default function PaymentModal({
               {showPrintPreview ? (
                 <TouchableOpacity
                   onPress={handlePrintPreview}
-                  disabled={isProcessing}
+                  disabled={isProcessing || blockInteractions}
                   style={[
                     styles.payBtnPrimary,
                     {
-                      backgroundColor: isProcessing
-                        ? colors.border
-                        : colors.primary,
+                      backgroundColor:
+                        isProcessing || blockInteractions
+                          ? colors.border
+                          : colors.primary,
                     },
                   ]}
                 >
@@ -999,12 +1062,12 @@ export default function PaymentModal({
                 onPress={() => {
                   handleConfirm(false);
                 }}
-                disabled={isSplitInvalid || isProcessing}
+                disabled={isSplitInvalid || isProcessing || blockInteractions}
                 style={[
                   styles.payBtn,
                   {
                     backgroundColor:
-                      isSplitInvalid || isProcessing
+                      isSplitInvalid || isProcessing || blockInteractions
                         ? colors.border
                         : colors.primary,
                   },
@@ -1020,12 +1083,12 @@ export default function PaymentModal({
                 onPress={() => {
                   handleConfirm(true);
                 }}
-                disabled={isSplitInvalid || isProcessing}
+                disabled={isSplitInvalid || isProcessing || blockInteractions}
                 style={[
                   styles.payBtnPrimary,
                   {
                     backgroundColor:
-                      isSplitInvalid || isProcessing
+                      isSplitInvalid || isProcessing || blockInteractions
                         ? colors.border
                         : colors.primary,
                   },
@@ -1042,12 +1105,12 @@ export default function PaymentModal({
                   onPress={() => {
                     handleConfirm(true, true);
                   }}
-                  disabled={isSplitInvalid || isProcessing}
+                  disabled={isSplitInvalid || isProcessing || blockInteractions}
                   style={[
                     styles.expenseBtn,
                     {
                       backgroundColor:
-                        isSplitInvalid || isProcessing
+                        isSplitInvalid || isProcessing || blockInteractions
                           ? colors.border
                           : colors.success || colors.secondary || colors.primary,
                     },
@@ -1067,6 +1130,7 @@ export default function PaymentModal({
                 </TouchableOpacity>
               ) : null}
             </View>
+          </View>
           </View>
           </Card>
         </KeyboardAvoidingView>
@@ -1250,6 +1314,21 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+  },
+  blockBanner: {
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginHorizontal: 18,
+    marginTop: 10,
+  },
+  blockBannerBtn: {
+    marginTop: 10,
+    alignSelf: "flex-start",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
   },
 });
 

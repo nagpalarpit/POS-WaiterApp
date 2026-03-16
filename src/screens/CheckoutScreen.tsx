@@ -18,6 +18,7 @@ import CartNoteModal from '../components/CartNoteModal';
 import { formatCurrency } from '../utils/currency';
 import { emitOrderSync, emitPosKotPrint, unlockOrder, unlockTable } from '../services/orderSyncService';
 import { useToast } from '../components/ToastProvider';
+import { useConnection } from '../contexts/ConnectionProvider';
 import {
   getAttributeValueName,
   getAttributeValuePrice,
@@ -66,6 +67,7 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
 
   const [checkoutCart, setCheckoutCart] = useState<Cart>(incomingCart);
   const { showToast } = useToast();
+  const { canModifyOrders } = useConnection();
 
   const orderSubmit = useOrderSubmit(
     checkoutCart,
@@ -150,6 +152,10 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
 
   const handleSaveCartNote = async (note: string, discount: any) => {
     try {
+      if (!canModifyOrders) {
+        showToast('error', 'Local server is offline. Orders are view-only.');
+        return;
+      }
       await cartService.updateOrderNote(note || '');
       if (discount) {
         await cartService.updateDiscount(discount);
@@ -167,6 +173,10 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
 
   const handlePlaceOrder = async () => {
     try {
+      if (!canModifyOrders) {
+        showToast('error', 'Local server is offline. Orders are view-only.');
+        return;
+      }
       if (!checkoutCart.items?.length) {
         showToast('error', 'Please add items before placing order');
         return;
@@ -535,12 +545,19 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
 
         <View style={styles.footerActions}>
           <TouchableOpacity
-            onPress={() => cartNotes.setShowCartNoteModal(true)}
+            onPress={() => {
+              if (!canModifyOrders) {
+                showToast('error', 'Local server is offline. Orders are view-only.');
+                return;
+              }
+              cartNotes.setShowCartNoteModal(true);
+            }}
             style={[
               styles.secondaryActionBtn,
               {
                 borderColor: colors.border,
                 backgroundColor: colors.surface,
+                opacity: canModifyOrders ? 1 : 0.5,
               },
             ]}
           >
@@ -552,12 +569,12 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
 
           <TouchableOpacity
             onPress={handlePlaceOrder}
-            disabled={orderSubmit.loading || checkoutCart.items.length === 0}
+            disabled={orderSubmit.loading || checkoutCart.items.length === 0 || !canModifyOrders}
             style={[
               styles.primaryActionBtn,
               {
                 backgroundColor:
-                  orderSubmit.loading || checkoutCart.items.length === 0
+                  orderSubmit.loading || checkoutCart.items.length === 0 || !canModifyOrders
                     ? colors.border
                     : colors.primary,
               },
