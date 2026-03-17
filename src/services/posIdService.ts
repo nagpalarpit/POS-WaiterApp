@@ -1,6 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-
-const POS_ID_KEY = 'POS_ID';
+import { STORAGE_KEYS } from '../constants/storageKeys';
 
 class POSIdService {
   private posId: string | null = null;
@@ -17,7 +16,7 @@ class POSIdService {
    */
   async setPosId(id: string): Promise<void> {
     this.posId = id;
-    await AsyncStorage.setItem(POS_ID_KEY, id);
+    await AsyncStorage.setItem(STORAGE_KEYS.posId, id);
   }
 
   /**
@@ -25,7 +24,7 @@ class POSIdService {
    */
   async loadPosId(): Promise<string | null> {
     try {
-      const id = await AsyncStorage.getItem(POS_ID_KEY);
+      const id = await AsyncStorage.getItem(STORAGE_KEYS.posId);
       if (id) {
         this.posId = id;
       }
@@ -41,7 +40,7 @@ class POSIdService {
    */
   async clearPosId(): Promise<void> {
     this.posId = null;
-    await AsyncStorage.removeItem(POS_ID_KEY);
+    await AsyncStorage.removeItem(STORAGE_KEYS.posId);
   }
 }
 

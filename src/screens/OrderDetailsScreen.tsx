@@ -17,6 +17,7 @@ import {
   StyleSheet,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { STORAGE_KEYS } from "../constants/storageKeys";
 import { useTheme } from "../theme/ThemeProvider";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
@@ -36,7 +37,6 @@ import {
   getItemUnitTotal,
 } from "../utils/cartCalculations";
 import PaymentModal from "../components/PaymentModal";
-import ConnectionSettingsModal from "../components/ConnectionSettingsModal";
 import PinModal from "../components/PinModal";
 import CancelOrderModal from "../components/CancelOrderModal";
 import { formatCurrency } from "../utils/currency";
@@ -608,15 +608,6 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
   const [pinModalVisible, setPinModalVisible] = useState(false);
   const [cancelModalVisible, setCancelModalVisible] = useState(false);
   const [canceling, setCanceling] = useState(false);
-  const [connectionModalVisible, setConnectionModalVisible] = useState(false);
-
-  const openConnectionModal = useCallback(() => {
-    setConnectionModalVisible(true);
-  }, []);
-
-  const closeConnectionModal = useCallback(() => {
-    setConnectionModalVisible(false);
-  }, []);
 
   const PAYMENT_METHOD_LABELS: Record<number, string> = {
     0: "Cash",
@@ -1075,7 +1066,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
         option?.paymentMethod ?? option?.id,
         0,
       );
-      const userDataStr = await AsyncStorage.getItem("userData");
+      const userDataStr = await AsyncStorage.getItem(STORAGE_KEYS.authUser);
       const userData = userDataStr ? JSON.parse(userDataStr) : null;
       const paidBy = Number(userData?.id || userData?.userId || 0) || null;
       const orderDetails = displayedOrderDetails || {};
@@ -2132,10 +2123,6 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
     }
   };
 
-  const handleReconnectLocal = () => {
-    openConnectionModal();
-  };
-
   const handleOpenPaymentModal = () => {
     if (isLocalServerDisconnected) {
       showToast(
@@ -2598,45 +2585,6 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
           </Card>
         ) : (
           <>
-            {showLocalServerOfflineNotice ? (
-              <Card
-                rounded={14}
-                style={{
-                  padding: 12,
-                  borderColor: colors.warning,
-                  backgroundColor: colors.warning + "12",
-                  marginBottom: 10,
-                }}
-              >
-                <Text style={{ color: colors.text, fontWeight: "800" }}>
-                  Local server disconnected
-                </Text>
-                <Text style={{ color: colors.textSecondary, marginTop: 6 }}>
-                  Internet is available, but the POS server on your local
-                  network is unreachable. Payments are disabled until the local
-                  server reconnects.
-                </Text>
-                <TouchableOpacity
-                  onPress={handleReconnectLocal}
-                  disabled={connectionModalVisible}
-                  style={{
-                    marginTop: 10,
-                    alignSelf: "flex-start",
-                    paddingHorizontal: 12,
-                    paddingVertical: 8,
-                    borderRadius: 999,
-                    backgroundColor: colors.primary,
-                    opacity: connectionModalVisible ? 0.6 : 1,
-                  }}
-                >
-                  <Text
-                    style={{ color: colors.textInverse || "#fff", fontWeight: "700" }}
-                  >
-                    Connect
-                  </Text>
-                </TouchableOpacity>
-              </Card>
-            ) : null}
             <Card style={{ padding: 12, borderColor: colors.border }}>
             <Text
               style={{ color: colors.text, fontWeight: "700", marginBottom: 8 }}
@@ -2690,12 +2638,6 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
         )}
       </ScrollView>
 
-      <ConnectionSettingsModal
-        visible={connectionModalVisible}
-        onClose={closeConnectionModal}
-        onConnected={closeConnectionModal}
-      />
-
       <PaymentModal
         visible={paymentModalVisible}
         onClose={() => {
@@ -2715,9 +2657,6 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
             ? "Internet is available, but the local POS server is disconnected. Reconnect to continue payment."
             : "Local server is disconnected. Payments are disabled until it reconnects."
         }
-        onReconnect={isLocalServerDisconnected ? handleReconnectLocal : undefined}
-        reconnectLabel="Connect"
-        isReconnecting={connectionModalVisible}
         onSelect={async (option: any) => {
           setSelectedPaymentId(
             toNumber(option?.paymentMethod ?? option?.id, 0),

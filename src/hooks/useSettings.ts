@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { STORAGE_KEYS } from '../constants/storageKeys';
 import localDatabase from '../services/localDatabase';
 import api from '../services/api';
 import { API_ENDPOINTS } from '../config/apiEndpoints';
@@ -42,7 +43,7 @@ export const useSettings = () => {
     try {
       setLoadingSettings(true);
 
-      const userDataStr = await AsyncStorage.getItem('userData');
+      const userDataStr = await AsyncStorage.getItem(STORAGE_KEYS.authUser);
       const userData = userDataStr ? JSON.parse(userDataStr) : null;
       const companyId = userData?.companyId ?? userData?.company?.id;
       const companyName = userData?.company?.name || userData?.companyName;
@@ -79,7 +80,6 @@ export const useSettings = () => {
       };
 
       setSettings(merged);
-      console.log('Settings loaded:', merged);
       return merged;
     } catch (error) {
       console.error('Error loading settings:', error);

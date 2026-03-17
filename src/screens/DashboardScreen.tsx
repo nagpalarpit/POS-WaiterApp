@@ -1,8 +1,10 @@
 import React, { useState, useLayoutEffect, useEffect, useMemo } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, FlatList, ActivityIndicator, RefreshControl, Image } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, FlatList, ActivityIndicator, RefreshControl } from 'react-native';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Image } from 'expo-image';
+import { STORAGE_KEYS } from '../constants/storageKeys';
 import { useTheme } from '../theme/ThemeProvider';
 import { SERVER_BASE_URL } from '../config/urls';
 import { getOrderStatusLabel } from '../utils/orderUtils';
@@ -44,14 +46,16 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
   // Local state
   const [activeTab, setActiveTab] = useState<number>(DELIVERY_TYPE.DINE_IN);
   const [refreshing, setRefreshing] = useState(false);
-  const [logoSource, setLogoSource] = useState<any>(null);
+  const [logoUri, setLogoUri] = useState<string | null>(null);
+  const [logoLoadFailed, setLogoLoadFailed] = useState(false);
   const [selectedTableArea, setSelectedTableArea] = useState<any | null>(null);
 
   /**
    * Get company initials for placeholder logo
    */
   const getCompanyInitials = () => {
-    const companyName = (settingsData.settings as any)?.companyName || 'POS';
+    console.log(settingsData.settings, 'Settings data for initials'); // Debug log
+    const companyName = (settingsData.settings as any)?.company?.companyName || 'POS';
     const parts = companyName.split(' ').filter(Boolean);
     if (parts.length === 0) return 'POS';
     if (parts.length === 1) return parts[0].slice(0, 3).toUpperCase();
@@ -63,14 +67,22 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
    */
   useEffect(() => {
     const loadUserData = async () => {
-      const userData = await AsyncStorage.getItem('userData');
+      const userData = await AsyncStorage.getItem(STORAGE_KEYS.authUser);
       if (userData) {
         const user = JSON.parse(userData);
-        setLogoSource(
-          user?.company?.imagePath
-            ? { uri: `${SERVER_BASE_URL}${user.company.imagePath}` }
-            : null
-        );
+        const imagePath = String(user?.company?.imagePath || '').trim();
+
+        if (!imagePath) {
+          setLogoUri(null);
+          return;
+        }
+
+        const resolvedUri = imagePath.startsWith('http')
+          ? imagePath
+          : `${SERVER_BASE_URL.replace(/\/+$/, '')}/${imagePath.replace(/^\/+/, '')}`;
+
+        setLogoLoadFailed(false);
+        setLogoUri(resolvedUri);
       }
     };
     loadUserData();
@@ -91,8 +103,8 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
     const tableNos = tableAreaList.flatMap((area: any) =>
       Array.isArray(area?.tableAreaMappings)
         ? area.tableAreaMappings
-            .filter((mapping: any) => mapping?.isActive !== false)
-            .map((mapping: any) => Number(mapping.tableNo))
+          .filter((mapping: any) => mapping?.isActive !== false)
+          .map((mapping: any) => Number(mapping.tableNo))
         : []
     );
     const unique = Array.from(
@@ -140,7 +152,7 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
       .filter((mapping: any) => mapping?.isActive !== false)
       .map((mapping: any) => Number(mapping.tableNo))
       .filter((value: number) => Number.isFinite(value));
-    return Array.from(new Set(tableNos)).sort((a:any, b:any) => a - b);
+    return Array.from(new Set(tableNos)).sort((a: any, b: any) => a - b);
   };
 
   const selectedAreaTables = useMemo(
@@ -216,13 +228,25 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
 
         <TouchableOpacity
           onPress={() => navigation.getParent?.()?.openDrawer?.()}
-          style={{ width: 36, height: 36, borderRadius: 18, overflow: 'hidden' }}
+          style={{
+            width: 36,
+            height: 36,
+            borderRadius: 18,
+            overflow: 'hidden',
+            backgroundColor: colors.surfaceHover,
+          }}
         >
-          {logoSource ? (
+          {logoUri && !logoLoadFailed ? (
             <Image
-              source={logoSource}
+              source={{ uri: logoUri }}
               style={{ width: 36, height: 36 }}
-              resizeMode="cover"
+              contentFit="cover"
+              cachePolicy="disk"
+              transition={120}
+              onError={(error) => {
+                console.log('Dashboard logo failed to load:', error);
+                setLogoLoadFailed(true);
+              }}
             />
           ) : (
             <View
@@ -249,7 +273,7 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
         </TouchableOpacity>
       </View>
     ),
-    [colors, logoSource, navigation]
+    [colors, logoLoadFailed, logoUri, navigation]
   );
 
   /**
@@ -272,9 +296,9 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
             onPress={() =>
               canModifyOrders
                 ? navigation.navigate('Menu', {
-                    tableNo: null,
-                    deliveryType: activeTab,
-                  })
+                  tableNo: null,
+                  deliveryType: activeTab,
+                })
                 : showToast('error', 'Local server is offline. Orders are view-only.')
             }
             disabled={!canModifyOrders}

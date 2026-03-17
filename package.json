@@ -28,6 +28,7 @@
     "expo-dev-client": "~6.0.20",
     "expo-haptics": "~15.0.8",
     "expo-image": "~3.0.11",
+    "expo-secure-store": "^55.0.8",
     "expo-sqlite": "~16.0.10",
     "expo-status-bar": "~3.0.9",
     "nativewind": "^4.2.1",

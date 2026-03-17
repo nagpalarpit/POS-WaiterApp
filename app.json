@@ -13,7 +13,8 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.HSL.WaiterApp"
     },
     "android": {
       "usesCleartextTraffic": true,
@@ -23,7 +24,7 @@
       },
       "edgeToEdgeEnabled": false,
       "predictiveBackGestureEnabled": false,
-      "package": "com.aditya20121996.WaiterApp"
+      "package": "com.HSL.WaiterApp"
     },
     "web": {
       "favicon": "./assets/favicon.png"

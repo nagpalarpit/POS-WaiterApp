@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, TouchableOpacity, Modal, TextInput, Pressable, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { STORAGE_KEYS } from '../constants/storageKeys';
 import { useTheme } from '../theme/ThemeProvider';
 import { getCurrencySymbol } from '../utils/currency';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -49,7 +50,7 @@ export default function CartNoteModal({ visible, initialNote = '', initialDiscou
             if (!visible) return;
             setDiscountsLoading(true);
             try {
-                const userDataStr = await AsyncStorage.getItem('userData');
+                const userDataStr = await AsyncStorage.getItem(STORAGE_KEYS.authUser);
                 const userData = userDataStr ? JSON.parse(userDataStr) : null;
                 const companyId =
                     Number(

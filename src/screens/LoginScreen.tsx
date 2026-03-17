@@ -1,21 +1,41 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, TextInput, Keyboard, Platform, KeyboardAvoidingView, ScrollView, BackHandler } from 'react-native';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import {
+  BackHandler,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { MaterialIcons } from '@expo/vector-icons';
+import {
+  fireErrorNotification,
+  fireImpact,
+  fireSuccessNotification,
+} from '../components/auth/AuthPrimitives';
 import PrimaryButton from '../components/PrimaryButton';
+import { STORAGE_KEYS } from '../constants/storageKeys';
 import { useTheme } from '../theme/ThemeProvider';
-import authService from '../services/authService';
+import { useConnection } from '../contexts/ConnectionProvider';
+import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../components/ToastProvider';
 import { fetchDiscountsForCompany } from '../services/discountService';
 
 export default function LoginScreen() {
   const navigation = useNavigation();
+  const { colors } = useTheme();
+  const { login, isLoading } = useAuth();
+  const { isLocalServerReachable } = useConnection();
+  const { showToast } = useToast();
+
   const [username, setUsername] = useState('testyash1@gmail_test.com');
   const [password, setPassword] = useState('admin@123');
-  const [loading, setLoading] = useState(false);
-  const { colors } = useTheme();
-  const { showToast } = useToast();
 
   useFocusEffect(
     useCallback(() => {
@@ -23,7 +43,7 @@ export default function LoginScreen() {
       const backSub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
       const navSub = navigation.addListener('beforeRemove', (e: any) => {
         const actionType = e?.data?.action?.type;
-        if (actionType === 'GO_BACK' || actionType === 'POP' || actionType === 'POP_TO_TOP') {
+        if (actionType === 'GO_BACK' || actionType === 'POP_TO_TOP') {
           e.preventDefault();
         }
       });
@@ -37,103 +57,236 @@ export default function LoginScreen() {
 
   const doLogin = async () => {
     if (!username.trim() || !password.trim()) {
+      fireErrorNotification();
       showToast('error', 'Please enter username and password');
       return;
     }
 
+    if (!isLocalServerReachable) {
+      fireErrorNotification();
+      showToast('info', 'Connect to local server before logging in');
+      return;
+    }
+
     Keyboard.dismiss();
-    setLoading(true);
+    fireImpact();
 
     try {
-      const result = await authService.loginWithFallback({
-        email: username.trim(),
-        password: password.trim(),
-      });
+      const success = await login(username.trim(), password.trim());
 
-      if (result.success && result.response) {
-        const loginTypeLabel = result.loginType === 'local' ? 'Local Server' : 'Cloud Server';
-        console.log(`Login successful via ${loginTypeLabel}`);
-        
-        // Store user data to AsyncStorage for later access (companyId, etc.)
-        try {
-          await AsyncStorage.setItem('userData', JSON.stringify(result.response.user));
-          await AsyncStorage.setItem('authToken', result.response.token);
-          const companyId =
-            Number(
-              result.response.user?.companyId ||
-                result.response.user?.company?.id ||
-                result.response.user?.company?.companyId ||
-                0
-            ) || 0;
+      if (!success) {
+        fireErrorNotification();
+        return;
+      }
+
+      fireSuccessNotification();
+
+      try {
+        const userData = await AsyncStorage.getItem(STORAGE_KEYS.authUser);
+        if (userData) {
+          const user = JSON.parse(userData);
+          const companyId = Number(
+            user?.companyId || user?.company?.id || user?.company?.companyId || 0
+          );
           if (companyId) {
             fetchDiscountsForCompany(companyId).catch((error) => {
               console.log('LoginScreen: Unable to preload discounts:', error?.message || error);
             });
           }
-        } catch (storageError) {
-          console.error('Error storing user data:', storageError);
         }
-        
-        // Navigate to Dashboard (reset stack so Dashboard becomes the root)
-        navigation.reset({ index: 0, routes: [{ name: 'Main' as never }] });
-      } else {
-        showToast('error', result.error || 'Unable to authenticate');
+      } catch (storageError) {
+        console.error('Error preloading data:', storageError);
       }
+
+      navigation.reset({ index: 0, routes: [{ name: 'Main' as never }] });
     } catch (err: any) {
-      showToast('error', err.message || 'An unexpected error occurred');
-    } finally {
-      setLoading(false);
+      fireErrorNotification();
+      showToast('error', err?.message || 'An unexpected error occurred');
     }
   };
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.surface }}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-        <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', paddingVertical: 40, paddingHorizontal: 20 }} keyboardShouldPersistTaps="handled">
-          <View className="items-center mb-6">
-            <View className="w-20 h-20 rounded-full bg-primary items-center justify-center mb-4">
-              <View className="w-10 h-10 rounded-full" style={{ backgroundColor: colors.searchBackground + '66' }} />
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={{ flex: 1 }}
+      >
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.header}>
+            <View style={[styles.logoWrap, { backgroundColor: colors.primary + '12', borderColor: colors.border }]}>
+              <View style={[styles.logoInner, { backgroundColor: colors.primary + '18' }]}>
+                <MaterialIcons name="lock-person" size={22} color={colors.primary} />
+              </View>
             </View>
-            <Text className="text-2xl font-bold" style={{ color: colors.text }}>Welcome Waiter</Text>
-            <Text className="text-sm mt-1" style={{ color: colors.textSecondary }}>Log into your account</Text>
+
+            <Text style={[styles.title, { color: colors.text }]}>Welcome Waiter</Text>
+            <Text style={[styles.subtitle, { color: colors.textSecondary || colors.text }]}>
+              Log into your account
+            </Text>
           </View>
 
-          <View className="w-full max-w-md mx-auto rounded-2xl px-6 py-6" style={Platform.OS === 'android' ? { elevation: 2 } : { shadowColor: colors.border, shadowOpacity: 0.03, shadowRadius: 6, shadowOffset: { width: 0, height: 4 }, backgroundColor: colors.surface }}>
-            <View className="mb-4">
-              <Text className="text-sm mb-1" style={{ color: colors.textSecondary }}>Username</Text>
+          <View
+            style={[
+              styles.card,
+              Platform.OS === 'android'
+                ? { backgroundColor: colors.surface, elevation: 2 }
+                : {
+                    backgroundColor: colors.surface,
+                    shadowColor: colors.border,
+                    shadowOpacity: 0.05,
+                    shadowRadius: 8,
+                    shadowOffset: { width: 0, height: 4 },
+                  },
+            ]}
+          >
+            <Text style={[styles.label, { color: colors.textSecondary || colors.text }]}>Email</Text>
+            <View
+              style={[
+                styles.inputWrap,
+                { borderColor: colors.border, backgroundColor: colors.searchBackground || colors.surface },
+              ]}
+            >
+              <MaterialIcons
+                name="alternate-email"
+                size={18}
+                color={colors.textSecondary || colors.text}
+                style={styles.inputIcon}
+              />
               <TextInput
                 value={username}
                 onChangeText={setUsername}
-                placeholder="Enter your username"
+                placeholder="Enter your email"
+                placeholderTextColor={colors.textSecondary || colors.text}
+                keyboardType="email-address"
                 autoCapitalize="none"
-                className="border border-border rounded-lg px-4 py-3"
-                style={{ backgroundColor: colors.searchBackground, color: colors.text }}
-                editable={!loading}
+                autoCorrect={false}
+                style={[styles.input, { color: colors.text }]}
+                editable={!isLoading}
               />
             </View>
 
-            <View className="mb-6">
-              <Text className="text-sm mb-1" style={{ color: colors.textSecondary }}>Password</Text>
+            <Text style={[styles.label, styles.labelSpacing, { color: colors.textSecondary || colors.text }]}>
+              Password
+            </Text>
+            <View
+              style={[
+                styles.inputWrap,
+                { borderColor: colors.border, backgroundColor: colors.searchBackground || colors.surface },
+              ]}
+            >
+              <MaterialIcons
+                name="key"
+                size={18}
+                color={colors.textSecondary || colors.text}
+                style={styles.inputIcon}
+              />
               <TextInput
                 value={password}
                 onChangeText={setPassword}
                 placeholder="Enter your password"
+                placeholderTextColor={colors.textSecondary || colors.text}
                 secureTextEntry
-                className="border border-border rounded-lg px-4 py-3"
-                style={{ backgroundColor: colors.searchBackground, color: colors.text }}
-                editable={!loading}
+                autoCapitalize="none"
+                autoCorrect={false}
+                style={[styles.input, { color: colors.text }]}
+                editable={!isLoading}
               />
             </View>
 
-            <PrimaryButton 
-              title="Login" 
-              onPress={doLogin} 
-              loading={loading} 
+            <PrimaryButton
+              title={isLoading ? 'Signing in...' : 'Login'}
+              onPress={doLogin}
+              loading={isLoading}
               className="mt-4"
             />
+
+            {!isLocalServerReachable ? (
+              <Text style={[styles.helperText, { color: colors.textSecondary || colors.text }]}>
+                Connect the device to the local POS service before logging in.
+              </Text>
+            ) : null}
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  scrollContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 40,
+  },
+  header: {
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  logoWrap: {
+    width: 72,
+    height: 72,
+    borderRadius: 22,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
+  },
+  logoInner: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginBottom: 8,
+  },
+  subtitle: {
+    fontSize: 14,
+    textAlign: 'center',
+  },
+  card: {
+    width: '100%',
+    maxWidth: 520,
+    alignSelf: 'center',
+    borderRadius: 20,
+    paddingHorizontal: 20,
+    paddingVertical: 20,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  labelSpacing: {
+    marginTop: 16,
+  },
+  inputWrap: {
+    borderWidth: 1,
+    borderRadius: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    minHeight: 56,
+  },
+  inputIcon: {
+    marginRight: 10,
+  },
+  input: {
+    flex: 1,
+    fontSize: 16,
+    paddingVertical: 12,
+  },
+  helperText: {
+    marginTop: 12,
+    fontSize: 12,
+    lineHeight: 18,
+  },
+});

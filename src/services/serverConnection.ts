@@ -1,10 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios, { AxiosError } from 'axios';
 import { API_ENDPOINTS } from '../config/apiEndpoints';
+import { STORAGE_KEYS } from '../constants/storageKeys';
 import posIdService from './posIdService';
-
-const LOCAL_BASE_URL = 'LOCAL_BASE_URL';
-const CONNECTION_STATUS_KEY = 'LOCAL_SERVER_CONNECTED';
 
 export interface ServerConnectionStatus {
   isConnected: boolean;
@@ -55,10 +53,35 @@ class ServerConnectionService {
    */
   async initializeConnection(): Promise<ServerConnectionStatus> {
     try {
+      await this.hydrateStoredConnection();
       return await this.refreshConnectionStatus();
     } catch (error) {
       console.log('Error initializing connection:', error);
       return this.connectionStatus;
+    }
+  }
+
+  async hydrateStoredConnection(): Promise<string | null> {
+    if (this.connectionStatus.baseUrl) {
+      return this.connectionStatus.baseUrl;
+    }
+
+    try {
+      const storedBaseUrl = await AsyncStorage.getItem(STORAGE_KEYS.localBaseUrl);
+
+      if (!storedBaseUrl) {
+        return null;
+      }
+
+      this.connectionStatus = {
+        ...this.connectionStatus,
+        baseUrl: storedBaseUrl,
+      };
+
+      return storedBaseUrl;
+    } catch (error) {
+      console.log('Error hydrating stored connection:', error);
+      return null;
     }
   }
 
@@ -67,7 +90,7 @@ class ServerConnectionService {
    */
   async refreshConnectionStatus(baseUrl?: string | null): Promise<ServerConnectionStatus> {
     try {
-      const storedBaseUrl = baseUrl || (await AsyncStorage.getItem(LOCAL_BASE_URL));
+      const storedBaseUrl = baseUrl || (await AsyncStorage.getItem(STORAGE_KEYS.localBaseUrl));
 
       if (!storedBaseUrl) {
         this.connectionStatus = {
@@ -75,7 +98,7 @@ class ServerConnectionService {
           baseUrl: null,
           lastChecked: Date.now(),
         };
-        await AsyncStorage.setItem(CONNECTION_STATUS_KEY, 'false');
+        await AsyncStorage.setItem(STORAGE_KEYS.localServerConnected, 'false');
         return this.connectionStatus;
       }
 
@@ -86,10 +109,7 @@ class ServerConnectionService {
         lastChecked: Date.now(),
       };
 
-      await AsyncStorage.setItem(
-        CONNECTION_STATUS_KEY,
-        JSON.stringify(isConnected)
-      );
+      await AsyncStorage.setItem(STORAGE_KEYS.localServerConnected, JSON.stringify(isConnected));
 
       return this.connectionStatus;
     } catch (error) {
@@ -111,23 +131,23 @@ class ServerConnectionService {
       const isConnected = await this.checkLocalServerConnection(baseUrl);
 
       if (isConnected) {
-        await AsyncStorage.setItem(LOCAL_BASE_URL, baseUrl);
+        await AsyncStorage.setItem(STORAGE_KEYS.localBaseUrl, baseUrl);
         this.connectionStatus = {
           isConnected: true,
           baseUrl,
           lastChecked: Date.now(),
         };
-        await AsyncStorage.setItem(CONNECTION_STATUS_KEY, 'true');
+        await AsyncStorage.setItem(STORAGE_KEYS.localServerConnected, 'true');
         return true;
       } else {
         this.connectionStatus.isConnected = false;
-        await AsyncStorage.setItem(CONNECTION_STATUS_KEY, 'false');
+        await AsyncStorage.setItem(STORAGE_KEYS.localServerConnected, 'false');
         return false;
       }
     } catch (error) {
       console.log('Error setting server URL:', error);
       this.connectionStatus.isConnected = false;
-      await AsyncStorage.setItem(CONNECTION_STATUS_KEY, 'false');
+      await AsyncStorage.setItem(STORAGE_KEYS.localServerConnected, 'false');
       return false;
     }
   }
@@ -157,12 +177,20 @@ class ServerConnectionService {
     return this.lastError;
   }
 
+  setConnectionState(isConnected: boolean, baseUrl?: string | null): void {
+    this.connectionStatus = {
+      isConnected,
+      baseUrl: baseUrl !== undefined ? baseUrl : this.connectionStatus.baseUrl,
+      lastChecked: Date.now(),
+    };
+  }
+
   /**
    * Disconnect from server
    */
   async disconnect(): Promise<void> {
-    await AsyncStorage.removeItem(LOCAL_BASE_URL);
-    await AsyncStorage.removeItem(CONNECTION_STATUS_KEY);
+    await AsyncStorage.removeItem(STORAGE_KEYS.localBaseUrl);
+    await AsyncStorage.removeItem(STORAGE_KEYS.localServerConnected);
     this.connectionStatus = {
       isConnected: false,
       baseUrl: null,
