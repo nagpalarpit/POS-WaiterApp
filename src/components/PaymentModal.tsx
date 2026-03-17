@@ -27,7 +27,6 @@ import { formatCurrency } from "../utils/currency";
 import giftCardService from "../services/giftCardService";
 import { useToast } from "./ToastProvider";
 import { useConnection } from "../contexts/ConnectionProvider";
-import ConnectionSettingsModal from "./ConnectionSettingsModal";
 import {
   clearPaymentFlowHandlers,
   getPaymentFlowHandlers,
@@ -1191,12 +1190,6 @@ export default function PaymentScreen({ navigation, route }: any) {
           </View>
         </View>
       </KeyboardAvoidingView>
-
-      <ConnectionSettingsModal
-        visible={connectionModalVisible}
-        onClose={closeConnectionModal}
-        onConnected={closeConnectionModal}
-      />
     </SafeAreaView>
   );
 }
