@@ -8,6 +8,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  TouchableOpacity,
   View,
 } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
@@ -36,6 +37,7 @@ export default function LoginScreen() {
 
   const [username, setUsername] = useState('testyash1@gmail_test.com');
   const [password, setPassword] = useState('admin@123');
+  const [showPassword, setShowPassword] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -189,12 +191,24 @@ export default function LoginScreen() {
                 onChangeText={setPassword}
                 placeholder="Enter your password"
                 placeholderTextColor={colors.textSecondary || colors.text}
-                secureTextEntry
+                secureTextEntry={!showPassword}
                 autoCapitalize="none"
                 autoCorrect={false}
                 style={[styles.input, { color: colors.text }]}
                 editable={!isLoading}
               />
+              <TouchableOpacity
+                onPress={() => setShowPassword((prev) => !prev)}
+                disabled={isLoading}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                style={styles.trailingIconButton}
+              >
+                <MaterialIcons
+                  name={showPassword ? 'visibility-off' : 'visibility'}
+                  size={20}
+                  color={colors.textSecondary || colors.text}
+                />
+              </TouchableOpacity>
             </View>
 
             <PrimaryButton
@@ -278,6 +292,11 @@ const styles = StyleSheet.create({
   },
   inputIcon: {
     marginRight: 10,
+  },
+  trailingIconButton: {
+    marginLeft: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   input: {
     flex: 1,

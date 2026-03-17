@@ -48,16 +48,21 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
   const [logoLoadFailed, setLogoLoadFailed] = useState(false);
   const [selectedTableArea, setSelectedTableArea] = useState<any | null>(null);
 
-  /**
-   * Get company initials for placeholder logo
-   */
-  const getCompanyInitials = () => {
-    const companyName = (settingsData.settings?.companyName || 'POS').trim();
+  const companyDisplayName = useMemo(() => {
+    const rawName =
+      settingsData.settings?.companyName ||
+      settingsData.settings?.company?.name ||
+      '';
+    return rawName.trim();
+  }, [settingsData.settings?.companyName, settingsData.settings?.company?.name]);
+
+  const companyInitials = useMemo(() => {
+    const companyName = companyDisplayName || 'POS';
     const parts = companyName.split(' ').filter(Boolean);
     if (parts.length === 0) return 'POS';
     if (parts.length === 1) return parts[0].slice(0, 3).toUpperCase();
     return (parts[0][0] + parts[1][0]).toUpperCase();
-  };
+  }, [companyDisplayName]);
 
   /**
    * Load and set logo from user data - only on mount
@@ -263,14 +268,14 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
                   fontWeight: '800',
                 }}
               >
-                {getCompanyInitials()}
+                {companyInitials}
               </Text>
             </View>
           )}
         </TouchableOpacity>
       </View>
     ),
-    [colors, logoLoadFailed, logoUri, navigation]
+    [colors, companyInitials, logoLoadFailed, logoUri, navigation]
   );
 
   /**

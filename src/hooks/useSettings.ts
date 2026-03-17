@@ -32,15 +32,19 @@ const normalizeCompanyName = (value: unknown): string | undefined => {
   return trimmed || undefined;
 };
 
+const resolveCompanyName = (source: any): string | undefined =>
+  normalizeCompanyName(source?.companyName) ||
+  normalizeCompanyName(source?.name) ||
+  normalizeCompanyName(source?.displayName);
+
 const normalizeSettingsRecord = (record: any): Settings | null => {
   if (!record) return null;
   const settingInfo = record.settingInfo ?? record;
   if (!settingInfo) return null;
 
   const companyName =
-    normalizeCompanyName(settingInfo?.companyName) ||
-    normalizeCompanyName(settingInfo?.company?.companyName) ||
-    normalizeCompanyName(settingInfo?.company?.name);
+    resolveCompanyName(settingInfo) ||
+    resolveCompanyName(settingInfo?.company);
 
   const companyId =
     settingInfo?.companyId ??
@@ -76,8 +80,8 @@ export const useSettings = () => {
       const userData = userDataStr ? JSON.parse(userDataStr) : null;
       const companyId = userData?.companyId ?? userData?.company?.id;
       const companyName =
-        normalizeCompanyName(userData?.company?.name) ||
-        normalizeCompanyName(userData?.companyName);
+        resolveCompanyName(userData) ||
+        resolveCompanyName(userData?.company);
 
       let resolved: Settings | null = null;
 
