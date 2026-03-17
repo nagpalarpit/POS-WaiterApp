@@ -120,6 +120,7 @@ export default function PinModal({ visible, onClose, onVerified }: Props) {
         </View>
       }
       maxHeightRatio={0.58}
+      keyboardBehavior="expand"
     >
       <View style={{ marginTop: 4 }}>
         <Text

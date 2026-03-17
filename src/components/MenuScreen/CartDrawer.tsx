@@ -99,12 +99,48 @@ export default function CartScreen({ navigation, route }: any) {
 
     useLayoutEffect(() => {
         navigation.setOptions({
-            headerTitle: 'Order Summary',
+            headerTitle: () => (
+                <View
+                    style={{
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                    }}
+                >
+                    <Text style={{ fontSize: 16, fontWeight: '700', color: colors.text }}>
+                        Order Summary
+                    </Text>
+                    <Text
+                        style={{
+                            fontSize: 12,
+                            color: colors.textSecondary,
+                            marginTop: 2,
+                        }}
+                    >
+                        {cartData.cartQuantity}{' '}
+                        {cartData.cartQuantity === 1 ? 'item' : 'items'} -{' '}
+                        {formatCurrency(total)}
+                    </Text>
+                </View>
+            ),
             headerStyle: { backgroundColor: colors.background },
             headerTintColor: colors.text,
             headerTitleStyle: { fontWeight: '700' },
+            headerRight: () => (
+                <View
+                    style={{
+                        width: 32,
+                        height: 32,
+                        borderRadius: 10,
+                        backgroundColor: colors.primary + '15',
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                    }}
+                >
+                    <MaterialCommunityIcons name="cart" size={18} color={colors.primary} />
+                </View>
+            ),
         });
-    }, [navigation, colors]);
+    }, [navigation, colors, cartData.cartQuantity, total]);
 
     const ensureCanModify = (message?: string) => {
         if (canModifyOrders) return true;
@@ -178,7 +214,7 @@ export default function CartScreen({ navigation, route }: any) {
         });
     };
 
-    const footerHeight = 88;
+    const footerHeight = 142;
 
     return (
         <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
@@ -188,73 +224,6 @@ export default function CartScreen({ navigation, route }: any) {
                 keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
             >
                 <View style={{ flex: 1 }}>
-                    {/* Header */}
-                    <View
-                        style={{
-                            paddingHorizontal: 16,
-                            paddingVertical: 12,
-                            backgroundColor: colors.background,
-                            borderBottomWidth: 1,
-                            borderBottomColor: colors.border,
-                        }}
-                    >
-                        <View
-                            style={{
-                                flexDirection: 'row',
-                                justifyContent: 'space-between',
-                                alignItems: 'center',
-                            }}
-                        >
-                            <TouchableOpacity
-                                onPress={() => navigation.goBack()}
-                                style={{
-                                    width: 36,
-                                    height: 36,
-                                    borderRadius: 10,
-                                    backgroundColor: colors.surfaceHover,
-                                    justifyContent: 'center',
-                                    alignItems: 'center',
-                                }}
-                            >
-                                <MaterialIcons name="arrow-back" size={20} color={colors.text} />
-                            </TouchableOpacity>
-                            <View
-                                style={{
-                                    flex: 1,
-                                    alignItems: 'center',
-                                    marginHorizontal: 12,
-                                }}
-                            >
-                                <Text style={{ fontSize: 16, fontWeight: '700', color: colors.text }}>
-                                    Order Summary
-                                </Text>
-                                <Text
-                                    style={{
-                                        fontSize: 12,
-                                        color: colors.textSecondary,
-                                        marginTop: 2,
-                                    }}
-                                >
-                                    {cartData.cartQuantity}{' '}
-                                    {cartData.cartQuantity === 1 ? 'item' : 'items'} -{' '}
-                                    {formatCurrency(total)}
-                                </Text>
-                            </View>
-                            <View
-                                style={{
-                                    width: 32,
-                                    height: 32,
-                                    borderRadius: 10,
-                                    backgroundColor: colors.primary + '15',
-                                    justifyContent: 'center',
-                                    alignItems: 'center',
-                                }}
-                            >
-                                <MaterialCommunityIcons name="cart" size={18} color={colors.primary} />
-                            </View>
-                        </View>
-                    </View>
-
                     {/* Cart Items or Empty State */}
                     {cartData.cart.items.length > 0 ? (
                         <ScrollView
@@ -431,13 +400,64 @@ export default function CartScreen({ navigation, route }: any) {
                             right: 0,
                             bottom: 0,
                             paddingHorizontal: 12,
-                            paddingTop: 12,
-                            paddingBottom: insets.bottom,
+                            paddingTop: 10,
+                            paddingBottom: Math.max(insets.bottom, 8),
                             borderTopWidth: 1,
                             borderTopColor: colors.border,
                             backgroundColor: colors.background,
                         }}
                     >
+                        <View
+                            style={{
+                                borderWidth: 1,
+                                borderColor: colors.border,
+                                borderRadius: 12,
+                                backgroundColor: colors.surface,
+                                paddingHorizontal: 12,
+                                paddingVertical: 10,
+                                marginBottom: 10,
+                            }}
+                        >
+                            <View
+                                style={{
+                                    flexDirection: 'row',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center',
+                                }}
+                            >
+                                <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                                    Subtotal
+                                </Text>
+                                <Text style={{ color: colors.text, fontWeight: '700' }}>
+                                    {formatCurrency(subtotal)}
+                                </Text>
+                            </View>
+                            <View
+                                style={{
+                                    flexDirection: 'row',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center',
+                                    marginTop: 8,
+                                    paddingTop: 8,
+                                    borderTopWidth: 1,
+                                    borderTopColor: colors.border,
+                                }}
+                            >
+                                <Text style={{ color: colors.text, fontWeight: '800' }}>
+                                    Total
+                                </Text>
+                                <Text
+                                    style={{
+                                        color: colors.primary,
+                                        fontWeight: '800',
+                                        fontSize: 16,
+                                    }}
+                                >
+                                    {formatCurrency(total)}
+                                </Text>
+                            </View>
+                        </View>
+
                         <TouchableOpacity
                             onPress={proceedToCheckout}
                             style={{

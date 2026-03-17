@@ -107,6 +107,7 @@ export default function AddExtraModal({ visible, onClose, onSave }: Props) {
       subtitle="Create a quick extra item for this order."
       footer={footer}
       maxHeightRatio={0.78}
+      keyboardBehavior="expand"
     >
       <View style={{ marginBottom: 12 }}>
         <Text

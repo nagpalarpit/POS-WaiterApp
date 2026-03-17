@@ -106,6 +106,7 @@ export default function CancelOrderModal({
         </View>
       }
       maxHeightRatio={0.7}
+      keyboardBehavior="expand"
     >
       <View style={{ marginTop: 4 }}>
         <Text

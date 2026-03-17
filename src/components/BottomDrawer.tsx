@@ -40,6 +40,7 @@ type BottomDrawerProps = {
   bodyStyle?: StyleProp<ViewStyle>;
   footerStyle?: StyleProp<ViewStyle>;
   keyboardVerticalOffset?: number;
+  keyboardBehavior?: 'shift' | 'expand';
   scrollViewProps?: Omit<
     ScrollViewProps,
     'children' | 'contentContainerStyle' | 'style'
@@ -65,6 +66,7 @@ export default function BottomDrawer({
   bodyStyle,
   footerStyle,
   keyboardVerticalOffset = 0,
+  keyboardBehavior = 'shift',
   scrollViewProps,
   scrollViewRef,
 }: BottomDrawerProps) {
@@ -240,11 +242,21 @@ export default function BottomDrawer({
     return null;
   }
 
-  const shouldExpandDrawer = fullHeight || focusedWithinDrawer || keyboardHeight > 0;
+  const keyboardLift = Math.max(
+    keyboardHeight - Math.max(insets.bottom, 0) - keyboardVerticalOffset,
+    0,
+  );
+  const shouldExpandDrawer =
+    fullHeight ||
+    (keyboardBehavior === 'expand' &&
+      (focusedWithinDrawer || keyboardHeight > 0));
+  const availableHeight = Math.max(
+    windowHeight - insets.top - 16 - keyboardLift,
+    320,
+  );
   const resolvedMaxHeight = shouldExpandDrawer
-    ? Math.max(windowHeight - insets.top - 16, 320)
-    : Math.min(windowHeight * maxHeightRatio, windowHeight - insets.top - 16);
-
+    ? availableHeight
+    : Math.min(windowHeight * maxHeightRatio, availableHeight);
   const contentBottomPadding = footer
     ? 12
     : Math.max(insets.bottom, 16) + 12;
@@ -284,20 +296,21 @@ export default function BottomDrawer({
         <Animated.View
           style={[
             styles.drawer,
-            {
-              backgroundColor: colors.surface,
-              borderColor: colors.border,
-              maxHeight: resolvedMaxHeight,
-              transform: [{ translateY: drawerTranslateY }],
-            },
-            drawerStyle,
-          ]}
+          {
+            backgroundColor: colors.surface,
+            borderColor: colors.border,
+            maxHeight: resolvedMaxHeight,
+            marginBottom: keyboardLift,
+            transform: [{ translateY: drawerTranslateY }],
+          },
+          drawerStyle,
+        ]}
+      >
+        <KeyboardAvoidingView
+          behavior={undefined}
+          keyboardVerticalOffset={keyboardVerticalOffset}
+          style={styles.keyboardRoot}
         >
-          <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            keyboardVerticalOffset={keyboardVerticalOffset}
-            style={styles.keyboardRoot}
-          >
             <View style={styles.dragHandleWrap}>
               <View
                 style={[styles.dragHandle, { backgroundColor: colors.border }]}
@@ -391,7 +404,11 @@ export default function BottomDrawer({
               <View
                 style={[
                   styles.body,
-                  { paddingBottom: Math.max(insets.bottom, 16) + 12 },
+                  {
+                    paddingBottom: footer
+                      ? 12
+                      : Math.max(insets.bottom, 16) + 12,
+                  },
                   bodyStyle,
                 ]}
                 onStartShouldSetResponderCapture={

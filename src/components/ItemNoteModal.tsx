@@ -64,6 +64,7 @@ export default function ItemNoteModal({
       subtitle="Add a note for this item."
       footer={footer}
       maxHeightRatio={0.66}
+      keyboardBehavior="expand"
     >
       <TextInput
         value={note}

@@ -262,6 +262,7 @@ export default function CartNoteModal({
         footer={footer}
         fullHeight
         maxHeightRatio={0.92}
+        keyboardBehavior="expand"
       >
         <View style={{ marginBottom: 16 }}>
           <Text
