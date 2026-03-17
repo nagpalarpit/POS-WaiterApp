@@ -36,6 +36,7 @@ import {
   getItemUnitTotal,
 } from "../utils/cartCalculations";
 import PaymentModal from "../components/PaymentModal";
+import ConnectionSettingsModal from "../components/ConnectionSettingsModal";
 import PinModal from "../components/PinModal";
 import CancelOrderModal from "../components/CancelOrderModal";
 import { formatCurrency } from "../utils/currency";
@@ -595,8 +596,6 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
     canModifyOrders,
     isInternetReachable,
     isLocalServerReachable,
-    reconnectLocalServer,
-    isCheckingLocal,
   } = useConnection();
   const isReadOnly = !canModifyOrders;
   const isLocalServerDisconnected = !isLocalServerReachable;
@@ -609,6 +608,15 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
   const [pinModalVisible, setPinModalVisible] = useState(false);
   const [cancelModalVisible, setCancelModalVisible] = useState(false);
   const [canceling, setCanceling] = useState(false);
+  const [connectionModalVisible, setConnectionModalVisible] = useState(false);
+
+  const openConnectionModal = useCallback(() => {
+    setConnectionModalVisible(true);
+  }, []);
+
+  const closeConnectionModal = useCallback(() => {
+    setConnectionModalVisible(false);
+  }, []);
 
   const PAYMENT_METHOD_LABELS: Record<number, string> = {
     0: "Cash",
@@ -2124,16 +2132,8 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
     }
   };
 
-  const handleReconnectLocal = async () => {
-    const ok = await reconnectLocalServer();
-    if (!ok) {
-      showToast(
-        "error",
-        "Unable to reconnect to the local server. Check the IP/port and try again.",
-      );
-      return;
-    }
-    showToast("success", "Connected to the local server.");
+  const handleReconnectLocal = () => {
+    openConnectionModal();
   };
 
   const handleOpenPaymentModal = () => {
@@ -2618,7 +2618,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
                 </Text>
                 <TouchableOpacity
                   onPress={handleReconnectLocal}
-                  disabled={isCheckingLocal}
+                  disabled={connectionModalVisible}
                   style={{
                     marginTop: 10,
                     alignSelf: "flex-start",
@@ -2626,22 +2626,14 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
                     paddingVertical: 8,
                     borderRadius: 999,
                     backgroundColor: colors.primary,
-                    opacity: isCheckingLocal ? 0.6 : 1,
+                    opacity: connectionModalVisible ? 0.6 : 1,
                   }}
                 >
-                  {isCheckingLocal ? (
-                    <Text
-                      style={{ color: colors.textInverse || "#fff", fontWeight: "700" }}
-                    >
-                      Connecting...
-                    </Text>
-                  ) : (
-                    <Text
-                      style={{ color: colors.textInverse || "#fff", fontWeight: "700" }}
-                    >
-                      Connect
-                    </Text>
-                  )}
+                  <Text
+                    style={{ color: colors.textInverse || "#fff", fontWeight: "700" }}
+                  >
+                    Connect
+                  </Text>
                 </TouchableOpacity>
               </Card>
             ) : null}
@@ -2698,6 +2690,12 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
         )}
       </ScrollView>
 
+      <ConnectionSettingsModal
+        visible={connectionModalVisible}
+        onClose={closeConnectionModal}
+        onConnected={closeConnectionModal}
+      />
+
       <PaymentModal
         visible={paymentModalVisible}
         onClose={() => {
@@ -2719,7 +2717,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
         }
         onReconnect={isLocalServerDisconnected ? handleReconnectLocal : undefined}
         reconnectLabel="Connect"
-        isReconnecting={isCheckingLocal}
+        isReconnecting={connectionModalVisible}
         onSelect={async (option: any) => {
           setSelectedPaymentId(
             toNumber(option?.paymentMethod ?? option?.id, 0),
