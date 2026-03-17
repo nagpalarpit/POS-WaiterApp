@@ -499,7 +499,11 @@ export default function AppNavigator() {
       }
     });
 
-    return unsubscribe;
+    return () => {
+      if (typeof unsubscribe === 'function') {
+        unsubscribe();
+      }
+    };
   }, [showToast]);
 
   if (!ready) return null;
