@@ -15,6 +15,8 @@ import DashboardScreen from '../screens/DashboardScreen';
 import MenuScreen from '../screens/MenuScreen';
 import CheckoutScreen from '../screens/CheckoutScreen';
 import OrderDetailsScreen from '../screens/OrderDetailsScreen';
+import CartScreen from '../components/MenuScreen/CartDrawer';
+import PaymentModal from '../components/PaymentModal';
 import posIdService from '../services/posIdService';
 import serverConnection from '../services/serverConnection';
 import { onOrderSync } from '../services/orderSyncService';
@@ -35,6 +37,20 @@ export type RootStackParamList = {
     deliveryType: number;
     existingOrder?: any;
     tableArea?: any;
+  };
+  Cart: {
+    tableNo?: number;
+    deliveryType: number;
+    existingOrder?: any;
+    tableArea?: any;
+  };
+  Payment: {
+    title?: string;
+    orderTotal?: number;
+    companyId?: number;
+    splitItems?: any[];
+    allowSplitOption?: boolean;
+    hidePrintPreview?: boolean;
   };
   Checkout: {
     cart: any;
@@ -112,6 +128,8 @@ function MainStack() {
         })}
       />
       <Stack.Screen name="Menu" component={MenuScreen} options={{ title: 'Menu' }} />
+      <Stack.Screen name="Cart" component={CartScreen} options={{ title: 'Order Summary' }} />
+      <Stack.Screen name="Payment" component={PaymentModal} options={{ title: 'Payment' }} />
       <Stack.Screen name="Checkout" component={CheckoutScreen} options={{ title: 'Checkout' }} />
       <Stack.Screen name="OrderDetails" component={OrderDetailsScreen} options={{ title: 'Order Details' }} />
     </Stack.Navigator>
