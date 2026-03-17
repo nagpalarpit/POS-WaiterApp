@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, TextInput } from 'react-native';
+import { View, Text, TouchableOpacity } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { CartItem, AttributeValue } from '../../services/cartService';
 import {
@@ -15,13 +15,7 @@ import { formatCurrency } from '../../utils/currency';
 
 interface CartItemRowProps {
   item: CartItem;
-  isEditing: boolean;
-  editingNote: string;
-  onNoteChange: (text: string) => void;
-  onEditNote: (item: CartItem) => void;
   onOpenNoteModal: (item: CartItem) => void;
-  onCancelEdit: () => void;
-  onSaveNote: () => void;
   onUpdateQuantity: (cartId: string, quantity: number) => void;
   onRemoveItem: (cartId: string) => void;
   colors: any;
@@ -32,13 +26,7 @@ interface CartItemRowProps {
  */
 export const CartItemRow: React.FC<CartItemRowProps> = ({
   item,
-  isEditing,
-  editingNote,
-  onNoteChange,
-  onEditNote,
   onOpenNoteModal,
-  onCancelEdit,
-  onSaveNote,
   onUpdateQuantity,
   onRemoveItem,
   colors,
@@ -102,53 +90,12 @@ export const CartItemRow: React.FC<CartItemRowProps> = ({
         </Text>
       ) : null}
 
-      {/* Note Edit Section */}
-      {isEditing ? (
-        <View style={{ marginTop: 8 }}>
-          <TextInput
-            value={editingNote}
-            onChangeText={onNoteChange}
-            placeholder="Add note for this item"
-            multiline
-            style={{
-              borderWidth: 1,
-              borderColor: colors.border,
-              borderRadius: 8,
-              paddingHorizontal: 10,
-              paddingVertical: 8,
-              fontSize: 12,
-              color: colors.text,
-              backgroundColor: colors.background,
-              minHeight: 60,
-              textAlignVertical: 'top',
-            }}
-          />
-          <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
-            <TouchableOpacity
-              onPress={onCancelEdit}
-              style={{ paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: colors.border }}
-            >
-              <Text className="text-xs" style={{ color: colors.text }}>
-                Cancel
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={onSaveNote}
-              style={{ paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, backgroundColor: colors.primary }}
-            >
-              <Text className="text-xs font-semibold" style={{ color: colors.textInverse }}>
-                Save Note
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      ) : (
-        <TouchableOpacity onPress={() => onOpenNoteModal(item)} style={{ marginTop: 8 }}>
-          <Text className="text-xs font-semibold" style={{ color: colors.primary }}>
-            {item.orderItemNote ? 'Edit Item Note' : 'Add Item Note'}
-          </Text>
-        </TouchableOpacity>
-      )}
+      {/* Note Action */}
+      <TouchableOpacity onPress={() => onOpenNoteModal(item)} style={{ marginTop: 8 }}>
+        <Text className="text-xs font-semibold" style={{ color: colors.primary }}>
+          {item.orderItemNote ? 'Edit Item Note' : 'Add Item Note'}
+        </Text>
+      </TouchableOpacity>
 
       {/* Price and Quantity Controls */}
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.border }}>

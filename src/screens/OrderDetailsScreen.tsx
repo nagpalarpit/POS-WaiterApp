@@ -50,6 +50,7 @@ import {
   unlockOrder,
 } from "../services/orderSyncService";
 import { useToast } from "../components/ToastProvider";
+import { setPaymentFlowHandlers } from "../services/paymentFlowStore";
 import { useConnection } from "../contexts/ConnectionProvider";
 
 const TSC_OFFLINE_MESSAGE =
@@ -717,6 +718,11 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
   );
   const [paymentModalVisible, setPaymentModalVisible] = useState(false);
   const [pendingSettle, setPendingSettle] = useState(false);
+  const pendingSettleRef = useRef(false);
+
+  useEffect(() => {
+    pendingSettleRef.current = pendingSettle;
+  }, [pendingSettle]);
   const [expandedGroupType, setExpandedGroupType] = useState<number | null>(
     null,
   );
@@ -2123,7 +2129,30 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
     }
   };
 
-  const handleOpenPaymentModal = () => {
+  const handlePaymentSelect = async (option: any) => {
+    setSelectedPaymentId(
+      toNumber(option?.paymentMethod ?? option?.id, 0),
+    );
+
+    if (!pendingSettleRef.current) {
+      return { keepOpen: true };
+    }
+
+    const isSplitSelection = option?.isItemSplit === true;
+    const settleResult = await settleOrderWithPayment(option);
+
+    if (isSplitSelection && settleResult?.keepModalOpen) {
+      setPendingSettle(true);
+      pendingSettleRef.current = true;
+      return { keepOpen: true };
+    }
+
+    setPendingSettle(false);
+    pendingSettleRef.current = false;
+    return { keepOpen: false };
+  };
+
+  const openPaymentScreen = (mode: "settle" | "method") => {
     if (isLocalServerDisconnected) {
       showToast(
         "error",
@@ -2131,7 +2160,33 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
       );
       return;
     }
-    setPaymentModalVisible(true);
+
+    const shouldSettle = mode === "settle";
+    setPendingSettle(shouldSettle);
+    pendingSettleRef.current = shouldSettle;
+
+    setPaymentFlowHandlers({
+      onSelect: handlePaymentSelect,
+      onPrintPreview: handlePrintPreview,
+      onClose: () => {
+        setPendingSettle(false);
+        pendingSettleRef.current = false;
+      },
+    });
+
+    navigation.navigate("Payment", {
+      title: shouldSettle ? "Settle Payment" : "Change Payment Method",
+      orderTotal: totals.total,
+      companyId: resolvedCompanyId,
+      splitItems: splitPaymentItems,
+      allowSplitOption,
+      hidePrintPreview: hideDeleteForSplit,
+    });
+  };
+
+  
+  const handleOpenPaymentModal = () => {
+    openPaymentScreen("method");
   };
 
   const handlePrintPreview = async (option: any) => {
@@ -2809,8 +2864,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
             onPress={() => {
               if (isPaid) return;
               lockPayment(order);
-              setPendingSettle(true);
-              setPaymentModalVisible(true);
+              openPaymentScreen("settle");
             }}
             disabled={marking || isPaid || isReadOnly}
             style={[
