@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { STORAGE_KEYS } from '../constants/storageKeys';
 import localDatabase from '../services/localDatabase';
 
 export interface MenuCategory {
@@ -123,7 +124,7 @@ export const useMenuData = () => {
       setLoading(true);
 
       // Get user info from AsyncStorage to retrieve companyId
-      const userDataStr = await AsyncStorage.getItem('userData');
+      const userDataStr = await AsyncStorage.getItem(STORAGE_KEYS.authUser);
       const userData = userDataStr ? JSON.parse(userDataStr) : null;
       const companyId = userData?.companyId;
 

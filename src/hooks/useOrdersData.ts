@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { STORAGE_KEYS } from '../constants/storageKeys';
 import localDatabase from '../services/localDatabase';
 import { ORDER_STATUS } from '../utils/orderUtils';
 import { onOrderSync } from '../services/orderSyncService';
@@ -87,11 +88,9 @@ export const useOrdersData = () => {
       setLoading(true);
 
       // Get user info from AsyncStorage to retrieve companyId
-      const userDataStr = await AsyncStorage.getItem('userData');
+      const userDataStr = await AsyncStorage.getItem(STORAGE_KEYS.authUser);
       const userData = userDataStr ? JSON.parse(userDataStr) : null;
       const companyId = userData?.companyId;
-
-      console.log('OrdersData: User data retrieved:', { companyId });
 
       // Fetch orders from 'order' collection with companyId filter
       const orders = await localDatabase.select('order', {
@@ -120,13 +119,6 @@ export const useOrdersData = () => {
         setDineInTables(dineIn);
         setDeliveryOrders(delivery);
         setPickupOrders(pickup);
-
-        console.log('Orders fetched:', { 
-          total: activeOrders.length, 
-          dineIn: dineIn.length, 
-          delivery: delivery.length, 
-          pickup: pickup.length 
-        });
       }
     } catch (error) {
       console.error('Error fetching orders:', error);

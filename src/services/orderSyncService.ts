@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { STORAGE_KEYS } from '../constants/storageKeys';
 import { getSocket } from './socket';
 
 type OrderSyncEvent = {
@@ -156,7 +157,7 @@ const applyLocks = (eventType: string, orderInfo: any, sourceId: string) => {
 
 const resolveCompanyId = async (): Promise<number> => {
   if (cachedCompanyId) return cachedCompanyId;
-  const userDataStr = await AsyncStorage.getItem('userData');
+  const userDataStr = await AsyncStorage.getItem(STORAGE_KEYS.authUser);
   const userData = userDataStr ? JSON.parse(userDataStr) : null;
   const companyId = toNumber(userData?.companyId, 0);
   cachedCompanyId = companyId || null;
@@ -220,7 +221,9 @@ export const initOrderSync = () => {
 
 export const onOrderSync = (listener: (event: OrderSyncEvent) => void) => {
   listeners.add(listener);
-  return () => listeners.delete(listener);
+  return () => {
+    listeners.delete(listener);
+  };
 };
 
 export const emitOrderSync = async (

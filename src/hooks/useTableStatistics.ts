@@ -89,8 +89,6 @@ export const useTableStatistics = (dineInOrders: Order[], settings: Settings | n
     setAvailableTablesCount(Math.max(0, available));
     setBookedTablesCount(Math.max(0, booked));
     setSemiPaidTablesCount(Math.max(0, semiPaid));
-
-    console.log('Table statistics:', { available, booked, semiPaid });
   };
 
   useEffect(() => {

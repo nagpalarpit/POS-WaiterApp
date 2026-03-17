@@ -1,14 +1,12 @@
 import axios, { AxiosInstance, AxiosError } from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { STORAGE_KEYS } from '../constants/storageKeys';
 import posIdService from './posIdService';
 
 const localApi: AxiosInstance = axios.create({
   timeout: 15000,
   baseURL: 'http://localhost:3000', // Default, will be set dynamically
 });
-
-const KEY = 'LOCAL_BASE_URL';
-const TOKEN_KEY = 'local_token';
 
 // Set up request interceptor to add auth token and POS ID (same as POS_V2)
 localApi.interceptors.request.use(
@@ -21,7 +19,7 @@ localApi.interceptors.request.use(
       return config;
     }
 
-    const token = await AsyncStorage.getItem(TOKEN_KEY);
+    const token = await AsyncStorage.getItem(STORAGE_KEYS.localAuthToken);
     if (token) {
       headers.Authorization = `Bearer ${token}`;
     }
@@ -44,29 +42,29 @@ localApi.interceptors.response.use(
   (error: AxiosError) => {
     if (error.response?.status === 401) {
       // Handle unauthorized - clear token
-      AsyncStorage.removeItem(TOKEN_KEY).catch(console.error);
+      AsyncStorage.removeItem(STORAGE_KEYS.localAuthToken).catch(console.error);
     }
     return Promise.reject(error);
   }
 );
 
 export const setLocalBaseUrlFromStorage = async () => {
-  const base = await AsyncStorage.getItem(KEY);
+  const base = await AsyncStorage.getItem(STORAGE_KEYS.localBaseUrl);
   if (base) localApi.defaults.baseURL = base;
 };
 
 export const setLocalBaseUrl = async (base: string) => {
   localApi.defaults.baseURL = base;
-  await AsyncStorage.setItem(KEY, base);
+  await AsyncStorage.setItem(STORAGE_KEYS.localBaseUrl, base);
 };
 
 export const setLocalAuthToken = async (token: string) => {
-  await AsyncStorage.setItem(TOKEN_KEY, token);
+  await AsyncStorage.setItem(STORAGE_KEYS.localAuthToken, token);
   localApi.defaults.headers.common['Authorization'] = `Bearer ${token}`;
 };
 
 export const clearLocalAuthToken = async () => {
-  await AsyncStorage.removeItem(TOKEN_KEY);
+  await AsyncStorage.removeItem(STORAGE_KEYS.localAuthToken);
   delete localApi.defaults.headers.common['Authorization'];
 };
 

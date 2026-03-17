@@ -1,8 +1,28 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, TextInput, Keyboard, Platform, KeyboardAvoidingView, ScrollView, BackHandler } from 'react-native';
-import { useNavigation, useIsFocused, useFocusEffect } from '@react-navigation/native';
+import {
+  BackHandler,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
+import { useFocusEffect, useIsFocused, useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { MaterialIcons } from '@expo/vector-icons';
+import {
+  DEFAULT_IP,
+  DEFAULT_PORT,
+  fireErrorNotification,
+  fireImpact,
+  fireSuccessNotification,
+  parseSavedUrl,
+} from '../components/auth/AuthPrimitives';
+import { STORAGE_KEYS } from '../constants/storageKeys';
 import PrimaryButton from '../components/PrimaryButton';
 import { useTheme } from '../theme/ThemeProvider';
 import serverConnection from '../services/serverConnection';
@@ -11,168 +31,308 @@ import { useToast } from '../components/ToastProvider';
 import { useConnection } from '../contexts/ConnectionProvider';
 
 export default function IPEntryScreen() {
-    const navigation = useNavigation();
-    const isFocused = useIsFocused();
-    const [ip, setIp] = useState('127.0.0.1');
-    const [port, setPort] = useState('4000'); // Default port
-    const [loading, setLoading] = useState(false);
-    const [initialized, setInitialized] = useState(false);
-    const [debugInfo, setDebugInfo] = useState<string | null>(null);
-    const { colors } = useTheme();
-    const { showToast } = useToast();
-    const { refreshLocalServerStatus } = useConnection();
+  const navigation = useNavigation();
+  const isFocused = useIsFocused();
+  const { colors } = useTheme();
+  const { showToast } = useToast();
+  const { refreshLocalServerStatus } = useConnection();
 
-    useFocusEffect(
-        useCallback(() => {
-            const onBackPress = () => true;
-            const backSub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
-            const navSub = navigation.addListener('beforeRemove', (e: any) => {
-                const actionType = e?.data?.action?.type;
-                if (actionType === 'GO_BACK' || actionType === 'POP' || actionType === 'POP_TO_TOP') {
-                    e.preventDefault();
-                }
-            });
+  const [ip, setIp] = useState(DEFAULT_IP);
+  const [port, setPort] = useState(DEFAULT_PORT);
+  const [loading, setLoading] = useState(false);
+  const [initialized, setInitialized] = useState(false);
+  const [debugInfo, setDebugInfo] = useState<string | null>(null);
 
-            return () => {
-                backSub.remove();
-                navSub();
-            };
-        }, [navigation])
-    );
-
-    // Initialize with saved server URL on screen focus
-    useEffect(() => {
-        const initializeScreen = async () => {
-            if (isFocused) {
-                const savedUrl = serverConnection.getServerUrl();
-                if (savedUrl) {
-                    // Parse saved URL to show IP and port
-                    const urlObj = new URL(savedUrl);
-                    setIp(urlObj.hostname);
-                    setPort(urlObj.port || '4000');
-                }
-                setInitialized(true);
-            }
-        };
-
-        initializeScreen();
-    }, [isFocused]);
-
-    const testConnection = async () => {
-        const trimmedIp = ip.trim();
-        const trimmedPort = port.trim();
-
-        if (!trimmedIp) {
-            showToast('error', 'Please enter server IP');
-            return;
+  useFocusEffect(
+    useCallback(() => {
+      const onBackPress = () => true;
+      const backSub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+      const navSub = navigation.addListener('beforeRemove', (e: any) => {
+        const actionType = e?.data?.action?.type;
+        if (actionType === 'GO_BACK' || actionType === 'POP' || actionType === 'POP_TO_TOP') {
+          e.preventDefault();
         }
+      });
 
-        Keyboard.dismiss();
-        const host = trimmedPort ? `http://${trimmedIp}:${trimmedPort}/` : `http://${trimmedIp}/`;
-        setLoading(true);
-        setDebugInfo(`Testing: ${host}`);
-        console.log('[IPEntry] Testing connection to:', host);
+      return () => {
+        backSub.remove();
+        navSub();
+      };
+    }, [navigation])
+  );
 
-        try {
-            const success = await serverConnection.setServerUrl(host);
+  useEffect(() => {
+    const initializeScreen = async () => {
+      if (!isFocused) {
+        return;
+      }
 
-            console.log('Connection test result:', success);
+      const savedUrl = serverConnection.getServerUrl();
+      const parsed = parseSavedUrl(savedUrl);
 
-            if (success) {
-                setDebugInfo('Connected successfully.');
-                // Also set it in localApi for direct API calls
-                await setLocalBaseUrl(host);
-                // Backward compatibility for modules still using legacy storage.
-                await AsyncStorage.setItem('BASE_URL', host);
-                await refreshLocalServerStatus();
-
-                // Fetch POS ID when available, but do not block navigation.
-                try {
-                    await serverConnection.initializePosId();
-                    console.log('POS ID fetched and stored successfully');
-                } catch (err: any) {
-                    console.log('Warning: Could not fetch POS ID from server:', err.message);
-                }
-
-                navigation.navigate('Login' as never);
-            } else {
-                const lastError = serverConnection.getLastError();
-                setDebugInfo(lastError ? `Failed: ${lastError}` : 'Failed: unknown error');
-                showToast('error', 'Unable to reach the POS server. Please check the IP address and port are correct and try again.');
-            }
-        } catch (err: any) {
-            setDebugInfo(err?.message ? `Error: ${err.message}` : 'Error: unknown');
-            showToast('error', err.message || 'Unable to reach server');
-        } finally {
-            setLoading(false);
-        }
+      setIp(parsed?.ip || DEFAULT_IP);
+      setPort(parsed?.port || DEFAULT_PORT);
+      setInitialized(true);
     };
 
-    if (!initialized) {
-        return (
-            <SafeAreaView style={{ flex: 1, backgroundColor: colors.surface }}>
-                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-                    <Text style={{ color: colors.text }}>Loading...</Text>
-                </View>
-            </SafeAreaView>
-        );
+    initializeScreen();
+  }, [isFocused]);
+
+  const testConnection = async () => {
+    const trimmedIp = ip.trim();
+    const trimmedPort = port.trim();
+
+    if (!trimmedIp) {
+      fireErrorNotification();
+      showToast('error', 'Please enter server IP');
+      return;
     }
 
+    if (trimmedPort && !/^\d+$/.test(trimmedPort)) {
+      fireErrorNotification();
+      showToast('error', 'Port must contain only numbers');
+      return;
+    }
+
+    Keyboard.dismiss();
+    const host = trimmedPort ? `http://${trimmedIp}:${trimmedPort}/` : `http://${trimmedIp}/`;
+
+    fireImpact();
+    setLoading(true);
+    setDebugInfo(`Testing ${host}`);
+
+    try {
+      const success = await serverConnection.setServerUrl(host);
+
+      if (success) {
+        setDebugInfo('Connected successfully. Local server is ready.');
+        await setLocalBaseUrl(host);
+        await AsyncStorage.setItem(STORAGE_KEYS.legacyBaseUrl, host);
+        await refreshLocalServerStatus();
+
+        try {
+          await serverConnection.initializePosId();
+        } catch (err: any) {
+          console.log('Warning: Could not fetch POS ID from server:', err?.message);
+        }
+
+        fireSuccessNotification();
+        navigation.navigate('Login' as never);
+        return;
+      }
+
+      const lastError = serverConnection.getLastError();
+      setDebugInfo(lastError ? `Connection failed: ${lastError}` : 'Connection failed.');
+      fireErrorNotification();
+      showToast(
+        'error',
+        'Unable to reach the POS server. Check the IP address and port, then try again.'
+      );
+    } catch (err: any) {
+      setDebugInfo(err?.message ? `Connection failed: ${err.message}` : 'Connection failed.');
+      fireErrorNotification();
+      showToast('error', err?.message || 'Unable to reach server');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (!initialized) {
     return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: colors.surface }}>
-            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-                <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', paddingVertical: 40, paddingHorizontal: 20 }} keyboardShouldPersistTaps="handled">
-                    <View className="items-center mb-6">
-                        <View className="w-20 h-20 rounded-full bg-primary items-center justify-center mb-4">
-                            <View className="w-10 h-10 rounded-full" style={{ backgroundColor: colors.searchBackground + '66' }} />
-                        </View>
-                        <Text className="text-2xl font-bold" style={{ color: colors.text }}>Connect to POS</Text>
-                        <Text className="text-sm mt-1" style={{ color: colors.textSecondary }}>Enter local server details</Text>
-                    </View>
-
-                    <View className="w-full max-w-md mx-auto rounded-2xl px-6 py-6" style={{ backgroundColor: colors.surface }}>
-                        <Text className="text-sm mb-2" style={{ color: colors.textSecondary }}>Server IP Address</Text>
-                        <TextInput
-                            value={ip}
-                            onChangeText={setIp}
-                            placeholder="e.g., 192.168.1.100"
-                            keyboardType={Platform.OS === 'ios' ? 'url' : 'default'}
-                            className="border border-border rounded-lg px-4 py-3 mb-4"
-                            style={{ backgroundColor: colors.searchBackground, color: colors.text }}
-                            returnKeyType="next"
-                            autoCorrect={false}
-                            editable={!loading}
-                        />
-
-                        <Text className="text-sm mb-2" style={{ color: colors.textSecondary }}>Port (optional)</Text>
-                        <TextInput
-                            value={port}
-                            onChangeText={setPort}
-                            placeholder="e.g., 4000"
-                            keyboardType="numeric"
-                            className="border border-border rounded-lg px-4 py-3 mb-6"
-                            style={{ backgroundColor: colors.searchBackground, color: colors.text }}
-                            returnKeyType="done"
-                            editable={!loading}
-                        />
-
-                        <PrimaryButton
-                            title="Connect to Local Server"
-                            onPress={testConnection}
-                            loading={loading}
-                            className="mt-2"
-                        />
-
-                        {!!debugInfo && (
-                            <Text className="text-xs mt-3" style={{ color: colors.textSecondary }}>
-                                {debugInfo}
-                            </Text>
-                        )}
-                    </View>
-                </ScrollView>
-            </KeyboardAvoidingView>
-        </SafeAreaView>
+      <SafeAreaView style={{ flex: 1, backgroundColor: colors.surface }}>
+        <View style={styles.loadingState}>
+          <Text style={{ color: colors.text }}>Loading connection settings...</Text>
+        </View>
+      </SafeAreaView>
     );
+  }
+
+  return (
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.surface }}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={{ flex: 1 }}
+      >
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.header}>
+            <View style={[styles.logoWrap, { backgroundColor: colors.primary + '12', borderColor: colors.border }]}>
+              <View style={[styles.logoInner, { backgroundColor: colors.primary + '18' }]}>
+                <MaterialIcons name="settings-input-antenna" size={22} color={colors.primary} />
+              </View>
+            </View>
+
+            <Text style={[styles.title, { color: colors.text }]}>Connect this device</Text>
+            <Text style={[styles.subtitle, { color: colors.textSecondary || colors.text }]}>
+              Enter the local POS server details before staff sign in.
+            </Text>
+          </View>
+
+          <View
+            style={[
+              styles.card,
+              Platform.OS === 'android'
+                ? { backgroundColor: colors.surface, elevation: 2 }
+                : {
+                    backgroundColor: colors.surface,
+                    shadowColor: colors.border,
+                    shadowOpacity: 0.05,
+                    shadowRadius: 8,
+                    shadowOffset: { width: 0, height: 4 },
+                  },
+            ]}
+          >
+            <Text style={[styles.label, { color: colors.textSecondary || colors.text }]}>Server IP Address</Text>
+            <View
+              style={[
+                styles.inputWrap,
+                { borderColor: colors.border, backgroundColor: colors.searchBackground || colors.surface },
+              ]}
+            >
+              <MaterialIcons
+                name="dns"
+                size={18}
+                color={colors.textSecondary || colors.text}
+                style={styles.inputIcon}
+              />
+              <TextInput
+                value={ip}
+                onChangeText={setIp}
+                placeholder="e.g., 192.168.1.100"
+                placeholderTextColor={colors.textSecondary || colors.text}
+                keyboardType={Platform.OS === 'ios' ? 'url' : 'default'}
+                style={[styles.input, { color: colors.text }]}
+                returnKeyType="next"
+                autoCorrect={false}
+                editable={!loading}
+              />
+            </View>
+
+            <Text style={[styles.label, styles.labelSpacing, { color: colors.textSecondary || colors.text }]}>
+              Port (optional)
+            </Text>
+            <View
+              style={[
+                styles.inputWrap,
+                { borderColor: colors.border, backgroundColor: colors.searchBackground || colors.surface },
+              ]}
+            >
+              <MaterialIcons
+                name="swap-vert"
+                size={18}
+                color={colors.textSecondary || colors.text}
+                style={styles.inputIcon}
+              />
+              <TextInput
+                value={port}
+                onChangeText={setPort}
+                placeholder="e.g., 4000"
+                placeholderTextColor={colors.textSecondary || colors.text}
+                keyboardType="numeric"
+                style={[styles.input, { color: colors.text }]}
+                returnKeyType="done"
+                editable={!loading}
+              />
+            </View>
+
+            <PrimaryButton
+              title={loading ? 'Connecting...' : 'Connect to Local Server'}
+              onPress={testConnection}
+              loading={loading}
+              className="mt-4"
+            />
+
+            {debugInfo ? (
+              <Text style={[styles.debugText, { color: colors.textSecondary || colors.text }]}>
+                {debugInfo}
+              </Text>
+            ) : null}
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
+  );
 }
 
-
+const styles = StyleSheet.create({
+  loadingState: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  scrollContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 40,
+  },
+  header: {
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  logoWrap: {
+    width: 72,
+    height: 72,
+    borderRadius: 22,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
+  },
+  logoInner: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginBottom: 8,
+  },
+  subtitle: {
+    fontSize: 14,
+    textAlign: 'center',
+  },
+  card: {
+    width: '100%',
+    maxWidth: 520,
+    alignSelf: 'center',
+    borderRadius: 20,
+    paddingHorizontal: 20,
+    paddingVertical: 20,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  labelSpacing: {
+    marginTop: 16,
+  },
+  inputWrap: {
+    borderWidth: 1,
+    borderRadius: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    minHeight: 56,
+  },
+  inputIcon: {
+    marginRight: 10,
+  },
+  input: {
+    flex: 1,
+    fontSize: 16,
+    paddingVertical: 12,
+  },
+  debugText: {
+    marginTop: 12,
+    fontSize: 12,
+    lineHeight: 18,
+  },
+});

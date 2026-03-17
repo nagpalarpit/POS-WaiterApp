@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Modal, View, Text, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { STORAGE_KEYS } from '../constants/storageKeys';
 import { useTheme } from '../theme/ThemeProvider';
 import Card from './Card';
 import { useToast } from './ToastProvider';
@@ -43,7 +44,7 @@ export default function PinModal({ visible, onClose, onVerified }: Props) {
 
     setChecking(true);
     try {
-      const userDataStr = await AsyncStorage.getItem('userData');
+      const userDataStr = await AsyncStorage.getItem(STORAGE_KEYS.authUser);
       const userData = userDataStr ? JSON.parse(userDataStr) : null;
       const companyId = normalizeCompanyId(userData);
       const where: any = { 'userInfo.pin': trimmed };

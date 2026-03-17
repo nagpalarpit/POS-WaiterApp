@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { STORAGE_KEYS } from '../constants/storageKeys';
 import orderService, { PlaceOrderItemPayload } from '../services/orderService';
 import cartService, { Cart, CartItem, AttributeValue } from '../services/cartService';
 import posIdService from '../services/posIdService';
@@ -163,7 +164,7 @@ export const useOrderSubmit = (
 
       setLoading(true);
 
-      const userDataStr = await AsyncStorage.getItem('userData');
+      const userDataStr = await AsyncStorage.getItem(STORAGE_KEYS.authUser);
       const userData = userDataStr ? JSON.parse(userDataStr) : null;
       const companyId = Number(
         existingOrder?.companyId ||

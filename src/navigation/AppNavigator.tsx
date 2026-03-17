@@ -1,40 +1,36 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { NavigationContainer } from '@react-navigation/native';
+import { DrawerActions, NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createDrawerNavigator, DrawerContentComponentProps } from '@react-navigation/drawer';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { View, Text, Switch, TouchableOpacity, ScrollView } from 'react-native';
+import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 
 import IPEntryScreen from '../screens/IPEntryScreen';
 import LoginScreen from '../screens/LoginScreen';
+import ComingSoonScreen from '../screens/ComingSoonScreen';
+import SettingsScreen from '../screens/SettingsScreen';
 import DashboardScreen from '../screens/DashboardScreen';
 import MenuScreen from '../screens/MenuScreen';
 import CheckoutScreen from '../screens/CheckoutScreen';
 import OrderDetailsScreen from '../screens/OrderDetailsScreen';
-import PaymentScreen from '../components/PaymentModal';
-import CartScreen from '../components/MenuScreen/CartDrawer';
-import serverConnection from '../services/serverConnection';
 import authService from '../services/authService';
 import posIdService from '../services/posIdService';
-import { initLocalSocket, initCloudSocket } from '../services/socket';
-import { initOrderSync, onOrderSync } from '../services/orderSyncService';
+import serverConnection from '../services/serverConnection';
+import { onOrderSync } from '../services/orderSyncService';
 import { useTheme } from '../theme/ThemeProvider';
 import { useToast } from '../components/ToastProvider';
 import { useConnection } from '../contexts/ConnectionProvider';
+import { useAuth } from '../contexts/AuthContext';
+import { STORAGE_KEYS } from '../constants/storageKeys';
+import StatusBarIndicator from '../components/StatusBarIndicator';
 
 export type RootStackParamList = {
   IPEntry: undefined;
   Login: undefined;
   Dashboard: undefined;
   Menu: {
-    tableNo?: number;
-    deliveryType: number;
-    existingOrder?: any;
-    tableArea?: any;
-  };
-  Cart: {
     tableNo?: number;
     deliveryType: number;
     existingOrder?: any;
@@ -50,20 +46,15 @@ export type RootStackParamList = {
   OrderDetails: {
     order: any;
   };
-  Payment: {
-    title?: string;
-    orderTotal?: number;
-    companyId?: number;
-    splitItems?: any[];
-    allowSplitOption?: boolean;
-    hidePrintPreview?: boolean;
-  };
 };
 
 type RootDrawerParamList = {
   Main: undefined;
   IPEntry: undefined;
   Login: undefined;
+  Account: undefined;
+  Settings: undefined;
+  Support: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -76,52 +67,102 @@ type DrawerUser = {
   subtitle: string;
 };
 
+type HeaderMenuButtonProps = {
+  color: string;
+  onPress: () => void;
+};
+
+function HeaderMenuButton({ color, onPress }: HeaderMenuButtonProps) {
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+      style={{ width: 36, height: 36, alignItems: 'center', justifyContent: 'center', marginLeft: 2 }}
+    >
+      <MaterialIcons name="menu" size={24} color={color} />
+    </TouchableOpacity>
+  );
+}
+
 function MainStack() {
+  const { colors } = useTheme();
+
   return (
     <Stack.Navigator
       screenOptions={{
-        headerShown: false,
+        headerShown: true,
+        headerStyle: { backgroundColor: colors.background },
+        headerTintColor: colors.text,
+        headerShadowVisible: false,
       }}
-      initialRouteName="Dashboard">
-      <Stack.Screen name="Dashboard" component={DashboardScreen} options={{ headerShown: true }} />
-      <Stack.Screen name="Menu" component={MenuScreen} options={{ headerShown: true }} />
-      <Stack.Screen name="Cart" component={CartScreen} options={{ headerShown: true }} />
-      <Stack.Screen name="Checkout" component={CheckoutScreen} options={{ headerShown: true }} />
-      <Stack.Screen name="OrderDetails" component={OrderDetailsScreen} options={{ headerShown: true }} />
-      <Stack.Screen name="Payment" component={PaymentScreen} options={{ headerShown: true }} />
+      initialRouteName="Dashboard"
+    >
+      <Stack.Screen
+        name="Dashboard"
+        component={DashboardScreen}
+        options={({ navigation }) => ({
+          title: 'Dashboard',
+          headerLeft: ({ tintColor }) => (
+            <HeaderMenuButton
+              color={tintColor || colors.text}
+              onPress={() => navigation.getParent()?.dispatch(DrawerActions.openDrawer())}
+            />
+          ),
+        })}
+      />
+      <Stack.Screen name="Menu" component={MenuScreen} options={{ title: 'Menu' }} />
+      <Stack.Screen name="Checkout" component={CheckoutScreen} options={{ title: 'Checkout' }} />
+      <Stack.Screen name="OrderDetails" component={OrderDetailsScreen} options={{ title: 'Order Details' }} />
     </Stack.Navigator>
+  );
+}
+
+function AccountScreen() {
+  return (
+    <ComingSoonScreen
+      title="Account"
+      description="Profile details, shift preferences, and device-specific account options will live here."
+      icon="person-outline"
+    />
+  );
+}
+
+function SupportScreen() {
+  return (
+    <ComingSoonScreen
+      title="Help & Support"
+      description="Support contacts, troubleshooting help, and short guides will appear here."
+      icon="help-outline"
+    />
   );
 }
 
 function CustomDrawerContent(props: DrawerContentComponentProps) {
   const { colors } = useTheme();
-  const [updatingConnection, setUpdatingConnection] = useState(false);
+  const { showToast } = useToast();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [drawerUser, setDrawerUser] = useState<DrawerUser>({
     displayName: 'Waiter',
     subtitle: 'POS Waiter App',
   });
-  const { showToast } = useToast();
-  const { isLocalServerReachable, refreshLocalServerStatus } = useConnection();
-  const isOnline = isLocalServerReachable;
 
   useEffect(() => {
     const hydrateDrawer = async () => {
       try {
-        const rawUser = await AsyncStorage.getItem('userData');
+        const rawUser = await AsyncStorage.getItem(STORAGE_KEYS.authUser);
         const parsedUser = rawUser ? JSON.parse(rawUser) : null;
 
         const firstName = parsedUser?.firstName || parsedUser?.name || '';
         const lastName = parsedUser?.lastName || '';
-        const name = [firstName, lastName].filter(Boolean).join(' ').trim();
+        const fullName = [firstName, lastName].filter(Boolean).join(' ').trim();
         const email = parsedUser?.email || parsedUser?.userName || '';
         const companyName = parsedUser?.company?.name || parsedUser?.companyName || '';
 
         setDrawerUser({
-          displayName: name || companyName || 'Waiter',
+          displayName: fullName || companyName || 'Waiter',
           subtitle: email || companyName || 'POS Waiter App',
         });
-      } catch (error) {
+      } catch (_) {
         setDrawerUser({
           displayName: 'Waiter',
           subtitle: 'POS Waiter App',
@@ -142,33 +183,20 @@ function CustomDrawerContent(props: DrawerContentComponentProps) {
     return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
   }, [drawerUser.displayName]);
 
+  const drawerItems: Array<{
+    route: DrawerRouteName;
+    label: string;
+    icon: React.ComponentProps<typeof MaterialIcons>['name'];
+  }> = [
+      { route: 'Main', label: 'Dashboard', icon: 'dashboard' },
+      { route: 'Account', label: 'Account', icon: 'person-outline' },
+      { route: 'Settings', label: 'Settings', icon: 'settings' },
+      { route: 'Support', label: 'Help & Support', icon: 'help-outline' },
+    ];
+
   const navigateTo = (routeName: DrawerRouteName) => {
     props.navigation.navigate(routeName);
     props.navigation.closeDrawer();
-  };
-
-  const handleOnlineToggle = async (nextValue: boolean) => {
-    try {
-      setUpdatingConnection(true);
-
-      if (!nextValue) {
-        await serverConnection.disconnect();
-        await refreshLocalServerStatus();
-        return;
-      }
-
-      const status = await serverConnection.initializeConnection();
-      await refreshLocalServerStatus();
-
-      if (!status.isConnected) {
-        showToast('error', 'Unable to connect to the local server. Update IP settings and try again.');
-      }
-    } catch (error) {
-      await refreshLocalServerStatus();
-      showToast('error', 'There was an issue updating server connection status.');
-    } finally {
-      setUpdatingConnection(false);
-    }
   };
 
   const clearWebStorage = () => {
@@ -176,11 +204,12 @@ function CustomDrawerContent(props: DrawerContentComponentProps) {
       const anyGlobal = globalThis as any;
       if (anyGlobal?.localStorage?.clear) anyGlobal.localStorage.clear();
       if (anyGlobal?.sessionStorage?.clear) anyGlobal.sessionStorage.clear();
-    } catch (_) {}
+    } catch (_) { }
   };
 
   const handleLogout = async () => {
     if (isLoggingOut) return;
+
     setIsLoggingOut(true);
     try {
       await authService.logout();
@@ -188,7 +217,7 @@ function CustomDrawerContent(props: DrawerContentComponentProps) {
       await serverConnection.disconnect();
       await AsyncStorage.clear();
       clearWebStorage();
-    } catch (error) {
+    } catch (_) {
       showToast('error', 'Unable to logout. Please try again.');
     } finally {
       setIsLoggingOut(false);
@@ -200,39 +229,13 @@ function CustomDrawerContent(props: DrawerContentComponentProps) {
     }
   };
 
-  const drawerItems: Array<{
-    route: DrawerRouteName;
-    label: string;
-    subtitle: string;
-    icon: React.ComponentProps<typeof MaterialIcons>['name'];
-  }> = [
-    {
-      route: 'Main',
-      label: 'Dashboard',
-      subtitle: 'Tables, orders, and live activity',
-      icon: 'dashboard',
-    },
-    {
-      route: 'IPEntry',
-      label: 'Connection Settings',
-      subtitle: 'Manage local server IP and status',
-      icon: 'settings-input-antenna',
-    },
-    {
-      route: 'Login',
-      label: 'Account',
-      subtitle: 'Switch profile or log in again',
-      icon: 'person-outline',
-    },
-  ];
-
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top', 'bottom']}>
       <View
         style={{
-          paddingHorizontal: 16,
-          paddingTop: 10,
-          paddingBottom: 14,
+          paddingHorizontal: 18,
+          paddingTop: 16,
+          paddingBottom: 18,
           borderBottomWidth: 1,
           borderBottomColor: colors.border,
           backgroundColor: colors.background,
@@ -241,12 +244,12 @@ function CustomDrawerContent(props: DrawerContentComponentProps) {
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
           <View
             style={{
-              width: 44,
-              height: 44,
-              borderRadius: 22,
-              backgroundColor: colors.primary + '22',
-              justifyContent: 'center',
+              width: 46,
+              height: 46,
+              borderRadius: 23,
+              backgroundColor: colors.primary + '18',
               alignItems: 'center',
+              justifyContent: 'center',
               marginRight: 12,
             }}
           >
@@ -276,35 +279,6 @@ function CustomDrawerContent(props: DrawerContentComponentProps) {
             <MaterialIcons name="close" size={18} color={colors.text} />
           </TouchableOpacity>
         </View>
-
-        <View
-          style={{
-            alignSelf: 'flex-start',
-            marginTop: 14,
-            flexDirection: 'row',
-            alignItems: 'center',
-            paddingHorizontal: 10,
-            paddingVertical: 6,
-            borderRadius: 999,
-            backgroundColor: isOnline ? colors.success + '20' : colors.warning + '20',
-          }}
-        >
-          <MaterialIcons
-            name={isOnline ? 'wifi' : 'wifi-off'}
-            size={14}
-            color={isOnline ? colors.success : colors.warning}
-          />
-          <Text
-            style={{
-              marginLeft: 6,
-              color: isOnline ? colors.success : colors.warning,
-              fontSize: 12,
-              fontWeight: '700',
-            }}
-          >
-            {isOnline ? 'Online' : 'Offline'}
-          </Text>
-        </View>
       </View>
 
       <View style={{ flex: 1 }}>
@@ -312,32 +286,45 @@ function CustomDrawerContent(props: DrawerContentComponentProps) {
           style={{ flex: 1 }}
           contentContainerStyle={{ paddingHorizontal: 12, paddingTop: 14, paddingBottom: 24 }}
         >
+          <Text
+            style={{
+              color: colors.textSecondary,
+              fontSize: 12,
+              fontWeight: '700',
+              letterSpacing: 0.6,
+              textTransform: 'uppercase',
+              paddingHorizontal: 8,
+              marginBottom: 10,
+            }}
+          >
+            Menu
+          </Text>
+
           {drawerItems.map((item) => {
             const isActive = activeRoute === item.route;
+
             return (
               <TouchableOpacity
                 key={item.route}
                 onPress={() => navigateTo(item.route)}
                 activeOpacity={0.8}
                 style={{
-                  borderRadius: 14,
-                  borderWidth: 1,
-                  borderColor: isActive ? colors.primary : colors.border,
-                  backgroundColor: isActive ? colors.primary + '14' : colors.surface,
+                  borderRadius: 16,
+                  backgroundColor: isActive ? colors.primary + '12' : 'transparent',
                   paddingHorizontal: 12,
-                  paddingVertical: 12,
-                  marginBottom: 10,
+                  paddingVertical: 13,
+                  marginBottom: 4,
                 }}
               >
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                   <View
                     style={{
-                      width: 36,
-                      height: 36,
-                      borderRadius: 10,
+                      width: 38,
+                      height: 38,
+                      borderRadius: 12,
                       alignItems: 'center',
                       justifyContent: 'center',
-                      backgroundColor: isActive ? colors.primary + '20' : colors.surfaceHover,
+                      backgroundColor: isActive ? colors.primary + '18' : colors.surfaceHover,
                     }}
                   >
                     <MaterialIcons
@@ -347,9 +334,10 @@ function CustomDrawerContent(props: DrawerContentComponentProps) {
                     />
                   </View>
 
-                  <View style={{ flex: 1, marginLeft: 10 }}>
-                    <Text style={{ color: colors.text, fontSize: 15, fontWeight: '700' }}>{item.label}</Text>
-                    <Text style={{ color: colors.textSecondary, fontSize: 12, marginTop: 2 }}>{item.subtitle}</Text>
+                  <View style={{ flex: 1, marginLeft: 12 }}>
+                    <Text style={{ color: colors.text, fontSize: 15, fontWeight: isActive ? '700' : '600' }}>
+                      {item.label}
+                    </Text>
                   </View>
 
                   <MaterialIcons name="chevron-right" size={18} color={colors.textSecondary || colors.text} />
@@ -357,65 +345,12 @@ function CustomDrawerContent(props: DrawerContentComponentProps) {
               </TouchableOpacity>
             );
           })}
-
-          <View
-            style={{
-              marginTop: 8,
-              borderRadius: 14,
-              borderWidth: 1,
-              borderColor: colors.border,
-              backgroundColor: colors.surface,
-              paddingHorizontal: 12,
-              paddingVertical: 12,
-            }}
-          >
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <View
-                style={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: 10,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  backgroundColor: colors.surfaceHover,
-                }}
-              >
-                <MaterialIcons
-                  name={isOnline ? 'cloud-done' : 'cloud-off'}
-                  size={20}
-                  color={isOnline ? colors.success : colors.warning}
-                />
-              </View>
-              <View style={{ flex: 1, marginLeft: 10 }}>
-                <Text style={{ color: colors.text, fontSize: 15, fontWeight: '700' }}>Local Server</Text>
-                <Text style={{ color: colors.textSecondary, fontSize: 12, marginTop: 2 }}>
-                  {isOnline ? 'Connected and ready to sync' : 'Disconnected from server'}
-                </Text>
-              </View>
-              <Switch
-                value={isOnline}
-                onValueChange={handleOnlineToggle}
-                disabled={updatingConnection}
-                thumbColor={isOnline ? colors.primary : '#f4f3f4'}
-                trackColor={{ false: colors.border, true: colors.primary + '55' }}
-              />
-            </View>
-
-            {!isOnline && (
-              <TouchableOpacity
-                onPress={() => navigateTo('IPEntry')}
-                style={{ marginTop: 10, alignSelf: 'flex-start', paddingVertical: 6, paddingHorizontal: 8 }}
-              >
-                <Text style={{ color: colors.primary, fontWeight: '700', fontSize: 13 }}>Fix connection</Text>
-              </TouchableOpacity>
-            )}
-          </View>
         </ScrollView>
 
         <View
           style={{
-            paddingHorizontal: 12,
-            paddingBottom: 12,
+            paddingHorizontal: 16,
+            paddingBottom: 14,
             paddingTop: 10,
             borderTopWidth: 1,
             borderTopColor: colors.border,
@@ -430,7 +365,7 @@ function CustomDrawerContent(props: DrawerContentComponentProps) {
               flexDirection: 'row',
               alignItems: 'center',
               justifyContent: 'center',
-              borderRadius: 12,
+              borderRadius: 14,
               paddingVertical: 12,
               backgroundColor: isLoggingOut ? colors.border : colors.error,
             }}
@@ -449,38 +384,8 @@ function CustomDrawerContent(props: DrawerContentComponentProps) {
 export default function AppNavigator() {
   const { colors } = useTheme();
   const { showToast } = useToast();
-  const [ready, setReady] = useState(false);
-  const [initialRoute, setInitialRoute] = useState<keyof RootDrawerParamList>('IPEntry');
-
-  useEffect(() => {
-    const boot = async () => {
-      try {
-        const conn = await serverConnection.initializeConnection();
-        const token = await AsyncStorage.getItem('token');
-        const localToken = await AsyncStorage.getItem('local_token');
-
-        if (token || localToken) {
-          const localSocket = await initLocalSocket();
-          if (localSocket) {
-            initOrderSync();
-          } else {
-            await initCloudSocket();
-            initOrderSync();
-          }
-          if (conn.isConnected) setInitialRoute('Main');
-          else setInitialRoute('Login');
-        } else {
-          setInitialRoute('IPEntry');
-        }
-      } catch (error) {
-        setInitialRoute('IPEntry');
-      } finally {
-        setReady(true);
-      }
-    };
-
-    boot();
-  }, []);
+  const { isAuthenticated, isLoading } = useAuth();
+  const { isLocalServerReachable } = useConnection();
 
   useEffect(() => {
     const unsubscribe = onOrderSync((payload) => {
@@ -489,6 +394,7 @@ export default function AppNavigator() {
         showToast('success', 'Print successful');
         return;
       }
+
       if (eventType === 'PRINT_ERROR') {
         const message =
           payload?.orderData?.printMessage ||
@@ -499,38 +405,98 @@ export default function AppNavigator() {
       }
     });
 
-    return () => {
-      if (typeof unsubscribe === 'function') {
-        unsubscribe();
-      }
-    };
+    return unsubscribe;
   }, [showToast]);
 
-  if (!ready) return null;
+  if (isLoading) {
+    return null;
+  }
+
+  const initialRouteName: DrawerRouteName = isAuthenticated
+    ? 'Main'
+    : isLocalServerReachable
+      ? 'Login'
+      : 'IPEntry';
+  const navigatorKey = isAuthenticated ? 'authenticated' : initialRouteName;
 
   return (
     <NavigationContainer>
-      <Drawer.Navigator
-        drawerContent={(props) => <CustomDrawerContent {...props} />}
-        screenOptions={{
-          headerShown: false,
-          drawerType: 'front',
-          overlayColor: colors.overlay || 'rgba(0, 0, 0, 0.35)',
-          drawerStyle: {
-            width: '84%',
-            borderTopRightRadius: 16,
-            borderBottomRightRadius: 16,
-            backgroundColor: colors.background,
-          },
-        }}
-        initialRouteName={initialRoute}
-      >
-        <Drawer.Screen name="Main" component={MainStack} />
-        <Drawer.Screen name="IPEntry" component={IPEntryScreen} />
-        <Drawer.Screen name="Login" component={LoginScreen} />
-      </Drawer.Navigator>
+      <View style={{ flex: 1, backgroundColor: colors.background }}>
+        <StatusBarIndicator />
+        <View style={{ flex: 1 }}>
+          <Drawer.Navigator
+            key={navigatorKey}
+            initialRouteName={initialRouteName}
+            drawerContent={(props) => <CustomDrawerContent {...props} />}
+            screenOptions={{
+              headerShown: false,
+              drawerType: 'front',
+              overlayColor: colors.overlay || 'rgba(0, 0, 0, 0.35)',
+              drawerStyle: {
+                width: '82%',
+                borderTopRightRadius: 18,
+                borderBottomRightRadius: 18,
+                backgroundColor: colors.background,
+              },
+            }}
+          >
+            <Drawer.Screen name="Main" component={MainStack} />
+            <Drawer.Screen name="IPEntry" component={IPEntryScreen} />
+            <Drawer.Screen name="Login" component={LoginScreen} />
+            <Drawer.Screen
+              name="Account"
+              component={AccountScreen}
+              options={({ navigation }) => ({
+                headerShown: true,
+                title: 'Account',
+                headerStyle: { backgroundColor: colors.background },
+                headerTintColor: colors.text,
+                headerShadowVisible: false,
+                headerLeft: ({ tintColor }) => (
+                  <HeaderMenuButton
+                    color={tintColor || colors.text}
+                    onPress={() => navigation.dispatch(DrawerActions.openDrawer())}
+                  />
+                ),
+              })}
+            />
+            <Drawer.Screen
+              name="Settings"
+              component={SettingsScreen}
+              options={({ navigation }) => ({
+                headerShown: true,
+                title: 'Settings',
+                headerStyle: { backgroundColor: colors.background },
+                headerTintColor: colors.text,
+                headerShadowVisible: false,
+                headerLeft: ({ tintColor }) => (
+                  <HeaderMenuButton
+                    color={tintColor || colors.text}
+                    onPress={() => navigation.dispatch(DrawerActions.openDrawer())}
+                  />
+                ),
+              })}
+            />
+            <Drawer.Screen
+              name="Support"
+              component={SupportScreen}
+              options={({ navigation }) => ({
+                headerShown: true,
+                title: 'Help & Support',
+                headerStyle: { backgroundColor: colors.background },
+                headerTintColor: colors.text,
+                headerShadowVisible: false,
+                headerLeft: ({ tintColor }) => (
+                  <HeaderMenuButton
+                    color={tintColor || colors.text}
+                    onPress={() => navigation.dispatch(DrawerActions.openDrawer())}
+                  />
+                ),
+              })}
+            />
+          </Drawer.Navigator>
+        </View>
+      </View>
     </NavigationContainer>
   );
 }
-
-
