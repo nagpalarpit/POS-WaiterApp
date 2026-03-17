@@ -11,7 +11,8 @@
     "eas:android": "eas build --platform android --profile production",
     "eas:ios": "eas build --platform ios --profile production",
     "build:all": "npm run eas:android && npm run eas:ios",
-    "eas:preview": "eas build --platform android --profile preview"
+    "eas:preview": "eas build --platform android --profile preview",
+    "build:android": "cd android && ./gradlew assembleRelease && cd .."
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
