@@ -1,17 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import {
-  Modal,
   View,
   Text,
   TextInput,
   TouchableOpacity,
-  KeyboardAvoidingView,
-  Platform,
   ActivityIndicator,
 } from 'react-native';
 import { useTheme } from '../theme/ThemeProvider';
-import Card from './Card';
 import { useToast } from './ToastProvider';
+import BottomDrawer from './BottomDrawer';
 
 type Props = {
   visible: boolean;
@@ -46,139 +43,99 @@ export default function CancelOrderModal({
   };
 
   return (
-    <Modal
+    <BottomDrawer
       visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={onClose}
-      statusBarTranslucent
-    >
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={{ flex: 1, justifyContent: 'center', paddingHorizontal: 16 }}
-      >
-        <View
-          style={{
-            position: 'absolute',
-            top: 0,
-            right: 0,
-            bottom: 0,
-            left: 0,
-            backgroundColor: 'rgba(0,0,0,0.5)',
-          }}
-        />
-
-        <Card rounded={12} style={{ padding: 16, borderColor: colors.border }}>
-          <View
+      onClose={onClose}
+      closeDisabled={loading}
+      title="Cancel Order"
+      subtitle="Enter a reason to continue."
+      footer={
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <TouchableOpacity
+            onPress={onClose}
+            disabled={loading}
             style={{
-              flexDirection: 'row',
-              justifyContent: 'space-between',
-              alignItems: 'center',
+              flex: 1,
+              padding: 12,
+              borderRadius: 10,
+              borderWidth: 1.5,
+              borderColor: colors.border,
             }}
           >
-            <View>
-              <Text
-                style={{ color: colors.text, fontWeight: '700', fontSize: 16 }}
-              >
-                Cancel Order
-              </Text>
-              <Text
-                style={{ color: colors.textSecondary, fontSize: 12, marginTop: 2 }}
-              >
-                Enter a reason to continue
-              </Text>
-            </View>
-            <TouchableOpacity onPress={onClose} disabled={loading}>
-              <Text style={{ color: colors.textSecondary, fontSize: 20 }}>x</Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={{ marginTop: 16 }}>
             <Text
               style={{
+                textAlign: 'center',
                 color: colors.textSecondary,
-                fontSize: 12,
                 fontWeight: '600',
-                marginBottom: 8,
               }}
             >
-              Reason
+              Cancel
             </Text>
-            <TextInput
-              value={reason}
-              onChangeText={setReason}
-              placeholder="Enter cancel reason"
-              placeholderTextColor={colors.textSecondary}
-              style={{
-                color: colors.text,
-                borderWidth: 1,
-                borderColor: colors.border,
-                borderRadius: 8,
-                padding: 10,
-                minHeight: 90,
-                textAlignVertical: 'top',
-                backgroundColor: colors.surface,
-              }}
-              multiline
-            />
-          </View>
-
-          <View style={{ flexDirection: 'row', gap: 8, marginTop: 16 }}>
-            <TouchableOpacity
-              onPress={onClose}
-              disabled={loading}
-              style={{
-                flex: 1,
-                padding: 12,
-                borderRadius: 8,
-                borderWidth: 1.5,
-                borderColor: colors.border,
-              }}
-            >
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={handleConfirm}
+            disabled={!reason.trim() || loading}
+            style={{
+              flex: 1,
+              padding: 12,
+              borderRadius: 10,
+              backgroundColor:
+                !reason.trim() || loading ? colors.border : colors.error,
+            }}
+          >
+            <View style={{ alignItems: 'center', justifyContent: 'center' }}>
               <Text
                 style={{
                   textAlign: 'center',
-                  color: colors.textSecondary,
-                  fontWeight: '600',
+                  color: colors.textInverse,
+                  fontWeight: '700',
+                  opacity: loading ? 0 : 1,
                 }}
               >
-                Cancel
+                Confirm
               </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={handleConfirm}
-              disabled={!reason.trim() || loading}
-              style={{
-                flex: 1,
-                padding: 12,
-                borderRadius: 8,
-                backgroundColor:
-                  !reason.trim() || loading ? colors.border : colors.error,
-              }}
-            >
-              <View style={{ alignItems: 'center', justifyContent: 'center' }}>
-                <Text
-                  style={{
-                    textAlign: 'center',
-                    color: colors.textInverse,
-                    fontWeight: '700',
-                    opacity: loading ? 0 : 1,
-                  }}
-                >
-                  Confirm
-                </Text>
-                {loading ? (
-                  <ActivityIndicator
-                    size="small"
-                    color={colors.textInverse}
-                    style={{ position: 'absolute' }}
-                  />
-                ) : null}
-              </View>
-            </TouchableOpacity>
-          </View>
-        </Card>
-      </KeyboardAvoidingView>
-    </Modal>
+              {loading ? (
+                <ActivityIndicator
+                  size="small"
+                  color={colors.textInverse}
+                  style={{ position: 'absolute' }}
+                />
+              ) : null}
+            </View>
+          </TouchableOpacity>
+        </View>
+      }
+      maxHeightRatio={0.7}
+    >
+      <View style={{ marginTop: 4 }}>
+        <Text
+          style={{
+            color: colors.textSecondary,
+            fontSize: 12,
+            fontWeight: '600',
+            marginBottom: 8,
+          }}
+        >
+          Reason
+        </Text>
+        <TextInput
+          value={reason}
+          onChangeText={setReason}
+          placeholder="Enter cancel reason"
+          placeholderTextColor={colors.textSecondary}
+          style={{
+            color: colors.text,
+            borderWidth: 1,
+            borderColor: colors.border,
+            borderRadius: 10,
+            padding: 12,
+            minHeight: 120,
+            textAlignVertical: 'top',
+            backgroundColor: colors.surface,
+          }}
+          multiline
+        />
+      </View>
+    </BottomDrawer>
   );
 }

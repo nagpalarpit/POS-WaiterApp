@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
-import { Modal, View, Text, TouchableOpacity, ScrollView } from 'react-native';
-import { MaterialIcons } from '@expo/vector-icons';
+import { View, Text, TouchableOpacity } from 'react-native';
 import { useTheme } from '../theme/ThemeProvider';
+import BottomDrawer from './BottomDrawer';
 
 type Props = {
   visible: boolean;
@@ -32,7 +32,11 @@ const buildAvailableLabels = (existingLabels: string[] = []) => {
   return labels;
 };
 
-export default function GroupModal({ visible, existingLabels = [], onSelect }: Props) {
+export default function GroupModal({
+  visible,
+  existingLabels = [],
+  onSelect,
+}: Props) {
   const { colors } = useTheme();
   const labels = useMemo(
     () => buildAvailableLabels(existingLabels),
@@ -44,100 +48,43 @@ export default function GroupModal({ visible, existingLabels = [], onSelect }: P
   };
 
   return (
-    <Modal
+    <BottomDrawer
       visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={handleClose}
+      onClose={handleClose}
+      eyebrow="GROUP"
+      title="Select Group Label"
+      maxHeightRatio={0.62}
     >
       <View
         style={{
-          flex: 1,
-          backgroundColor: colors.overlay || 'rgba(0,0,0,0.4)',
-          justifyContent: 'center',
-          alignItems: 'center',
-          padding: 16,
+          flexDirection: 'row',
+          flexWrap: 'wrap',
+          gap: 12,
         }}
       >
-        <View
-          style={{
-            width: '100%',
-            maxWidth: 520,
-            backgroundColor: colors.surface,
-            borderRadius: 18,
-            borderWidth: 1,
-            borderColor: colors.border,
-            overflow: 'hidden',
-          }}
-        >
-          <View
+        {labels.map((label) => (
+          <TouchableOpacity
+            key={label}
+            onPress={() => onSelect(label)}
             style={{
-              paddingHorizontal: 16,
-              paddingVertical: 14,
-              borderBottomWidth: 1,
-              borderBottomColor: colors.border,
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-            }}
-          >
-            <View>
-              <Text style={{ color: colors.textSecondary, fontSize: 11, letterSpacing: 2 }}>
-                GROUP
-              </Text>
-              <Text style={{ color: colors.text, fontSize: 18, fontWeight: '700' }}>
-                Select Group Label
-              </Text>
-            </View>
-            <TouchableOpacity
-              onPress={handleClose}
-              style={{
-                width: 36,
-                height: 36,
-                borderRadius: 18,
-                backgroundColor: colors.surfaceHover || colors.background,
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <MaterialIcons name="close" size={20} color={colors.text} />
-            </TouchableOpacity>
-          </View>
-
-          <ScrollView
-            contentContainerStyle={{
-              paddingHorizontal: 16,
+              flexGrow: 1,
+              flexBasis: '45%',
+              minWidth: 150,
               paddingVertical: 16,
-              flexDirection: 'row',
-              flexWrap: 'wrap',
-              gap: 12,
+              paddingHorizontal: 12,
+              borderRadius: 14,
+              borderWidth: 2,
+              borderColor: colors.border,
+              backgroundColor: colors.backgroundSecondary || colors.surface,
+              alignItems: 'center',
             }}
           >
-            {labels.map((label) => (
-              <TouchableOpacity
-                key={label}
-                onPress={() => onSelect(label)}
-                style={{
-                  flexGrow: 1,
-                  flexBasis: '45%',
-                  minWidth: 150,
-                  paddingVertical: 16,
-                  paddingHorizontal: 12,
-                  borderRadius: 14,
-                  borderWidth: 2,
-                  borderColor: colors.border,
-                  backgroundColor: colors.backgroundSecondary || colors.surface,
-                  alignItems: 'center',
-                }}
-              >
-                <Text style={{ color: colors.text, fontWeight: '700', fontSize: 15 }}>
-                  {label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
+            <Text style={{ color: colors.text, fontWeight: '700', fontSize: 15 }}>
+              {label}
+            </Text>
+          </TouchableOpacity>
+        ))}
       </View>
-    </Modal>
+    </BottomDrawer>
   );
 }

@@ -36,7 +36,6 @@ import {
   getItemOptionsSummary,
   getItemUnitTotal,
 } from "../utils/cartCalculations";
-import PaymentModal from "../components/PaymentModal";
 import PinModal from "../components/PinModal";
 import CancelOrderModal from "../components/CancelOrderModal";
 import { formatCurrency } from "../utils/currency";
@@ -716,7 +715,6 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
   const [selectedPaymentId, setSelectedPaymentId] = useState<number | null>(
     paymentProcessorId ?? null,
   );
-  const [paymentModalVisible, setPaymentModalVisible] = useState(false);
   const [pendingSettle, setPendingSettle] = useState(false);
   const pendingSettleRef = useRef(false);
 
@@ -2692,51 +2690,6 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
           </>
         )}
       </ScrollView>
-
-      <PaymentModal
-        visible={paymentModalVisible}
-        onClose={() => {
-          setPaymentModalVisible(false);
-          setPendingSettle(false);
-        }}
-        onPrintPreview={handlePrintPreview}
-        hidePrintPreview={hideDeleteForSplit}
-        isBlocked={isLocalServerDisconnected}
-        blockTitle={
-          showLocalServerOfflineNotice
-            ? "Local Server Disconnected"
-            : "Local Server Unavailable"
-        }
-        blockMessage={
-          showLocalServerOfflineNotice
-            ? "Internet is available, but the local POS server is disconnected. Reconnect to continue payment."
-            : "Local server is disconnected. Payments are disabled until it reconnects."
-        }
-        onSelect={async (option: any) => {
-          setSelectedPaymentId(
-            toNumber(option?.paymentMethod ?? option?.id, 0),
-          );
-          if (!pendingSettle) return;
-
-          const isSplitSelection = option?.isItemSplit === true;
-          if (!isSplitSelection) {
-            setPaymentModalVisible(false);
-          }
-
-          const settleResult = await settleOrderWithPayment(option);
-          if (isSplitSelection && settleResult?.keepModalOpen) {
-            setPaymentModalVisible(true);
-            setPendingSettle(true);
-            return;
-          }
-
-          setPendingSettle(false);
-        }}
-        orderTotal={totals.total}
-        companyId={resolvedCompanyId}
-        splitItems={splitPaymentItems}
-        allowSplitOption={allowSplitOption}
-      />
 
       <PinModal
         visible={pinModalVisible}
