@@ -9,8 +9,6 @@ import {
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeProvider';
 import { formatCurrency } from '../utils/currency';
-import Card from './Card';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AppBottomSheet from './AppBottomSheet';
 
 interface MenuItemVariant {
@@ -52,8 +50,7 @@ export default function ItemDetailsModal({
     onClose,
     onConfirm,
 }: ItemDetailsModalProps) {
-    const { colors, name } = useTheme();
-    const insets = useSafeAreaInsets();
+    const { colors } = useTheme();
 
     const [selectedVariant, setSelectedVariant] = useState<MenuItemVariant | null>(null);
     const [selectedAttribute, setSelectedAttribute] = useState<MenuItemVariantAttribute | null>(null);
@@ -266,53 +263,38 @@ export default function ItemDetailsModal({
 
     if (!item) return null;
 
+    const footer = (
+        <View>
+            <View style={styles.footerSummary}>
+                <Text style={[styles.footerLabel, { color: colors.textSecondary || colors.text }]}>Total Price</Text>
+                <Text style={[styles.footerTotal, { color: colors.primary }]}>
+                    {formatCurrency(calculateTotal())}
+                </Text>
+            </View>
+            <TouchableOpacity
+                onPress={handleConfirm}
+                activeOpacity={0.85}
+                style={[styles.footerButton, { backgroundColor: colors.primary }]}
+            >
+                <Text style={[styles.footerButtonText, { color: colors.textInverse || '#fff' }]}>
+                    Add to Cart
+                </Text>
+            </TouchableOpacity>
+        </View>
+    );
+
     return (
         <AppBottomSheet
             visible={visible}
             onClose={onClose}
+            title={item.name}
+            subtitle={category?.name ? `Category: ${category.name}` : 'Customize this item.'}
             snapPoints={['92%']}
-            showCloseButton={false}
+            footer={footer}
         >
-            <View
-                style={{
-                    paddingBottom: insets.bottom + 12,
-                }}
-            >
-                <Card
-                    rounded={20}
-                    padding={0}
-                    style={{
-                        width: '100%',
-                        maxHeight: '90%',
-                        minHeight: 280,
-                        height: '100%',
-                        overflow: 'hidden',
-                    }}
-                >
-                    {/* Header */}
-                    <View
-                        style={{
-                            flexDirection: 'row',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                            paddingHorizontal: 16,
-                            paddingVertical: 12,
-                            borderBottomWidth: 1,
-                            borderBottomColor: colors.border,
-                        }}
-                    >
-                        <Text style={{ fontSize: 20, fontWeight: 'bold', color: colors.text }}>
-                            {item.name}
-                        </Text>
-                        <TouchableOpacity onPress={onClose}>
-                            <MaterialCommunityIcons name="close" size={24} color={colors.text} />
-                        </TouchableOpacity>
-                    </View>
-
                     <ScrollView
-                        style={{ flex: 1, paddingHorizontal: 16, paddingVertical: 12 }}
                         keyboardShouldPersistTaps="handled"
-                        contentContainerStyle={{ paddingBottom: 16 }}
+                        contentContainerStyle={{ paddingBottom: 4 }}
                     >
                         {/* Item Price */}
                         <Text style={{ fontSize: 16, color: colors.textSecondary, marginBottom: 16 }}>
@@ -456,53 +438,33 @@ export default function ItemDetailsModal({
                             </View>
                         )}
                     </ScrollView>
-
-                    {/* Footer */}
-                    <View
-                        style={{
-                            borderTopWidth: 1,
-                            borderTopColor: colors.border,
-                            paddingHorizontal: 16,
-                            paddingTop: 12,
-                            paddingBottom: Math.max(insets.bottom, 20),
-                        }}
-                    >
-                        <View
-                            style={{
-                                flexDirection: 'row',
-                                justifyContent: 'space-between',
-                                alignItems: 'center',
-                                marginBottom: 12,
-                            }}
-                        >
-                            <Text style={{ fontSize: 16, color: colors.textSecondary }}>Total Price</Text>
-                            <Text style={{ fontSize: 20, fontWeight: 'bold', color: colors.primary }}>
-                                {formatCurrency(calculateTotal())}
-                            </Text>
-                        </View>
-
-                        <TouchableOpacity
-                            onPress={handleConfirm}
-                            style={{
-                                backgroundColor: colors.primary,
-                                borderRadius: 8,
-                                paddingVertical: 12,
-                            }}
-                        >
-                            <Text
-                                style={{
-                                    color: colors.textInverse,
-                                    textAlign: 'center',
-                                    fontSize: 18,
-                                    fontWeight: 'bold',
-                                }}
-                            >
-                                Add to Cart
-                            </Text>
-                        </TouchableOpacity>
-                    </View>
-                </Card>
-            </View>
         </AppBottomSheet>
     );
 }
+
+const styles = {
+    footerSummary: {
+        flexDirection: 'row' as const,
+        justifyContent: 'space-between' as const,
+        alignItems: 'center' as const,
+        marginBottom: 12,
+    },
+    footerLabel: {
+        fontSize: 15,
+        fontWeight: '600' as const,
+    },
+    footerTotal: {
+        fontSize: 20,
+        fontWeight: '800' as const,
+    },
+    footerButton: {
+        minHeight: 56,
+        borderRadius: 18,
+        alignItems: 'center' as const,
+        justifyContent: 'center' as const,
+    },
+    footerButtonText: {
+        fontSize: 16,
+        fontWeight: '800' as const,
+    },
+};

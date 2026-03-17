@@ -1,9 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../constants/storageKeys';
 import { useTheme } from '../theme/ThemeProvider';
-import Card from './Card';
 import { useToast } from './ToastProvider';
 import localDatabase from '../services/localDatabase';
 import AppBottomSheet from './AppBottomSheet';
@@ -70,59 +69,117 @@ export default function PinModal({ visible, onClose, onVerified }: Props) {
     }
   };
 
+  const footer = (
+    <View style={styles.footerActions}>
+      <TouchableOpacity
+        onPress={onClose}
+        activeOpacity={0.85}
+        style={[
+          styles.secondaryButton,
+          {
+            borderColor: colors.border,
+            backgroundColor: colors.searchBackground || colors.surface,
+          },
+        ]}
+      >
+        <Text style={[styles.secondaryButtonText, { color: colors.textSecondary || colors.text }]}>
+          Cancel
+        </Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        onPress={checkPin}
+        disabled={!pin.trim() || checking}
+        activeOpacity={0.85}
+        style={[
+          styles.primaryButton,
+          {
+            backgroundColor: !pin.trim() || checking ? colors.border : colors.primary,
+          },
+        ]}
+      >
+        <Text style={[styles.primaryButtonText, { color: colors.textInverse || '#fff' }]}>
+          Submit
+        </Text>
+      </TouchableOpacity>
+    </View>
+  );
+
   return (
     <AppBottomSheet
       visible={visible}
       onClose={onClose}
       title="PIN"
-      subtitle="Enter PIN to continue"
-      snapPoints={['38%']}
+      subtitle="Enter PIN to continue."
+      snapPoints={['52%']}
+      footer={footer}
     >
-      <Card rounded={12} style={{ padding: 16, borderColor: colors.border }}>
-        <View style={{ marginTop: 16 }}>
-          <Text style={{ color: colors.textSecondary, fontSize: 12, fontWeight: '600', marginBottom: 8 }}>PIN</Text>
-          <AppBottomSheetTextInput
-            value={pin}
-            onChangeText={setPin}
-            placeholder="Enter PIN"
-            placeholderTextColor={colors.textSecondary}
-            keyboardType="number-pad"
-            secureTextEntry
-            style={{
+      <View style={styles.formSection}>
+        <Text style={[styles.label, { color: colors.textSecondary || colors.text }]}>PIN</Text>
+        <AppBottomSheetTextInput
+          value={pin}
+          onChangeText={setPin}
+          placeholder="Enter PIN"
+          placeholderTextColor={colors.textSecondary || colors.text}
+          keyboardType="number-pad"
+          secureTextEntry
+          style={[
+            styles.input,
+            {
               color: colors.text,
-              borderWidth: 1,
               borderColor: colors.border,
-              borderRadius: 8,
-              padding: 10,
-              backgroundColor: colors.surface,
-              textAlign: 'center',
-              letterSpacing: 8,
-              fontSize: 16,
-            }}
-          />
-        </View>
-
-        <View style={{ flexDirection: 'row', gap: 8, marginTop: 16 }}>
-          <TouchableOpacity
-            onPress={onClose}
-            style={{ flex: 1, padding: 12, borderRadius: 8, borderWidth: 1.5, borderColor: colors.border }}
-          >
-            <Text style={{ textAlign: 'center', color: colors.textSecondary, fontWeight: '600' }}>Cancel</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={checkPin}
-            disabled={!pin.trim() || checking}
-            style={{
-              flex: 1,
-              padding: 12,
-              borderRadius: 8,
-              backgroundColor: !pin.trim() || checking ? colors.border : colors.primary,
-            }}
-          >
-            <Text style={{ textAlign: 'center', color: colors.textInverse, fontWeight: '700' }}>Submit</Text>
-          </TouchableOpacity>
-        </View>
-      </Card>
+              backgroundColor: colors.searchBackground || colors.surface,
+            },
+          ]}
+        />
+      </View>
     </AppBottomSheet>
   );
 }
+
+const styles = StyleSheet.create({
+  formSection: {
+    marginBottom: 18,
+  },
+  label: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: 8,
+    letterSpacing: 0.2,
+  },
+  input: {
+    minHeight: 56,
+    borderWidth: 1,
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    fontSize: 16,
+    textAlign: 'center',
+    letterSpacing: 8,
+  },
+  footerActions: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  secondaryButton: {
+    flex: 0.42,
+    minHeight: 54,
+    borderRadius: 18,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  secondaryButtonText: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  primaryButton: {
+    flex: 1,
+    minHeight: 56,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  primaryButtonText: {
+    fontSize: 16,
+    fontWeight: '800',
+  },
+});

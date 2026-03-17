@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity } from 'react-native';
 import { useTheme } from '../theme/ThemeProvider';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
-import Card from './Card';
 import AppBottomSheet from './AppBottomSheet';
 import AppBottomSheetTextInput from './AppBottomSheetTextInput';
 
@@ -14,39 +12,118 @@ interface Props {
 }
 
 export default function ItemNoteModal({ visible, initialNote = '', onClose, onSave }: Props) {
-    const { colors, name } = useTheme();
+    const { colors } = useTheme();
     const [note, setNote] = useState(initialNote || '');
 
     useEffect(() => {
         setNote(initialNote || '');
     }, [initialNote, visible]);
 
+    const footer = (
+        <View style={styles.footerActions}>
+            <TouchableOpacity
+                onPress={onClose}
+                activeOpacity={0.85}
+                style={[
+                    styles.secondaryButton,
+                    {
+                        borderColor: colors.border,
+                        backgroundColor: colors.searchBackground || colors.surface,
+                    },
+                ]}
+            >
+                <Text style={[styles.secondaryButtonText, { color: colors.textSecondary || colors.text }]}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+                onPress={() => { onSave(note); onClose(); }}
+                activeOpacity={0.85}
+                style={[
+                    styles.primaryButton,
+                    {
+                        backgroundColor: colors.primary,
+                    },
+                ]}
+            >
+                <Text style={[styles.primaryButtonText, { color: colors.textInverse || '#fff' }]}>Save Note</Text>
+            </TouchableOpacity>
+        </View>
+    );
+
     return (
         <AppBottomSheet
             visible={visible}
             onClose={onClose}
             title="Item Note"
-            snapPoints={['44%']}
+            subtitle="Add a quick instruction for this item."
+            snapPoints={['56%']}
+            footer={footer}
         >
-            <Card style={{ width: '100%' }} rounded={12}>
+            <View style={styles.formSection}>
+                <Text style={[styles.label, { color: colors.textSecondary || colors.text }]}>Note</Text>
                 <AppBottomSheetTextInput
                     value={note}
                     onChangeText={setNote}
                     placeholder="Add note for this item"
-                    placeholderTextColor={colors.textSecondary}
-                    style={{ minHeight: 100, color: colors.text, borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 10 }}
+                    placeholderTextColor={colors.textSecondary || colors.text}
+                    style={[
+                        styles.textArea,
+                        {
+                            color: colors.text,
+                            borderColor: colors.border,
+                            backgroundColor: colors.searchBackground || colors.surface,
+                        },
+                    ]}
                     multiline
                 />
-
-                <View style={{ flexDirection: 'row', marginTop: 12 }}>
-                    <TouchableOpacity onPress={onClose} style={{ flex: 1, marginRight: 8, padding: 12, borderRadius: 8, borderWidth: 1, borderColor: colors.border }}>
-                        <Text style={{ textAlign: 'center', color: colors.text }}>Cancel</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={() => { onSave(note); onClose(); }} style={{ flex: 1, padding: 12, borderRadius: 8, backgroundColor: colors.primary }}>
-                        <Text style={{ textAlign: 'center', color: colors.textInverse }}>Save</Text>
-                    </TouchableOpacity>
-                </View>
-            </Card>
+            </View>
         </AppBottomSheet>
     );
 }
+
+const styles = StyleSheet.create({
+    formSection: {
+        marginBottom: 18,
+    },
+    label: {
+        fontSize: 12,
+        fontWeight: '600',
+        marginBottom: 8,
+        letterSpacing: 0.2,
+    },
+    textArea: {
+        minHeight: 132,
+        borderWidth: 1,
+        borderRadius: 16,
+        paddingHorizontal: 16,
+        paddingVertical: 14,
+        textAlignVertical: 'top',
+        fontSize: 16,
+    },
+    footerActions: {
+        flexDirection: 'row',
+        gap: 10,
+    },
+    secondaryButton: {
+        flex: 0.42,
+        minHeight: 54,
+        borderRadius: 18,
+        borderWidth: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    secondaryButtonText: {
+        fontSize: 15,
+        fontWeight: '700',
+    },
+    primaryButton: {
+        flex: 1,
+        minHeight: 56,
+        borderRadius: 18,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    primaryButtonText: {
+        fontSize: 16,
+        fontWeight: '800',
+    },
+});

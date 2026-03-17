@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, ScrollView } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../constants/storageKeys';
 import { useTheme } from '../theme/ThemeProvider';
@@ -177,27 +177,71 @@ export default function CartNoteModal({ visible, initialNote = '', initialDiscou
         return true;
     };
 
+    const footer = (
+        <View style={styles.footerActions}>
+            <TouchableOpacity
+                onPress={onClose}
+                activeOpacity={0.85}
+                style={[
+                    styles.secondaryButton,
+                    {
+                        borderColor: colors.border,
+                        backgroundColor: colors.searchBackground || colors.surface,
+                    },
+                ]}
+            >
+                <Text style={[styles.secondaryButtonText, { color: colors.textSecondary || colors.text }]}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+                onPress={() => {
+                    const didSave = save();
+                    if (didSave) {
+                        onClose();
+                    }
+                }}
+                activeOpacity={0.85}
+                style={[
+                    styles.primaryButton,
+                    {
+                        backgroundColor: colors.primary,
+                    },
+                ]}
+            >
+                <Text style={[styles.primaryButtonText, { color: colors.textInverse || '#fff' }]}>Save Changes</Text>
+            </TouchableOpacity>
+        </View>
+    );
+
     return (
         <AppBottomSheet
             visible={visible}
             onClose={onClose}
             title="Notes & Discounts"
-            snapPoints={['72%']}
+            subtitle="Add an order note or apply a discount."
+            snapPoints={['80%']}
+            footer={footer}
         >
-            <View style={{ marginBottom: 16 }}>
-                <Text style={{ color: colors.textSecondary, fontSize: 12, fontWeight: '600', marginBottom: 8 }}>Order Note</Text>
+            <View style={styles.formSection}>
+                <Text style={[styles.label, { color: colors.textSecondary || colors.text }]}>Order Note</Text>
                 <AppBottomSheetTextInput
                     value={note}
                     onChangeText={setNote}
                     placeholder="Add a note for this order..."
-                    placeholderTextColor={colors.textSecondary}
-                    style={{ minHeight: 80, color: colors.text, borderWidth: 1, borderColor: colors.border, borderRadius: 8, padding: 10, backgroundColor: colors.surface }}
+                    placeholderTextColor={colors.textSecondary || colors.text}
+                    style={[
+                        styles.textArea,
+                        {
+                            color: colors.text,
+                            borderColor: colors.border,
+                            backgroundColor: colors.searchBackground || colors.surface,
+                        },
+                    ]}
                     multiline
                 />
             </View>
 
-            <View style={{ marginBottom: 16 }}>
-                <Text style={{ color: colors.textSecondary, fontSize: 12, fontWeight: '600', marginBottom: 8 }}>Discount</Text>
+            <View style={styles.formSection}>
+                <Text style={[styles.label, { color: colors.textSecondary || colors.text }]}>Discount</Text>
 
                 {discountsLoading ? (
                     <Text style={{ color: colors.textSecondary, fontSize: 12 }}>Loading discounts...</Text>
@@ -206,19 +250,19 @@ export default function CartNoteModal({ visible, initialNote = '', initialDiscou
                         No discounts available for this company.
                     </Text>
                 ) : (
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.discountRow}>
                         <TouchableOpacity
                             onPress={() => requestPinForDiscount(null)}
-                            style={{
-                                paddingHorizontal: 12,
-                                paddingVertical: 8,
-                                borderRadius: 999,
-                                borderWidth: 1.5,
-                                borderColor: !selectedDiscountId ? colors.primary : colors.border,
-                                backgroundColor: !selectedDiscountId ? colors.primary + '20' : colors.surface,
-                            }}
+                            activeOpacity={0.85}
+                            style={[
+                                styles.discountChip,
+                                {
+                                    borderColor: !selectedDiscountId ? colors.primary : colors.border,
+                                    backgroundColor: !selectedDiscountId ? colors.primary + '18' : colors.searchBackground || colors.surface,
+                                },
+                            ]}
                         >
-                            <Text style={{ color: !selectedDiscountId ? colors.primary : colors.text, fontWeight: '600', fontSize: 12 }}>
+                            <Text style={[styles.discountChipText, { color: !selectedDiscountId ? colors.primary : colors.text }]}>
                                 No Discount
                             </Text>
                         </TouchableOpacity>
@@ -230,16 +274,16 @@ export default function CartNoteModal({ visible, initialNote = '', initialDiscou
                                 <TouchableOpacity
                                     key={`${discountId}`}
                                     onPress={() => requestPinForDiscount(discountId ?? null)}
-                                    style={{
-                                        paddingHorizontal: 12,
-                                        paddingVertical: 8,
-                                        borderRadius: 999,
-                                        borderWidth: 1.5,
-                                        borderColor: selected ? colors.primary : colors.border,
-                                        backgroundColor: selected ? colors.primary + '20' : colors.surface,
-                                    }}
+                                    activeOpacity={0.85}
+                                    style={[
+                                        styles.discountChip,
+                                        {
+                                            borderColor: selected ? colors.primary : colors.border,
+                                            backgroundColor: selected ? colors.primary + '18' : colors.searchBackground || colors.surface,
+                                        },
+                                    ]}
                                 >
-                                    <Text style={{ color: selected ? colors.primary : colors.text, fontWeight: '600', fontSize: 12 }}>
+                                    <Text style={[styles.discountChipText, { color: selected ? colors.primary : colors.text }]}>
                                         {label} · {getDiscountValueLabel(discount)}
                                     </Text>
                                 </TouchableOpacity>
@@ -249,7 +293,7 @@ export default function CartNoteModal({ visible, initialNote = '', initialDiscou
                 )}
 
                 {selectedDiscount?.discountType === 'CUSTOM' && (
-                    <View style={{ marginTop: 10 }}>
+                    <View style={styles.customDiscountSection}>
                         <Text style={{ color: colors.textSecondary, fontSize: 11, marginBottom: 6 }}>
                             Custom Discount (%)
                         </Text>
@@ -258,34 +302,20 @@ export default function CartNoteModal({ visible, initialNote = '', initialDiscou
                             onChangeText={setCustomDiscountValue}
                             editable={pinVerified || discountChanged}
                             placeholder="Enter custom percentage"
-                            placeholderTextColor={colors.textSecondary}
+                            placeholderTextColor={colors.textSecondary || colors.text}
                             keyboardType="decimal-pad"
-                            style={{
-                                color: colors.text,
-                                borderWidth: 1,
-                                borderColor: colors.border,
-                                borderRadius: 8,
-                                padding: 10,
-                                backgroundColor: colors.surface,
-                                fontWeight: '600',
-                            }}
+                            style={[
+                                styles.input,
+                                {
+                                    color: colors.text,
+                                    borderColor: colors.border,
+                                    backgroundColor: colors.searchBackground || colors.surface,
+                                    fontWeight: '600',
+                                },
+                            ]}
                         />
                     </View>
                 )}
-            </View>
-
-            <View style={{ flexDirection: 'row', gap: 8 }}>
-                <TouchableOpacity onPress={onClose} style={{ flex: 1, padding: 12, borderRadius: 8, borderWidth: 1.5, borderColor: colors.border, backgroundColor: colors.surface }}>
-                    <Text style={{ textAlign: 'center', color: colors.text, fontWeight: '600' }}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => {
-                    const didSave = save();
-                    if (didSave) {
-                        onClose();
-                    }
-                }} style={{ flex: 1, padding: 12, borderRadius: 8, backgroundColor: colors.primary }}>
-                    <Text style={{ textAlign: 'center', color: colors.textInverse, fontWeight: '700' }}>Save Changes</Text>
-                </TouchableOpacity>
             </View>
 
             <PinModal
@@ -296,3 +326,76 @@ export default function CartNoteModal({ visible, initialNote = '', initialDiscou
         </AppBottomSheet>
     );
 }
+
+const styles = StyleSheet.create({
+    formSection: {
+        marginBottom: 18,
+    },
+    label: {
+        fontSize: 12,
+        fontWeight: '600',
+        marginBottom: 8,
+        letterSpacing: 0.2,
+    },
+    textArea: {
+        minHeight: 96,
+        borderWidth: 1,
+        borderRadius: 16,
+        paddingHorizontal: 16,
+        paddingVertical: 14,
+        textAlignVertical: 'top',
+        fontSize: 16,
+    },
+    discountRow: {
+        gap: 10,
+    },
+    discountChip: {
+        minHeight: 48,
+        paddingHorizontal: 14,
+        borderRadius: 16,
+        borderWidth: 1.5,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    discountChipText: {
+        fontSize: 13,
+        fontWeight: '700',
+    },
+    customDiscountSection: {
+        marginTop: 12,
+    },
+    input: {
+        minHeight: 56,
+        borderWidth: 1,
+        borderRadius: 16,
+        paddingHorizontal: 16,
+        fontSize: 16,
+    },
+    footerActions: {
+        flexDirection: 'row',
+        gap: 10,
+    },
+    secondaryButton: {
+        flex: 0.42,
+        minHeight: 54,
+        borderRadius: 18,
+        borderWidth: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    secondaryButtonText: {
+        fontSize: 15,
+        fontWeight: '700',
+    },
+    primaryButton: {
+        flex: 1,
+        minHeight: 56,
+        borderRadius: 18,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    primaryButtonText: {
+        fontSize: 16,
+        fontWeight: '800',
+    },
+});

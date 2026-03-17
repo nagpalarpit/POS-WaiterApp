@@ -181,292 +181,219 @@ export default function CartScreen({ navigation, route }: any) {
     const footerHeight = 88;
 
     return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
-            <KeyboardAvoidingView
-                style={{ flex: 1 }}
-                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
-            >
-                <View style={{ flex: 1 }}>
-                    {/* Header */}
+        <View style={{ flex: 1, backgroundColor: colors.background }}>
+            <View style={{ flex: 1 }}>
+                {/* Cart Items or Empty State */}
+                {cartData.cart.items.length > 0 ? (
+                    <ScrollView
+                        style={{ flex: 1 }}
+                        keyboardShouldPersistTaps="handled"
+                        contentContainerStyle={{
+                            paddingHorizontal: 12,
+                            paddingVertical: 12,
+                            paddingBottom: insets.bottom + footerHeight,
+                        }}
+                        scrollIndicatorInsets={{ right: 4 }}
+                    >
+                        {sortedGroupTypes.map((groupType) => {
+                            const items = groupedItems[groupType] || [];
+                            const label =
+                                items.find((item) => item.groupLabel)?.groupLabel ||
+                                `Gange ${groupType}`;
+                            const isExpanded = groupCount <= 1 || expandedGroupType === groupType;
+                            return (
+                                <View key={`group-${groupType}`} style={{ marginBottom: 14 }}>
+                                    <TouchableOpacity
+                                        onPress={() => {
+                                            if (groupCount > 1) {
+                                                setExpandedGroupType(groupType);
+                                            }
+                                            handleSelectGroup(groupType, label);
+                                        }}
+                                        style={{
+                                            paddingHorizontal: 12,
+                                            paddingVertical: 8,
+                                            borderRadius: 10,
+                                            borderWidth: 1,
+                                            borderColor: colors.border,
+                                            backgroundColor: colors.surfaceHover || colors.surface,
+                                            marginBottom: 8,
+                                            flexDirection: 'row',
+                                            alignItems: 'center',
+                                            justifyContent: 'space-between',
+                                        }}
+                                    >
+                                        <Text style={{ color: colors.text, fontWeight: '700' }}>
+                                            {label}
+                                        </Text>
+                                        {groupCount > 1 ? (
+                                            <MaterialCommunityIcons
+                                                name={isExpanded ? 'chevron-up' : 'chevron-down'}
+                                                size={18}
+                                                color={colors.textSecondary}
+                                            />
+                                        ) : null}
+                                    </TouchableOpacity>
+                                    {isExpanded
+                                        ? items.map((item) => (
+                                            <View
+                                                key={item.cartId}
+                                                style={{
+                                                    marginBottom: 12,
+                                                    borderRadius: 12,
+                                                    backgroundColor: colors.surface,
+                                                    borderWidth: 1,
+                                                    borderColor: colors.border,
+                                                    overflow: 'hidden',
+                                                }}
+                                            >
+                                                <CartItemRow
+                                                    item={item}
+                                                    onOpenNoteModal={(noteItem) =>
+                                                        cartNotes.openItemNoteModal(
+                                                            noteItem.cartId || '',
+                                                            noteItem.orderItemNote || '',
+                                                        )
+                                                    }
+                                                    onUpdateQuantity={handleUpdateQuantity}
+                                                    onRemoveItem={handleRemoveItem}
+                                                    colors={colors}
+                                                />
+                                            </View>
+                                        ))
+                                        : null}
+                                </View>
+                            );
+                        })}
+
+                        {/* Cart Summary (without checkout button) */}
+                        <CartSummary
+                            cart={cartData.cart}
+                            cartQuantity={cartData.cartQuantity}
+                            onEditOrderMeta={() => {
+                                if (!ensureCanModify()) return;
+                                cartNotes.setShowCartNoteModal(true);
+                            }}
+                            onCheckout={proceedToCheckout}
+                            colors={colors}
+                            isOrderNoteOrDiscountPresent={false}
+                            showCheckout={false}
+                        />
+                    </ScrollView>
+                ) : (
+                    /* Empty State */
                     <View
                         style={{
-                            paddingHorizontal: 16,
-                            paddingVertical: 12,
-                            backgroundColor: colors.background,
-                            borderBottomWidth: 1,
-                            borderBottomColor: colors.border,
+                            flex: 1,
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                            paddingHorizontal: 24,
                         }}
                     >
                         <View
                             style={{
-                                flexDirection: 'row',
-                                justifyContent: 'space-between',
-                                alignItems: 'center',
-                            }}
-                        >
-                            <TouchableOpacity
-                                onPress={() => navigation.goBack()}
-                                style={{
-                                    width: 36,
-                                    height: 36,
-                                    borderRadius: 10,
-                                    backgroundColor: colors.surfaceHover,
-                                    justifyContent: 'center',
-                                    alignItems: 'center',
-                                }}
-                            >
-                                <MaterialIcons name="arrow-back" size={20} color={colors.text} />
-                            </TouchableOpacity>
-                            <View
-                                style={{
-                                    flex: 1,
-                                    alignItems: 'center',
-                                    marginHorizontal: 12,
-                                }}
-                            >
-                                <Text style={{ fontSize: 16, fontWeight: '700', color: colors.text }}>
-                                    Order Summary
-                                </Text>
-                                <Text
-                                    style={{
-                                        fontSize: 12,
-                                        color: colors.textSecondary,
-                                        marginTop: 2,
-                                    }}
-                                >
-                                    {cartData.cartQuantity}{' '}
-                                    {cartData.cartQuantity === 1 ? 'item' : 'items'} -{' '}
-                                    {formatCurrency(total)}
-                                </Text>
-                            </View>
-                            <View
-                                style={{
-                                    width: 32,
-                                    height: 32,
-                                    borderRadius: 10,
-                                    backgroundColor: colors.primary + '15',
-                                    justifyContent: 'center',
-                                    alignItems: 'center',
-                                }}
-                            >
-                                <MaterialCommunityIcons name="cart" size={18} color={colors.primary} />
-                            </View>
-                        </View>
-                    </View>
-
-                    {/* Cart Items or Empty State */}
-                    {cartData.cart.items.length > 0 ? (
-                        <ScrollView
-                            style={{ flex: 1 }}
-                            keyboardShouldPersistTaps="handled"
-                            contentContainerStyle={{
-                                paddingHorizontal: 12,
-                                paddingVertical: 12,
-                                paddingBottom: insets.bottom + footerHeight,
-                            }}
-                            scrollIndicatorInsets={{ right: 4 }}
-                        >
-                            {sortedGroupTypes.map((groupType) => {
-                                const items = groupedItems[groupType] || [];
-                                const label =
-                                    items.find((item) => item.groupLabel)?.groupLabel ||
-                                    `Gange ${groupType}`;
-                                const isExpanded = groupCount <= 1 || expandedGroupType === groupType;
-                                return (
-                                    <View key={`group-${groupType}`} style={{ marginBottom: 14 }}>
-                                        <TouchableOpacity
-                                            onPress={() => {
-                                                if (groupCount > 1) {
-                                                    setExpandedGroupType(groupType);
-                                                }
-                                                handleSelectGroup(groupType, label);
-                                            }}
-                                            style={{
-                                                paddingHorizontal: 12,
-                                                paddingVertical: 8,
-                                                borderRadius: 10,
-                                                borderWidth: 1,
-                                                borderColor: colors.border,
-                                                backgroundColor: colors.surfaceHover || colors.surface,
-                                                marginBottom: 8,
-                                                flexDirection: 'row',
-                                                alignItems: 'center',
-                                                justifyContent: 'space-between',
-                                            }}
-                                        >
-                                            <Text style={{ color: colors.text, fontWeight: '700' }}>
-                                                {label}
-                                            </Text>
-                                            {groupCount > 1 ? (
-                                                <MaterialCommunityIcons
-                                                    name={isExpanded ? 'chevron-up' : 'chevron-down'}
-                                                    size={18}
-                                                    color={colors.textSecondary}
-                                                />
-                                            ) : null}
-                                        </TouchableOpacity>
-                                        {isExpanded
-                                            ? items.map((item) => (
-                                                <View
-                                                    key={item.cartId}
-                                                    style={{
-                                                        marginBottom: 12,
-                                                        borderRadius: 12,
-                                                        backgroundColor: colors.surface,
-                                                        borderWidth: 1,
-                                                        borderColor: colors.border,
-                                                        overflow: 'hidden',
-                                                    }}
-                                                >
-                                                    <CartItemRow
-                                                        item={item}
-                                                        onOpenNoteModal={(noteItem) =>
-                                                            cartNotes.openItemNoteModal(
-                                                                noteItem.cartId || '',
-                                                                noteItem.orderItemNote || '',
-                                                            )
-                                                        }
-                                                        onUpdateQuantity={handleUpdateQuantity}
-                                                        onRemoveItem={handleRemoveItem}
-                                                        colors={colors}
-                                                    />
-                                                </View>
-                                            ))
-                                            : null}
-                                    </View>
-                                );
-                            })}
-
-                            {/* Cart Summary (without checkout button) */}
-                            <CartSummary
-                                cart={cartData.cart}
-                                cartQuantity={cartData.cartQuantity}
-                                onEditOrderMeta={() => {
-                                    if (!ensureCanModify()) return;
-                                    cartNotes.setShowCartNoteModal(true);
-                                }}
-                                onCheckout={proceedToCheckout}
-                                colors={colors}
-                                isOrderNoteOrDiscountPresent={false}
-                                showCheckout={false}
-                            />
-                        </ScrollView>
-                    ) : (
-                        /* Empty State */
-                        <View
-                            style={{
-                                flex: 1,
+                                width: 80,
+                                height: 80,
+                                borderRadius: 40,
+                                backgroundColor: colors.primary + '10',
                                 justifyContent: 'center',
                                 alignItems: 'center',
-                                paddingHorizontal: 24,
+                                marginBottom: 24,
                             }}
                         >
-                            <View
-                                style={{
-                                    width: 80,
-                                    height: 80,
-                                    borderRadius: 40,
-                                    backgroundColor: colors.primary + '10',
-                                    justifyContent: 'center',
-                                    alignItems: 'center',
-                                    marginBottom: 24,
-                                }}
-                            >
-                                <MaterialCommunityIcons
-                                    name="cart-outline"
-                                    size={36}
-                                    color={colors.primary}
-                                />
-                            </View>
-                            <Text
-                                style={{
-                                    fontSize: 18,
-                                    fontWeight: '700',
-                                    color: colors.text,
-                                    textAlign: 'center',
-                                    marginBottom: 8,
-                                }}
-                            >
-                                Cart is Empty
-                            </Text>
-                            <Text
-                                style={{
-                                    fontSize: 14,
-                                    color: colors.textSecondary,
-                                    textAlign: 'center',
-                                    lineHeight: 20,
-                                }}
-                            >
-                                Add items from the menu to get started
-                            </Text>
-                            <View
-                                style={{
-                                    marginTop: 28,
-                                    paddingHorizontal: 12,
-                                    paddingVertical: 8,
-                                    borderRadius: 8,
-                                    backgroundColor: colors.primary + '08',
-                                }}
-                            >
-                                <Text
-                                    style={{
-                                        fontSize: 12,
-                                        color: colors.primary,
-                                        fontWeight: '600',
-                                        textAlign: 'center',
-                                    }}
-                                >
-                                    Tap on items to add them
-                                </Text>
-                            </View>
+                            <MaterialCommunityIcons
+                                name="cart-outline"
+                                size={36}
+                                color={colors.primary}
+                            />
                         </View>
-                    )}
+                        <Text
+                            style={{
+                                fontSize: 18,
+                                fontWeight: '700',
+                                color: colors.text,
+                                textAlign: 'center',
+                                marginBottom: 8,
+                            }}
+                        >
+                            Cart is Empty
+                        </Text>
+                        <Text
+                            style={{
+                                fontSize: 14,
+                                color: colors.textSecondary,
+                                textAlign: 'center',
+                                lineHeight: 20,
+                            }}
+                        >
+                            Add items from the menu to get started
+                        </Text>
+                        <View
+                            style={{
+                                marginTop: 28,
+                                paddingHorizontal: 12,
+                                paddingVertical: 8,
+                                borderRadius: 8,
+                                backgroundColor: colors.primary + '08',
+                            }}
+                        >
+                            <Text
+                                style={{
+                                    fontSize: 12,
+                                    color: colors.primary,
+                                    fontWeight: '600',
+                                    textAlign: 'center',
+                                }}
+                            >
+                                Tap on items to add them
+                            </Text>
+                        </View>
+                    </View>
+                )}
 
-                    {/* Fixed Checkout Button */}
-                    <View
+                {/* Fixed Checkout Button */}
+                <View
+                    style={{
+                        position: 'absolute',
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        paddingHorizontal: 12,
+                        paddingTop: 12,
+                        paddingBottom: insets.bottom,
+                        borderTopWidth: 1,
+                        borderTopColor: colors.border,
+                        backgroundColor: colors.background,
+                    }}
+                >
+                    <TouchableOpacity
+                        onPress={proceedToCheckout}
                         style={{
-                            position: 'absolute',
-                            left: 0,
-                            right: 0,
-                            bottom: 0,
+                            backgroundColor: colors.primary,
+                            borderRadius: 12,
+                            paddingVertical: 13,
                             paddingHorizontal: 12,
-                            paddingTop: 12,
-                            paddingBottom: insets.bottom,
-                            borderTopWidth: 1,
-                            borderTopColor: colors.border,
-                            backgroundColor: colors.background,
+                            shadowColor: colors.primary,
+                            shadowOpacity: 0.3,
+                            shadowRadius: 8,
+                            elevation: 4,
                         }}
                     >
-                        <TouchableOpacity
-                            onPress={proceedToCheckout}
+                        <Text
                             style={{
-                                backgroundColor: colors.primary,
-                                borderRadius: 12,
-                                paddingVertical: 13,
-                                paddingHorizontal: 12,
-                                shadowColor: colors.primary,
-                                shadowOpacity: 0.3,
-                                shadowRadius: 8,
-                                elevation: 4,
+                                textAlign: 'center',
+                                fontWeight: '800',
+                                fontSize: 13,
+                                color: colors.textInverse,
+                                letterSpacing: 0.3,
                             }}
                         >
-                            <Text
-                                style={{
-                                    textAlign: 'center',
-                                    fontWeight: '800',
-                                    fontSize: 13,
-                                    color: colors.textInverse,
-                                    letterSpacing: 0.3,
-                                }}
-                            >
-                                Continue to Checkout ({cartData.cartQuantity}{' '}
-                                {cartData.cartQuantity === 1 ? 'item' : 'items'})
-                            </Text>
-                        </TouchableOpacity>
-                    </View>
+                            Continue to Checkout ({cartData.cartQuantity}{' '}
+                            {cartData.cartQuantity === 1 ? 'item' : 'items'})
+                        </Text>
+                    </TouchableOpacity>
                 </View>
-            </KeyboardAvoidingView>
+            </View>
 
             <ItemNoteModal
                 visible={cartNotes.showItemNoteModal}
@@ -504,6 +431,6 @@ export default function CartScreen({ navigation, route }: any) {
                 }}
                 onVerified={handlePinVerified}
             />
-        </SafeAreaView>
+        </View>
     );
 }
