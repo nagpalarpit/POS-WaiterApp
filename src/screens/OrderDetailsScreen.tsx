@@ -207,8 +207,8 @@ const resolveTaxMeta = (
     const defaultThreshold = 8162;
     const deliveryTypeId = Number(
       orderDetails?.orderDeliveryTypeId ??
-        orderDetails?.orderInfo?.orderDeliveryTypeId ??
-        0,
+      orderDetails?.orderInfo?.orderDeliveryTypeId ??
+      0,
     );
     if (orderIdNum <= defaultThreshold && deliveryTypeId === 0) {
       taxKey = "19%";
@@ -415,7 +415,7 @@ const getCanceledPayment = (items: any[] = []) => {
         (acc: number, current: any) =>
           acc +
           toNumber(current?.attributeValuePrice ?? current?.price, 0) *
-            toNumber(current?.quantity, 1),
+          toNumber(current?.quantity, 1),
         total,
       ) || total;
     canceledOrderPayment += total * toNumber(item.quantity, 0);
@@ -436,9 +436,9 @@ const normalizeAttributeValues = (values: any[] = []) => {
       "",
     attributeValuePrice: toNumber(
       value.unitPrice ??
-        value.attributeValuePrice ??
-        value.price ??
-        value.menuItemVariantAttributeValue?.price,
+      value.attributeValuePrice ??
+      value.price ??
+      value.menuItemVariantAttributeValue?.price,
       0,
     ),
     attributeValueQuantity: Math.max(
@@ -464,9 +464,9 @@ const extractFromVariants = (variants: any[] = []) => {
 
     variantPrice += toNumber(
       variant?.unitPrice ??
-        variant?.price ??
-        variant?.variantPrice ??
-        variant?.menuItemVariant?.price,
+      variant?.price ??
+      variant?.variantPrice ??
+      variant?.menuItemVariant?.price,
       0,
     );
 
@@ -532,9 +532,9 @@ const normalizeOrderItem = (item: any, index: number) => {
       variantDetails.variantName,
     variantPrice: toNumber(
       item?.variantPrice ??
-        item?.orderItemVariant?.variantPrice ??
-        item?.orderItemVariant?.price ??
-        item?.orderItemVariant?.unitPrice,
+      item?.orderItemVariant?.variantPrice ??
+      item?.orderItemVariant?.price ??
+      item?.orderItemVariant?.unitPrice,
       variantDetails.variantPrice,
     ),
     attributeName: item?.attributeName || variantDetails.attributeName,
@@ -754,7 +754,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
   useFocusEffect(
     useCallback(() => {
       editingRef.current = false;
-      return () => {};
+      return () => { };
     }, []),
   );
 
@@ -1079,9 +1079,9 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
       const companyId =
         Number(
           order.companyId ||
-            orderDetails?.companyId ||
-            userData?.companyId ||
-            0,
+          orderDetails?.companyId ||
+          userData?.companyId ||
+          0,
         ) || 0;
       const invoiceNumber =
         await commonFunctionService.generateInvoice(companyId);
@@ -1096,24 +1096,24 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
       const defaultAmount = totals.total + tip + deliveryCharge - giftCardTotal;
       const incomingPaymentDetails = Array.isArray(option?.orderPaymentDetails)
         ? option.orderPaymentDetails
-            .map((detail: any) => ({
-              paymentProcessorId: toNumber(
-                detail?.paymentProcessorId,
-                selectedPaymentMethod,
-              ),
-              paymentTotal: toNumber(detail?.paymentTotal, 0),
-            }))
-            .filter((detail: any) => detail.paymentTotal > 0)
+          .map((detail: any) => ({
+            paymentProcessorId: toNumber(
+              detail?.paymentProcessorId,
+              selectedPaymentMethod,
+            ),
+            paymentTotal: toNumber(detail?.paymentTotal, 0),
+          }))
+          .filter((detail: any) => detail.paymentTotal > 0)
         : [];
       let orderPaymentDetails =
         incomingPaymentDetails.length > 0
           ? incomingPaymentDetails
           : [
-              {
-                paymentProcessorId: selectedPaymentMethod,
-                paymentTotal: toNumber(defaultAmount, 0),
-              },
-            ];
+            {
+              paymentProcessorId: selectedPaymentMethod,
+              paymentTotal: toNumber(defaultAmount, 0),
+            },
+          ];
       const splitAmount = orderPaymentDetails.reduce(
         (sum: number, detail: any) => sum + toNumber(detail?.paymentTotal, 0),
         0,
@@ -1197,8 +1197,8 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
 
       let splitSelections = Array.isArray(option?.splitSelections)
         ? option.splitSelections.map((qty: any) =>
-            Math.max(0, Math.floor(toNumber(qty, 0))),
-          )
+          Math.max(0, Math.floor(toNumber(qty, 0))),
+        )
         : [];
       let isItemSplit =
         option?.isItemSplit === true &&
@@ -1303,11 +1303,11 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
           incomingPaymentDetails.length > 0
             ? incomingPaymentDetails
             : [
-                {
-                  paymentProcessorId: selectedPaymentMethod,
-                  paymentTotal: splitDefaultAmount,
-                },
-              ];
+              {
+                paymentProcessorId: selectedPaymentMethod,
+                paymentTotal: splitDefaultAmount,
+              },
+            ];
         const splitPaymentSummary = option?.orderPaymentSummary ?? {
           paymentProcessorId: selectedPaymentMethod,
         };
@@ -1646,7 +1646,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
           const details = splitOrder?.orderDetails || {};
           const paymentMethod = toNumber(
             details?.paymentMethod ??
-              details?.orderPaymentSummary?.paymentProcessorId,
+            details?.orderPaymentSummary?.paymentProcessorId,
             selectedPaymentMethod,
           );
           const splitLocalOrderId =
@@ -1833,15 +1833,15 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
                   giftCardTotal:
                     toNumber(
                       settledRow?.giftCardTotal ??
-                        settledDataValues?.giftCardTotal ??
-                        existingOrderDetails?.giftCardTotal,
+                      settledDataValues?.giftCardTotal ??
+                      existingOrderDetails?.giftCardTotal,
                       0,
                     ) || 0,
                   giftCardLogs: normalizeGiftCardLogs(
                     settledRow?.giftCardLogs ??
-                      settledDataValues?.giftCardLogs ??
-                      existingOrderDetails?.giftCardLogs ??
-                      null,
+                    settledDataValues?.giftCardLogs ??
+                    existingOrderDetails?.giftCardLogs ??
+                    null,
                   ),
                   orderCustomerDetails:
                     settledRow?.orderCustomerDetails ??
@@ -2182,7 +2182,6 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
     });
   };
 
-  
   const handleOpenPaymentModal = () => {
     openPaymentScreen("method");
   };
@@ -2345,10 +2344,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
   };
 
   return (
-    <SafeAreaView
-      style={{ flex: 1, backgroundColor: colors.background }}
-      edges={["bottom"]}
-    >
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
       <View style={{ paddingHorizontal: 12, paddingTop: 10 }}>
         <Card rounded={14} style={{ padding: 12, borderColor: colors.border }}>
           <View
@@ -2639,54 +2635,54 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
         ) : (
           <>
             <Card style={{ padding: 12, borderColor: colors.border }}>
-            <Text
-              style={{ color: colors.text, fontWeight: "700", marginBottom: 8 }}
-            >
-              Payment Summary
-            </Text>
-            <View style={styles.paymentRow}>
-              <Text style={{ color: colors.textSecondary }}>
-                Current Method
-              </Text>
-              <Text style={{ color: colors.text, fontWeight: "700" }}>
-                {paymentLabel}
-              </Text>
-            </View>
-            <View style={styles.paymentRow}>
-              <Text style={{ color: colors.textSecondary }}>Total Amount</Text>
-              <Text style={{ color: colors.text, fontWeight: "700" }}>
-                {formatCurrency(totals.total)}
-              </Text>
-            </View>
-            <TouchableOpacity
-              onPress={handleOpenPaymentModal}
-              disabled={isLocalServerDisconnected}
-              style={[
-                styles.changePaymentBtn,
-                {
-                  borderColor: colors.border,
-                  backgroundColor: colors.surfaceHover || colors.background,
-                  opacity: isLocalServerDisconnected ? 0.6 : 1,
-                },
-              ]}
-            >
-              <MaterialCommunityIcons
-                name="credit-card-edit-outline"
-                size={16}
-                color={colors.text}
-              />
               <Text
-                style={{
-                  color: colors.text,
-                  fontWeight: "700",
-                  marginLeft: 6,
-                  fontSize: 12,
-                }}
+                style={{ color: colors.text, fontWeight: "700", marginBottom: 8 }}
               >
-                Change Payment Method
+                Payment Summary
               </Text>
-            </TouchableOpacity>
-          </Card>
+              <View style={styles.paymentRow}>
+                <Text style={{ color: colors.textSecondary }}>
+                  Current Method
+                </Text>
+                <Text style={{ color: colors.text, fontWeight: "700" }}>
+                  {paymentLabel}
+                </Text>
+              </View>
+              <View style={styles.paymentRow}>
+                <Text style={{ color: colors.textSecondary }}>Total Amount</Text>
+                <Text style={{ color: colors.text, fontWeight: "700" }}>
+                  {formatCurrency(totals.total)}
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={handleOpenPaymentModal}
+                disabled={isLocalServerDisconnected}
+                style={[
+                  styles.changePaymentBtn,
+                  {
+                    borderColor: colors.border,
+                    backgroundColor: colors.surfaceHover || colors.background,
+                    opacity: isLocalServerDisconnected ? 0.6 : 1,
+                  },
+                ]}
+              >
+                <MaterialCommunityIcons
+                  name="credit-card-edit-outline"
+                  size={16}
+                  color={colors.text}
+                />
+                <Text
+                  style={{
+                    color: colors.text,
+                    fontWeight: "700",
+                    marginLeft: 6,
+                    fontSize: 12,
+                  }}
+                >
+                  Change Payment Method
+                </Text>
+              </TouchableOpacity>
+            </Card>
           </>
         )}
       </ScrollView>
@@ -2850,7 +2846,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
           </TouchableOpacity>
         </View>
       </View>
-    </SafeAreaView>
+    </View>
   );
 }
 

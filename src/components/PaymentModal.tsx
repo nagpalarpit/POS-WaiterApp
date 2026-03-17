@@ -545,7 +545,7 @@ export default function PaymentScreen(props: PaymentModalProps) {
       setSplitGiftCard(null);
       return;
     }
-      setGiftCard(null);
+    setGiftCard(null);
   };
 
   if (!visible) {
@@ -553,7 +553,7 @@ export default function PaymentScreen(props: PaymentModalProps) {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -1000,9 +1000,9 @@ export default function PaymentScreen(props: PaymentModalProps) {
                           {
                             backgroundColor:
                               isApplyingGiftCard ||
-                              !(isSplitMode
-                                ? splitGiftCode.trim()
-                                : giftCode.trim())
+                                !(isSplitMode
+                                  ? splitGiftCode.trim()
+                                  : giftCode.trim())
                                 ? colors.border
                                 : colors.primary,
                           },
@@ -1140,7 +1140,7 @@ export default function PaymentScreen(props: PaymentModalProps) {
                         backgroundColor:
                           isProcessing || blockInteractions
                             ? colors.border
-                          : colors.surface,
+                            : colors.surface,
                         opacity: isProcessing || blockInteractions ? 0.6 : 1,
                       },
                     ]}
@@ -1227,8 +1227,8 @@ export default function PaymentScreen(props: PaymentModalProps) {
                           isSplitInvalid || isProcessing || blockInteractions
                             ? colors.border
                             : colors.success ||
-                              colors.secondary ||
-                              colors.primary,
+                            colors.secondary ||
+                            colors.primary,
                       },
                     ]}
                   >
@@ -1250,7 +1250,7 @@ export default function PaymentScreen(props: PaymentModalProps) {
           </View>
         </View>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </View>
   );
 }
 

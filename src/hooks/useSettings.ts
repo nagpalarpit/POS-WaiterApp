@@ -12,6 +12,10 @@ export interface Settings {
   enableGroupLabel?: boolean;
   companyId?: string | number;
   companyName?: string;
+  company?: {
+    id?: string | number;
+    name?: string;
+  };
   isKiosk?: boolean;
   tableAreas?: any[];
 }
@@ -22,11 +26,36 @@ const DEFAULT_SETTINGS: Settings = {
   enablePickup: true,
 };
 
+const normalizeCompanyName = (value: unknown): string | undefined => {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  return trimmed || undefined;
+};
+
 const normalizeSettingsRecord = (record: any): Settings | null => {
   if (!record) return null;
   const settingInfo = record.settingInfo ?? record;
   if (!settingInfo) return null;
-  return settingInfo as Settings;
+
+  const companyName =
+    normalizeCompanyName(settingInfo?.companyName) ||
+    normalizeCompanyName(settingInfo?.company?.companyName) ||
+    normalizeCompanyName(settingInfo?.company?.name);
+
+  const companyId =
+    settingInfo?.companyId ??
+    settingInfo?.company?.id;
+
+  return {
+    ...(settingInfo as Settings),
+    ...(companyId !== undefined ? { companyId } : {}),
+    ...(companyName ? { companyName } : {}),
+    company: {
+      ...(settingInfo?.company || {}),
+      ...(companyId !== undefined ? { id: companyId } : {}),
+      ...(companyName ? { name: companyName } : {}),
+    },
+  };
 };
 
 /**
@@ -46,7 +75,9 @@ export const useSettings = () => {
       const userDataStr = await AsyncStorage.getItem(STORAGE_KEYS.authUser);
       const userData = userDataStr ? JSON.parse(userDataStr) : null;
       const companyId = userData?.companyId ?? userData?.company?.id;
-      const companyName = userData?.company?.name || userData?.companyName;
+      const companyName =
+        normalizeCompanyName(userData?.company?.name) ||
+        normalizeCompanyName(userData?.companyName);
 
       let resolved: Settings | null = null;
 
@@ -76,7 +107,13 @@ export const useSettings = () => {
       const merged: Settings = {
         ...DEFAULT_SETTINGS,
         ...(resolved || {}),
+        ...(companyId !== undefined ? { companyId } : {}),
         ...(companyName ? { companyName } : {}),
+        company: {
+          ...(resolved?.company || {}),
+          ...(companyId !== undefined ? { id: companyId } : {}),
+          ...(companyName ? { name: companyName } : {}),
+        },
       };
 
       setSettings(merged);
