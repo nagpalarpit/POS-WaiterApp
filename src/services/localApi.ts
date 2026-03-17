@@ -26,7 +26,7 @@ localApi.interceptors.request.use(
       headers.Authorization = `Bearer ${token}`;
     }
 
-    const posId = posIdService.getPosId() || (await posIdService.loadPosId());
+    const posId = posIdService.getPosId();
     if (posId) {
       headers['PosId'] = posId;
     }

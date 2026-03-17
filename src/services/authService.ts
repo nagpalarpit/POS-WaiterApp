@@ -2,11 +2,10 @@ import api, { setAuthToken, clearAuthToken } from './api';
 import localApi, { setLocalAuthToken, clearLocalAuthToken } from './localApi';
 import serverConnection from './serverConnection';
 import localDatabase from './localDatabase';
-import posIdService from './posIdService';
 import { initLocalSocket, initCloudSocket, disconnectSocket } from './socket';
 import { initOrderSync } from './orderSyncService';
 import { API_ENDPOINTS } from '../config/apiEndpoints';
-import { ensureTokenLicenseIsValid } from './tokenService';
+import { clearStoredAuthSession, ensureTokenLicenseIsValid } from './tokenService';
 
 export interface LoginResponse {
   token: string;
@@ -99,9 +98,6 @@ class AuthService {
       // Set local auth token
       await setLocalAuthToken(loginData.token);
 
-      // Load POS ID that was already fetched during IPEntryScreen connection
-      await posIdService.loadPosId();
-
       const loginResponse: LoginResponse = {
         token: loginData.token,
         user: loginData.user,
@@ -143,10 +139,6 @@ class AuthService {
         // Set cloud auth token
         await setAuthToken(loginResponse.token);
 
-        // Try to load previously stored POS ID (from local server)
-        // If not available, POS ID will be empty and optional
-        await posIdService.loadPosId();
-
         // Save metadata
         await this.saveLoginMetadata({
           ...loginResponse,
@@ -169,9 +161,10 @@ class AuthService {
   /**
    * Logout
    */
-  async logout(): Promise<void> {
+  async logout(reason?: string): Promise<void> {
     await clearAuthToken();
     await clearLocalAuthToken();
+    await clearStoredAuthSession(reason);
     disconnectSocket();
   }
 

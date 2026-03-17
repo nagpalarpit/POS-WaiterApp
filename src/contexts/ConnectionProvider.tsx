@@ -2,6 +2,8 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 import { AppState } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
 import serverConnection from '../services/serverConnection';
+import authService from '../services/authService';
+import posIdService from '../services/posIdService';
 import {
   connectLocalSocket,
   disconnectSocket,
@@ -36,6 +38,32 @@ export function ConnectionProvider({ children }: { children: React.ReactNode }) 
   const checkingRef = useRef(false);
   const pendingCheckRef = useRef<Promise<boolean> | null>(null);
   const networkConnectedRef = useRef(true);
+  const syncingPosIdRef = useRef<Promise<void> | null>(null);
+
+  const syncPosIdFromLocalServer = useCallback(async () => {
+    if (syncingPosIdRef.current) {
+      return syncingPosIdRef.current;
+    }
+
+    syncingPosIdRef.current = (async () => {
+      const previousPosId = await posIdService.getStoredPosId();
+      const nextPosId = await serverConnection.initializePosId();
+
+      if (previousPosId && nextPosId && previousPosId !== nextPosId) {
+        await authService.logout(
+          'POS assignment changed for this device. Please log in again.',
+        );
+      }
+    })()
+      .catch((error) => {
+        console.log('ConnectionProvider: Failed to refresh POS ID:', error);
+      })
+      .finally(() => {
+        syncingPosIdRef.current = null;
+      });
+
+    return syncingPosIdRef.current;
+  }, []);
 
   const updateInternetState = useCallback((state: { isConnected: boolean | null; isInternetReachable: boolean | null }) => {
     const connected = state.isConnected === true;
@@ -90,6 +118,9 @@ export function ConnectionProvider({ children }: { children: React.ReactNode }) 
 
       try {
         const connected = await connectLocalSocket();
+        if (connected) {
+          void syncPosIdFromLocalServer();
+        }
         setIsLocalServerReachable(connected);
         setLastLocalCheck(Date.now());
         return connected;
@@ -108,7 +139,7 @@ export function ConnectionProvider({ children }: { children: React.ReactNode }) 
     });
 
     return pendingCheckRef.current;
-  }, []);
+  }, [syncPosIdFromLocalServer]);
 
   const reconnectLocalServer = useCallback(async (): Promise<boolean> => {
     return refreshLocalServerStatus();
@@ -162,12 +193,15 @@ export function ConnectionProvider({ children }: { children: React.ReactNode }) 
       checkingRef.current = false;
       pendingCheckRef.current = null;
       setIsCheckingLocal(false);
+      if (connected) {
+        void syncPosIdFromLocalServer();
+      }
     });
 
     refreshLocalServerStatus();
 
     return unsubscribe;
-  }, [refreshLocalServerStatus]);
+  }, [refreshLocalServerStatus, syncPosIdFromLocalServer]);
 
   useEffect(() => {
     const unsubscribe = onCloudSocketStatusChange((connected) => {

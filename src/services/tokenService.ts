@@ -9,6 +9,10 @@ type DecodedToken = {
   [key: string]: any;
 };
 
+type AuthSessionClearedListener = (reason?: string) => void;
+
+const authSessionClearedListeners = new Set<AuthSessionClearedListener>();
+
 const normalizeBase64 = (value: string): string => {
   const normalized = value.replace(/-/g, '+').replace(/_/g, '/');
   const padLength = normalized.length % 4;
@@ -60,7 +64,20 @@ export const getTokenLicenseError = (token: string | null | undefined): string |
   return null;
 };
 
-export const clearStoredAuthSession = async () => {
+export const subscribeAuthSessionCleared = (
+  listener: AuthSessionClearedListener,
+) => {
+  authSessionClearedListeners.add(listener);
+  return () => {
+    authSessionClearedListeners.delete(listener);
+  };
+};
+
+const emitAuthSessionCleared = (reason?: string) => {
+  authSessionClearedListeners.forEach((listener) => listener(reason));
+};
+
+export const clearStoredAuthSession = async (reason?: string) => {
   await SecureStore.deleteItemAsync(SECURE_STORAGE_KEYS.authToken);
   await AsyncStorage.multiRemove([
     STORAGE_KEYS.authUser,
@@ -69,6 +86,7 @@ export const clearStoredAuthSession = async () => {
     STORAGE_KEYS.legacyCloudAuthToken,
     STORAGE_KEYS.localAuthToken,
   ]);
+  emitAuthSessionCleared(reason);
 };
 
 export const ensureTokenLicenseIsValid = async (token: string | null | undefined) => {

@@ -17,7 +17,6 @@ import {
   StyleSheet,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import NetInfo from "@react-native-community/netinfo";
 import { STORAGE_KEYS } from "../constants/storageKeys";
 import { useTheme } from "../theme/ThemeProvider";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
@@ -1986,11 +1985,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
         orderInfo,
       };
 
-      const networkState = await NetInfo.fetch();
-      const hasInternet =
-        networkState.isConnected === true &&
-        networkState.isInternetReachable !== false;
-      const allowOfflineFallback = serverConnection.isConnected() && !hasInternet;
+      const allowOfflineFallback = serverConnection.isConnected();
       const settleRes = await orderService.settleOrder(
         order._id || order.id || order.orderId,
         settlePayload,
@@ -2107,7 +2102,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
       return { keepModalOpen: false };
     } catch (err) {
       setMarking(false);
-      console.error("Error settling order after payment selection:", err);
+      console.error("Error settling order after payment selection:", JSON.stringify(err));
       showToast("error", "Unable to complete payment");
       return { keepModalOpen: false };
     }

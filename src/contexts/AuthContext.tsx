@@ -6,7 +6,11 @@ import { useToast } from '../components/ToastProvider';
 import { useConnection } from './ConnectionProvider';
 import { SECURE_STORAGE_KEYS, STORAGE_KEYS } from '../constants/storageKeys';
 import { AuthContextType, AuthState, User } from '../types/auth';
-import { clearStoredAuthSession, getTokenLicenseError } from '../services/tokenService';
+import {
+    clearStoredAuthSession,
+    getTokenLicenseError,
+    subscribeAuthSessionCleared,
+} from '../services/tokenService';
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
@@ -182,6 +186,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         initialize();
     }, []);
+
+    useEffect(() => {
+        const unsubscribe = subscribeAuthSessionCleared((reason) => {
+            setState({
+                isAuthenticated: false,
+                isLoading: false,
+                user: null,
+                token: null,
+                loginType: null,
+                isServerConnected: false,
+                isCheckingConnection: false,
+            });
+
+            if (reason) {
+                showToast('info', reason);
+            }
+        });
+
+        return unsubscribe;
+    }, [showToast]);
 
     useEffect(() => {
         if (!isLocalServerReachable || state.isAuthenticated || state.isLoading) {
