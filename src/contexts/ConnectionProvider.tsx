@@ -1,9 +1,12 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { AppState } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
 import serverConnection from '../services/serverConnection';
 import {
   connectLocalSocket,
   disconnectSocket,
+  initCloudStatusSocket,
+  onCloudSocketStatusChange,
   onLocalSocketStatusChange,
   pauseLocalSocketReconnect,
   resumeLocalSocketReconnect,
@@ -32,9 +35,13 @@ export function ConnectionProvider({ children }: { children: React.ReactNode }) 
   const [lastLocalCheck, setLastLocalCheck] = useState<number | null>(null);
   const checkingRef = useRef(false);
   const pendingCheckRef = useRef<Promise<boolean> | null>(null);
+  const networkConnectedRef = useRef(true);
 
   const updateInternetState = useCallback((state: { isConnected: boolean | null; isInternetReachable: boolean | null }) => {
-    if (state.isConnected === false) {
+    const connected = state.isConnected === true;
+    networkConnectedRef.current = connected;
+
+    if (!connected) {
       setIsInternetReachable(false);
       return;
     }
@@ -43,9 +50,20 @@ export function ConnectionProvider({ children }: { children: React.ReactNode }) 
       setIsInternetReachable(false);
       return;
     }
-
-    setIsInternetReachable(true);
   }, []);
+
+  const refreshInternetStatus = useCallback(async () => {
+    try {
+      const state = await NetInfo.fetch();
+      updateInternetState({
+        isConnected: state.isConnected ?? null,
+        isInternetReachable: state.isInternetReachable ?? null,
+      });
+      if (state.isConnected === true) {
+        await initCloudStatusSocket();
+      }
+    } catch (_) { }
+  }, [updateInternetState]);
 
   const refreshLocalServerStatus = useCallback(async (): Promise<boolean> => {
     if (pendingCheckRef.current) {
@@ -114,19 +132,25 @@ export function ConnectionProvider({ children }: { children: React.ReactNode }) 
         isConnected: state.isConnected ?? null,
         isInternetReachable: state.isInternetReachable ?? null,
       });
+
+      if (state.isConnected === true) {
+        void initCloudStatusSocket();
+      }
     });
 
-    NetInfo.fetch()
-      .then((state) => {
-        updateInternetState({
-          isConnected: state.isConnected ?? null,
-          isInternetReachable: state.isInternetReachable ?? null,
-        });
-      })
-      .catch(() => {});
+    const appStateSubscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active') {
+        void refreshInternetStatus();
+      }
+    });
 
-    return unsubscribe;
-  }, [updateInternetState]);
+    void refreshInternetStatus();
+
+    return () => {
+      unsubscribe();
+      appStateSubscription.remove();
+    };
+  }, [refreshInternetStatus, updateInternetState]);
 
   useEffect(() => {
     const unsubscribe = onLocalSocketStatusChange((connected) => {
@@ -142,6 +166,21 @@ export function ConnectionProvider({ children }: { children: React.ReactNode }) 
 
     return unsubscribe;
   }, [refreshLocalServerStatus]);
+
+  useEffect(() => {
+    const unsubscribe = onCloudSocketStatusChange((connected) => {
+      if (!networkConnectedRef.current) {
+        setIsInternetReachable(false);
+        return;
+      }
+
+      setIsInternetReachable(connected);
+    });
+
+    void initCloudStatusSocket();
+
+    return unsubscribe;
+  }, []);
 
   const value = useMemo(
     () => ({

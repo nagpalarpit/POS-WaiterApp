@@ -9,13 +9,30 @@ import ConnectionScreen from '../screens/ConnectionScreen';
 export default function StatusBarIndicator() {
     const { colors } = useTheme();
     const insets = useSafeAreaInsets();
-    const { isLocalServerReachable, isCheckingLocal, pauseLocalServerRetry, resumeLocalServerRetry } = useConnection();
+    const {
+        isInternetReachable,
+        isLocalServerReachable,
+        isCheckingLocal,
+        pauseLocalServerRetry,
+        resumeLocalServerRetry,
+    } = useConnection();
     const [showConnectionModal, setShowConnectionModal] = React.useState(false);
 
-    // Don't show bar if connected or checking
-    const shouldShowBar = !isLocalServerReachable && !isCheckingLocal;
+    const showLocalServerBanner = !isLocalServerReachable && !isCheckingLocal;
+    const showInternetBanner = !isInternetReachable && isLocalServerReachable;
+    const shouldShowBar = showLocalServerBanner || showInternetBanner;
+    const isActionable = showLocalServerBanner;
+
+    const bannerColor = showInternetBanner ? colors.warning || '#D97706' : colors.error;
+    const bannerIcon = showInternetBanner ? 'cloud-off' : 'wifi-off';
+    const bannerText = showInternetBanner
+        ? 'Internet unavailable'
+        : isCheckingLocal
+            ? 'Checking connection...'
+            : 'Local server disconnected';
 
     const openConnectionDrawer = () => {
+        if (!isActionable) return;
         pauseLocalServerRetry();
         setShowConnectionModal(true);
     };
@@ -33,18 +50,17 @@ export default function StatusBarIndicator() {
         <>
             {shouldShowBar && (
                 <>
-                    <StatusBar backgroundColor={colors.error} barStyle="light-content" />
+                    <StatusBar backgroundColor={bannerColor} barStyle="light-content" />
                     <TouchableOpacity
-                        style={[styles.container, { backgroundColor: colors.error, paddingTop: insets.top }]}
+                        disabled={!isActionable}
+                        style={[styles.container, { backgroundColor: bannerColor, paddingTop: insets.top }]}
                         onPress={openConnectionDrawer}
-                        activeOpacity={0.8}
+                        activeOpacity={isActionable ? 0.8 : 1}
                     >
                         <View style={styles.content}>
-                            <MaterialIcons name="wifi-off" size={16} color="#fff" />
-                            <Text style={styles.text}>
-                                {isCheckingLocal ? 'Checking connection...' : 'Local server disconnected'}
-                            </Text>
-                            <MaterialIcons name="chevron-right" size={16} color="#fff" />
+                            <MaterialIcons name={bannerIcon} size={16} color="#fff" />
+                            <Text style={styles.text}>{bannerText}</Text>
+                            {isActionable ? <MaterialIcons name="chevron-right" size={16} color="#fff" /> : null}
                         </View>
                     </TouchableOpacity>
                 </>
@@ -61,11 +77,7 @@ export default function StatusBarIndicator() {
 
 const styles = StyleSheet.create({
     container: {
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        zIndex: 1000,
+        zIndex: 10,
     },
     content: {
         flexDirection: 'row',

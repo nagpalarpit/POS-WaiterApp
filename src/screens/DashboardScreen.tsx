@@ -54,7 +54,6 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
    * Get company initials for placeholder logo
    */
   const getCompanyInitials = () => {
-    console.log(settingsData.settings, 'Settings data for initials'); // Debug log
     const companyName = (settingsData.settings as any)?.company?.companyName || 'POS';
     const parts = companyName.split(' ').filter(Boolean);
     if (parts.length === 0) return 'POS';

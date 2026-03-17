@@ -10,10 +10,17 @@ let socketKind: 'local' | 'cloud' | null = null;
 let socketUrl: string | null = null;
 let localReconnectPaused = false;
 const localSocketListeners = new Set<(connected: boolean) => void>();
+let cloudStatusSocket: Socket | null = null;
+let cloudStatusSocketUrl: string | null = null;
+const cloudSocketListeners = new Set<(connected: boolean) => void>();
 
 const emitLocalSocketStatus = (connected: boolean) => {
   serverConnection.setConnectionState(connected);
   localSocketListeners.forEach((listener) => listener(connected));
+};
+
+const emitCloudSocketStatus = (connected: boolean) => {
+  cloudSocketListeners.forEach((listener) => listener(connected));
 };
 
 const markSocketKind = (kind: 'local' | 'cloud' | null) => {
@@ -47,6 +54,28 @@ const attachLocalSocketLifecycle = (target: Socket) => {
   target.on('error', (error) => {
     console.log('Local Socket error:', error);
     emitLocalSocketStatus(false);
+  });
+};
+
+const attachCloudStatusSocketLifecycle = (target: Socket) => {
+  target.on('connect', () => {
+    console.log('Cloud Status Socket connected');
+    emitCloudSocketStatus(true);
+  });
+
+  target.on('disconnect', () => {
+    console.log('Cloud Status Socket disconnected');
+    emitCloudSocketStatus(false);
+  });
+
+  target.on('connect_error', (error) => {
+    console.log('Cloud Status Socket connect error:', error);
+    emitCloudSocketStatus(false);
+  });
+
+  target.on('error', (error) => {
+    console.log('Cloud Status Socket error:', error);
+    emitCloudSocketStatus(false);
   });
 };
 
@@ -234,6 +263,53 @@ export const initCloudSocket = async () => {
   }
 };
 
+export const initCloudStatusSocket = async () => {
+  try {
+    const cloudBaseUrl = await getCloudBaseUrl();
+
+    if (!cloudBaseUrl) {
+      console.log('No cloud server URL configured for status socket');
+      emitCloudSocketStatus(false);
+      return null;
+    }
+
+    const wsUrl = cloudBaseUrl.replace(/^http/, 'ws');
+
+    if (cloudStatusSocket && cloudStatusSocketUrl === wsUrl) {
+      if (!cloudStatusSocket.connected && !cloudStatusSocket.active) {
+        cloudStatusSocket.connect();
+      }
+      return cloudStatusSocket;
+    }
+
+    if (cloudStatusSocket) {
+      cloudStatusSocket.disconnect();
+      cloudStatusSocket = null;
+      cloudStatusSocketUrl = null;
+    }
+
+    const queryObj: any = { type: 'waiter' };
+    const posId = posIdService.getPosId();
+    if (posId) {
+      queryObj.posId = posId;
+    }
+
+    cloudStatusSocket = io(wsUrl, {
+      transports: ['websocket'],
+      query: queryObj,
+    });
+    cloudStatusSocketUrl = wsUrl;
+
+    attachCloudStatusSocketLifecycle(cloudStatusSocket);
+
+    return cloudStatusSocket;
+  } catch (error) {
+    console.log('Error initializing cloud status socket:', error);
+    emitCloudSocketStatus(false);
+    return null;
+  }
+};
+
 /**
  * Get current socket instance
  */
@@ -255,6 +331,16 @@ export const onLocalSocketStatusChange = (listener: (connected: boolean) => void
   listener(isLocalSocketConnected());
   return () => {
     localSocketListeners.delete(listener);
+  };
+};
+
+export const onCloudSocketStatusChange = (listener: (connected: boolean) => void) => {
+  cloudSocketListeners.add(listener);
+  if (cloudStatusSocket) {
+    listener(cloudStatusSocket.connected);
+  }
+  return () => {
+    cloudSocketListeners.delete(listener);
   };
 };
 
@@ -289,7 +375,13 @@ export const disconnectSocket = () => {
     socket.disconnect();
     socket = null;
   }
+  if (cloudStatusSocket) {
+    cloudStatusSocket.disconnect();
+    cloudStatusSocket = null;
+  }
   socketUrl = null;
+  cloudStatusSocketUrl = null;
   serverConnection.setConnectionState(false, socketKind === 'local' ? serverConnection.getServerUrl() : null);
   markSocketKind(null);
+  emitCloudSocketStatus(false);
 };

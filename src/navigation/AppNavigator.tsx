@@ -421,78 +421,82 @@ export default function AppNavigator() {
 
   return (
     <NavigationContainer>
-      <StatusBarIndicator />
-      <Drawer.Navigator
-        key={navigatorKey}
-        initialRouteName={initialRouteName}
-        drawerContent={(props) => <CustomDrawerContent {...props} />}
-        screenOptions={{
-          headerShown: false,
-          drawerType: 'front',
-          overlayColor: colors.overlay || 'rgba(0, 0, 0, 0.35)',
-          drawerStyle: {
-            width: '82%',
-            borderTopRightRadius: 18,
-            borderBottomRightRadius: 18,
-            backgroundColor: colors.background,
-          },
-        }}
-      >
-        <Drawer.Screen name="Main" component={MainStack} />
-        <Drawer.Screen name="IPEntry" component={IPEntryScreen} />
-        <Drawer.Screen name="Login" component={LoginScreen} />
-        <Drawer.Screen
-          name="Account"
-          component={AccountScreen}
-          options={({ navigation }) => ({
-            headerShown: true,
-            title: 'Account',
-            headerStyle: { backgroundColor: colors.background },
-            headerTintColor: colors.text,
-            headerShadowVisible: false,
-            headerLeft: ({ tintColor }) => (
-              <HeaderMenuButton
-                color={tintColor || colors.text}
-                onPress={() => navigation.dispatch(DrawerActions.openDrawer())}
-              />
-            ),
-          })}
-        />
-        <Drawer.Screen
-          name="Settings"
-          component={SettingsScreen}
-          options={({ navigation }) => ({
-            headerShown: true,
-            title: 'Settings',
-            headerStyle: { backgroundColor: colors.background },
-            headerTintColor: colors.text,
-            headerShadowVisible: false,
-            headerLeft: ({ tintColor }) => (
-              <HeaderMenuButton
-                color={tintColor || colors.text}
-                onPress={() => navigation.dispatch(DrawerActions.openDrawer())}
-              />
-            ),
-          })}
-        />
-        <Drawer.Screen
-          name="Support"
-          component={SupportScreen}
-          options={({ navigation }) => ({
-            headerShown: true,
-            title: 'Help & Support',
-            headerStyle: { backgroundColor: colors.background },
-            headerTintColor: colors.text,
-            headerShadowVisible: false,
-            headerLeft: ({ tintColor }) => (
-              <HeaderMenuButton
-                color={tintColor || colors.text}
-                onPress={() => navigation.dispatch(DrawerActions.openDrawer())}
-              />
-            ),
-          })}
-        />
-      </Drawer.Navigator>
+      <View style={{ flex: 1, backgroundColor: colors.background }}>
+        <StatusBarIndicator />
+        <View style={{ flex: 1 }}>
+          <Drawer.Navigator
+            key={navigatorKey}
+            initialRouteName={initialRouteName}
+            drawerContent={(props) => <CustomDrawerContent {...props} />}
+            screenOptions={{
+              headerShown: false,
+              drawerType: 'front',
+              overlayColor: colors.overlay || 'rgba(0, 0, 0, 0.35)',
+              drawerStyle: {
+                width: '82%',
+                borderTopRightRadius: 18,
+                borderBottomRightRadius: 18,
+                backgroundColor: colors.background,
+              },
+            }}
+          >
+            <Drawer.Screen name="Main" component={MainStack} />
+            <Drawer.Screen name="IPEntry" component={IPEntryScreen} />
+            <Drawer.Screen name="Login" component={LoginScreen} />
+            <Drawer.Screen
+              name="Account"
+              component={AccountScreen}
+              options={({ navigation }) => ({
+                headerShown: true,
+                title: 'Account',
+                headerStyle: { backgroundColor: colors.background },
+                headerTintColor: colors.text,
+                headerShadowVisible: false,
+                headerLeft: ({ tintColor }) => (
+                  <HeaderMenuButton
+                    color={tintColor || colors.text}
+                    onPress={() => navigation.dispatch(DrawerActions.openDrawer())}
+                  />
+                ),
+              })}
+            />
+            <Drawer.Screen
+              name="Settings"
+              component={SettingsScreen}
+              options={({ navigation }) => ({
+                headerShown: true,
+                title: 'Settings',
+                headerStyle: { backgroundColor: colors.background },
+                headerTintColor: colors.text,
+                headerShadowVisible: false,
+                headerLeft: ({ tintColor }) => (
+                  <HeaderMenuButton
+                    color={tintColor || colors.text}
+                    onPress={() => navigation.dispatch(DrawerActions.openDrawer())}
+                  />
+                ),
+              })}
+            />
+            <Drawer.Screen
+              name="Support"
+              component={SupportScreen}
+              options={({ navigation }) => ({
+                headerShown: true,
+                title: 'Help & Support',
+                headerStyle: { backgroundColor: colors.background },
+                headerTintColor: colors.text,
+                headerShadowVisible: false,
+                headerLeft: ({ tintColor }) => (
+                  <HeaderMenuButton
+                    color={tintColor || colors.text}
+                    onPress={() => navigation.dispatch(DrawerActions.openDrawer())}
+                  />
+                ),
+              })}
+            />
+          </Drawer.Navigator>
+        </View>
+      </View>
     </NavigationContainer>
   );
 }
