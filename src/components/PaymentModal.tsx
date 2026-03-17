@@ -82,6 +82,24 @@ type PaymentRouteParams = {
   hidePrintPreview?: boolean;
 };
 
+type PaymentModalProps = {
+  navigation?: any;
+  route?: { params?: PaymentRouteParams };
+  visible?: boolean;
+  onClose?: () => void;
+  onSelect?: (option: any) => Promise<any> | any;
+  onPrintPreview?: (option: any) => Promise<any> | any;
+  title?: string;
+  orderTotal?: number;
+  companyId?: number;
+  splitItems?: SplitSelectableItem[];
+  allowSplitOption?: boolean;
+  hidePrintPreview?: boolean;
+  isBlocked?: boolean;
+  blockTitle?: string;
+  blockMessage?: string;
+};
+
 const toAmount = (value: string): number => {
   const parsed = parseFloat(value || "0");
   if (!Number.isFinite(parsed) || parsed < 0) return 0;
@@ -170,8 +188,19 @@ const getGiftCardLabel = (giftCard: GiftCard): string => {
   return code;
 };
 
-export default function PaymentScreen({ navigation, route }: any) {
-  const params: PaymentRouteParams = route?.params || {};
+export default function PaymentScreen(props: PaymentModalProps) {
+  const {
+    navigation,
+    route,
+    visible = true,
+    onClose,
+    onSelect,
+    onPrintPreview,
+    isBlocked: forcedBlocked,
+    blockTitle: forcedBlockTitle,
+    blockMessage: forcedBlockMessage,
+  } = props;
+  const params: PaymentRouteParams = route?.params || props;
   const {
     title = "Payment",
     orderTotal = 0,
@@ -184,18 +213,25 @@ export default function PaymentScreen({ navigation, route }: any) {
   const { showToast } = useToast();
   const { isInternetReachable, isLocalServerReachable } = useConnection();
   const handlers = useMemo(() => getPaymentFlowHandlers(), []);
+  const effectiveOnSelect = onSelect || handlers?.onSelect;
+  const effectiveOnPrintPreview = onPrintPreview || handlers?.onPrintPreview;
   const scrollRef = useRef<ScrollView>(null);
   const isFocused = useIsFocused();
   const insets = useSafeAreaInsets();
-  const isBlocked = !isLocalServerReachable;
+  const closeHandledRef = useRef(false);
+  const isBlocked = forcedBlocked ?? !isLocalServerReachable;
   const showLocalServerOfflineNotice =
     isInternetReachable && !isLocalServerReachable;
-  const blockTitle = showLocalServerOfflineNotice
-    ? "Local Server Disconnected"
-    : "Local Server Unavailable";
-  const blockMessage = showLocalServerOfflineNotice
-    ? "Internet is available, but the local POS server is disconnected. Reconnect to continue payment."
-    : "Local server is disconnected. Payments are disabled until it reconnects.";
+  const blockTitle = forcedBlockTitle || (
+    showLocalServerOfflineNotice
+      ? "Local Server Disconnected"
+      : "Local Server Unavailable"
+  );
+  const blockMessage = forcedBlockMessage || (
+    showLocalServerOfflineNotice
+      ? "Internet is available, but the local POS server is disconnected. Reconnect to continue payment."
+      : "Local server is disconnected. Payments are disabled until it reconnects."
+  );
   const [connectionModalVisible, setConnectionModalVisible] = useState(false);
   const primaryTabs = [
     { id: 0, label: "Cash" },
@@ -231,21 +267,40 @@ export default function PaymentScreen({ navigation, route }: any) {
     splitItems.map(() => 0),
   );
 
+  const notifyClose = () => {
+    if (closeHandledRef.current) {
+      return;
+    }
+    closeHandledRef.current = true;
+    handlers?.onClose?.();
+    onClose?.();
+    clearPaymentFlowHandlers();
+  };
+
+  useEffect(() => {
+    closeHandledRef.current = false;
+  }, [visible]);
+
   useLayoutEffect(() => {
-    navigation.setOptions({ headerTitle: title });
+    if (navigation?.setOptions) {
+      navigation.setOptions({ headerTitle: title });
+    }
   }, [navigation, title]);
 
   useEffect(() => {
-    if (!handlers?.onSelect) {
+    if (!effectiveOnSelect) {
       showToast("error", "Payment session expired. Please try again.");
-      navigation.goBack();
+      if (navigation?.goBack) {
+        navigation.goBack();
+      } else {
+        onClose?.();
+      }
       return;
     }
     return () => {
-      handlers?.onClose?.();
-      clearPaymentFlowHandlers();
+      notifyClose();
     };
-  }, [handlers, navigation, showToast]);
+  }, [effectiveOnSelect, navigation, onClose, showToast]);
 
   useEffect(() => {
     if (!isFocused) {
@@ -288,7 +343,7 @@ export default function PaymentScreen({ navigation, route }: any) {
     [activeGiftCard, baseTotal, tipNum],
   );
   const due = round2(Math.max(baseTotal + tipNum - giftCardTotal, 0));
-  const showPrintPreview = !!handlers?.onPrintPreview && !hidePrintPreview;
+  const showPrintPreview = !!effectiveOnPrintPreview && !hidePrintPreview;
   const isSplitInvalid = isSplitMode && splitItemTotal <= 0;
   const row1Count = 2 + (showPrintPreview ? 1 : 0);
   const showExpenseButton = !isSplitMode;
@@ -384,9 +439,10 @@ export default function PaymentScreen({ navigation, route }: any) {
   };
 
   const closeWithReset = () => {
-    handlers?.onClose?.();
-    clearPaymentFlowHandlers();
-    navigation.goBack();
+    notifyClose();
+    if (navigation?.goBack) {
+      navigation.goBack();
+    }
   };
 
   const handleConfirm = async (print = false, isCorporate = false) => {
@@ -404,7 +460,7 @@ export default function PaymentScreen({ navigation, route }: any) {
     setIsProcessing(true);
     try {
       const option = buildPaymentOption(print, isCorporate);
-      const result = await handlers?.onSelect?.(option);
+      const result = await effectiveOnSelect?.(option);
       if (!(result as any)?.keepOpen) {
         closeWithReset();
         return;
@@ -422,7 +478,7 @@ export default function PaymentScreen({ navigation, route }: any) {
     setIsProcessing(true);
     try {
       const option = buildPaymentOption(true);
-      await handlers?.onPrintPreview?.(option);
+      await effectiveOnPrintPreview?.(option);
     } catch (error) {
       console.error("Print preview failed:", error);
       showToast("error", "Unable to generate print preview");
@@ -489,8 +545,12 @@ export default function PaymentScreen({ navigation, route }: any) {
       setSplitGiftCard(null);
       return;
     }
-    setGiftCard(null);
+      setGiftCard(null);
   };
+
+  if (!visible) {
+    return null;
+  }
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>

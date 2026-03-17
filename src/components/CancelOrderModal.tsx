@@ -1,17 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import {
-  Modal,
   View,
   Text,
-  TextInput,
   TouchableOpacity,
-  KeyboardAvoidingView,
-  Platform,
   ActivityIndicator,
 } from 'react-native';
 import { useTheme } from '../theme/ThemeProvider';
 import Card from './Card';
 import { useToast } from './ToastProvider';
+import AppBottomSheet from './AppBottomSheet';
+import AppBottomSheetTextInput from './AppBottomSheetTextInput';
 
 type Props = {
   visible: boolean;
@@ -46,54 +44,15 @@ export default function CancelOrderModal({
   };
 
   return (
-    <Modal
+    <AppBottomSheet
       visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={onClose}
-      statusBarTranslucent
+      onClose={onClose}
+      title="Cancel Order"
+      subtitle="Enter a reason to continue"
+      snapPoints={['46%']}
     >
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={{ flex: 1, justifyContent: 'center', paddingHorizontal: 16 }}
-      >
-        <View
-          style={{
-            position: 'absolute',
-            top: 0,
-            right: 0,
-            bottom: 0,
-            left: 0,
-            backgroundColor: 'rgba(0,0,0,0.5)',
-          }}
-        />
-
         <Card rounded={12} style={{ padding: 16, borderColor: colors.border }}>
-          <View
-            style={{
-              flexDirection: 'row',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-            }}
-          >
-            <View>
-              <Text
-                style={{ color: colors.text, fontWeight: '700', fontSize: 16 }}
-              >
-                Cancel Order
-              </Text>
-              <Text
-                style={{ color: colors.textSecondary, fontSize: 12, marginTop: 2 }}
-              >
-                Enter a reason to continue
-              </Text>
-            </View>
-            <TouchableOpacity onPress={onClose} disabled={loading}>
-              <Text style={{ color: colors.textSecondary, fontSize: 20 }}>x</Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={{ marginTop: 16 }}>
+          <View>
             <Text
               style={{
                 color: colors.textSecondary,
@@ -104,7 +63,7 @@ export default function CancelOrderModal({
             >
               Reason
             </Text>
-            <TextInput
+            <AppBottomSheetTextInput
               value={reason}
               onChangeText={setReason}
               placeholder="Enter cancel reason"
@@ -178,7 +137,6 @@ export default function CancelOrderModal({
             </TouchableOpacity>
           </View>
         </Card>
-      </KeyboardAvoidingView>
-    </Modal>
+    </AppBottomSheet>
   );
 }

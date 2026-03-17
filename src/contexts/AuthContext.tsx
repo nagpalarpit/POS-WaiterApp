@@ -6,6 +6,7 @@ import { useToast } from '../components/ToastProvider';
 import { useConnection } from './ConnectionProvider';
 import { SECURE_STORAGE_KEYS, STORAGE_KEYS } from '../constants/storageKeys';
 import { AuthContextType, AuthState, User } from '../types/auth';
+import { clearStoredAuthSession, getTokenLicenseError } from '../services/tokenService';
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
@@ -29,8 +30,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     const clearStoredAuth = async () => {
-        await SecureStore.deleteItemAsync(SECURE_STORAGE_KEYS.authToken);
-        await AsyncStorage.multiRemove([STORAGE_KEYS.authUser, STORAGE_KEYS.authLoginType]);
+        await clearStoredAuthSession();
     };
 
     // Load stored auth data
@@ -51,6 +51,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Validate token with server
     const validateToken = async (token: string, loginType: 'local' | 'cloud'): Promise<boolean> => {
         try {
+            const licenseError = getTokenLicenseError(token);
+            if (licenseError) {
+                throw new Error(licenseError);
+            }
+
             if (loginType === 'local') {
                 // For local, check if server is connected and socket is active
                 const isConnected = await checkServerConnection();
@@ -89,10 +94,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     isLoading: false,
                 }));
             } else {
-                // Local sessions should survive temporary server unavailability.
-                if (loginType !== 'local') {
-                    await clearStoredAuth();
-                }
+                await clearStoredAuth();
                 setState(prev => ({
                     ...prev,
                     isAuthenticated: false,
@@ -164,8 +166,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 isServerConnected: state.isServerConnected,
                 isCheckingConnection: false,
             });
-
-            showToast('success', 'Logged out successfully');
         } catch (error) {
             console.error('Error during logout:', error);
             showToast('error', 'Error during logout');

@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, Modal, TextInput } from 'react-native';
+import { View, Text, TouchableOpacity } from 'react-native';
 import { useTheme } from '../theme/ThemeProvider';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import Card from './Card';
+import AppBottomSheet from './AppBottomSheet';
+import AppBottomSheetTextInput from './AppBottomSheetTextInput';
 
 interface Props {
     visible: boolean;
@@ -20,33 +22,31 @@ export default function ItemNoteModal({ visible, initialNote = '', onClose, onSa
     }, [initialNote, visible]);
 
     return (
-        <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} allowSwipeDismissal={true}>
-            <View style={{ flex: 1, backgroundColor: colors.overlay, justifyContent: 'center', alignItems: 'center' }}>
-                <Card style={{ width: '90%' }} rounded={12}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                        <Text style={{ color: colors.text, fontWeight: '700' }}>Item Note</Text>
-                        <TouchableOpacity onPress={onClose}><MaterialCommunityIcons name="close" size={20} color={colors.text} /></TouchableOpacity>
-                    </View>
+        <AppBottomSheet
+            visible={visible}
+            onClose={onClose}
+            title="Item Note"
+            snapPoints={['44%']}
+        >
+            <Card style={{ width: '100%' }} rounded={12}>
+                <AppBottomSheetTextInput
+                    value={note}
+                    onChangeText={setNote}
+                    placeholder="Add note for this item"
+                    placeholderTextColor={colors.textSecondary}
+                    style={{ minHeight: 100, color: colors.text, borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 10 }}
+                    multiline
+                />
 
-                    <TextInput
-                        value={note}
-                        onChangeText={setNote}
-                        placeholder="Add note for this item"
-                        placeholderTextColor={colors.textSecondary}
-                        style={{ minHeight: 80, color: colors.text, borderWidth: 1, borderColor: colors.border, borderRadius: 6, padding: 8 }}
-                        multiline
-                    />
-
-                    <View style={{ flexDirection: 'row', marginTop: 12 }}>
-                        <TouchableOpacity onPress={onClose} style={{ flex: 1, marginRight: 8, padding: 12, borderRadius: 8, borderWidth: 1, borderColor: colors.border }}>
-                            <Text style={{ textAlign: 'center', color: colors.text }}>Cancel</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity onPress={() => { onSave(note); onClose(); }} style={{ flex: 1, padding: 12, borderRadius: 8, backgroundColor: colors.primary }}>
-                            <Text style={{ textAlign: 'center', color: colors.textInverse }}>Save</Text>
-                        </TouchableOpacity>
-                    </View>
-                </Card>
-            </View>
-        </Modal>
+                <View style={{ flexDirection: 'row', marginTop: 12 }}>
+                    <TouchableOpacity onPress={onClose} style={{ flex: 1, marginRight: 8, padding: 12, borderRadius: 8, borderWidth: 1, borderColor: colors.border }}>
+                        <Text style={{ textAlign: 'center', color: colors.text }}>Cancel</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => { onSave(note); onClose(); }} style={{ flex: 1, padding: 12, borderRadius: 8, backgroundColor: colors.primary }}>
+                        <Text style={{ textAlign: 'center', color: colors.textInverse }}>Save</Text>
+                    </TouchableOpacity>
+                </View>
+            </Card>
+        </AppBottomSheet>
     );
 }

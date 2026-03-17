@@ -1,18 +1,15 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  Modal,
+  StyleSheet,
   View,
   Text,
   TouchableOpacity,
-  TextInput,
-  Pressable,
-  KeyboardAvoidingView,
-  Platform,
 } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { MaterialIcons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeProvider';
-import Card from './Card';
 import { useToast } from './ToastProvider';
+import AppBottomSheet from './AppBottomSheet';
+import AppBottomSheetTextInput from './AppBottomSheetTextInput';
 
 const EXTRA_CATEGORY = {
   FOOD: 1,
@@ -70,188 +67,215 @@ export default function AddExtraModal({ visible, onClose, onSave }: Props) {
     });
   };
 
-  return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={onClose}
-      statusBarTranslucent
-    >
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={{ flex: 1 }}
+  const footer = (
+    <View style={styles.footerActions}>
+      <TouchableOpacity
+        onPress={onClose}
+        activeOpacity={0.85}
+        style={[
+          styles.secondaryButton,
+          {
+            borderColor: colors.border,
+            backgroundColor: colors.searchBackground || colors.surface,
+          },
+        ]}
       >
-        <Pressable
-          onPress={onClose}
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: 'rgba(0,0,0,0.5)',
-          }}
-        />
+        <Text style={[styles.secondaryButtonText, { color: colors.textSecondary || colors.text }]}>
+          Cancel
+        </Text>
+      </TouchableOpacity>
 
+      <TouchableOpacity
+        onPress={handleSave}
+        activeOpacity={0.85}
+        style={[
+          styles.primaryButton,
+          {
+            backgroundColor: colors.primary,
+            opacity: isValid ? 1 : 0.5,
+          },
+        ]}
+      >
+        <MaterialIcons name="add-circle-outline" size={18} color={colors.textInverse || '#fff'} />
+        <Text style={[styles.primaryButtonText, { color: colors.textInverse || '#fff' }]}>
+          Save Extra
+        </Text>
+      </TouchableOpacity>
+    </View>
+  );
+
+  return (
+    <AppBottomSheet
+      visible={visible}
+      onClose={onClose}
+      title="Add Extra"
+      subtitle="Create an extra item with a name, price, and category."
+      snapPoints={['70%']}
+      footer={footer}
+    >
+      <View style={styles.formSection}>
+        <Text style={[styles.label, { color: colors.textSecondary || colors.text }]}>Item Name</Text>
         <View
-          style={{
-            flex: 1,
-            justifyContent: 'center',
-            alignItems: 'center',
-            paddingHorizontal: 16,
-          }}
+          style={[
+            styles.inputWrap,
+            {
+              borderColor: colors.border,
+              backgroundColor: colors.searchBackground || colors.surface,
+            },
+          ]}
         >
-          <Card style={{ width: '100%', maxWidth: 400 }} rounded={14}>
-            <View
-              style={{
-                flexDirection: 'row',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                marginBottom: 16,
-              }}
-            >
-              <Text
-                style={{ color: colors.text, fontWeight: '700', fontSize: 16 }}
-              >
-                Add Extra
-              </Text>
-              <TouchableOpacity onPress={onClose}>
-                <MaterialCommunityIcons
-                  name="close"
-                  size={24}
-                  color={colors.text}
-                />
-              </TouchableOpacity>
-            </View>
-
-            <View style={{ marginBottom: 12 }}>
-              <Text
-                style={{
-                  color: colors.textSecondary,
-                  fontSize: 12,
-                  fontWeight: '600',
-                  marginBottom: 6,
-                }}
-              >
-                Item Name
-              </Text>
-              <TextInput
-                value={itemName}
-                onChangeText={setItemName}
-                placeholder="Enter extra item name"
-                placeholderTextColor={colors.textSecondary}
-                style={{
-                  color: colors.text,
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                  borderRadius: 8,
-                  paddingHorizontal: 10,
-                  paddingVertical: 8,
-                  backgroundColor: colors.surface,
-                }}
-              />
-            </View>
-
-            <View style={{ marginBottom: 16 }}>
-              <Text
-                style={{
-                  color: colors.textSecondary,
-                  fontSize: 12,
-                  fontWeight: '600',
-                  marginBottom: 6,
-                }}
-              >
-                Price
-              </Text>
-              <TextInput
-                value={priceInput}
-                onChangeText={setPriceInput}
-                placeholder="0.00"
-                placeholderTextColor={colors.textSecondary}
-                keyboardType="decimal-pad"
-                style={{
-                  color: colors.text,
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                  borderRadius: 8,
-                  paddingHorizontal: 10,
-                  paddingVertical: 8,
-                  backgroundColor: colors.surface,
-                }}
-              />
-            </View>
-
-            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16 }}>
-              {[ 
-                { id: EXTRA_CATEGORY.FOOD, label: 'Food' },
-                { id: EXTRA_CATEGORY.DRINK, label: 'Drink' },
-                // { id: EXTRA_CATEGORY.ZERO, label: '0%' },
-              ].map((entry) => {
-                const selected = extraCategory === entry.id;
-                return (
-                  <TouchableOpacity
-                    key={entry.id}
-                    onPress={() => setExtraCategory(entry.id)}
-                    style={{
-                      flex: 1,
-                      paddingVertical: 8,
-                      borderRadius: 999,
-                      borderWidth: 1.5,
-                      borderColor: selected ? colors.primary : colors.border,
-                      backgroundColor: selected
-                        ? `${colors.primary}20`
-                        : colors.surface,
-                      alignItems: 'center',
-                    }}
-                  >
-                    <Text
-                      style={{
-                        color: selected ? colors.primary : colors.text,
-                        fontWeight: '600',
-                        fontSize: 12,
-                      }}
-                    >
-                      {entry.label}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-
-            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 10 }}>
-              <TouchableOpacity
-                onPress={onClose}
-                style={{
-                  paddingHorizontal: 16,
-                  paddingVertical: 10,
-                  borderRadius: 999,
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                }}
-              >
-                <Text style={{ color: colors.textSecondary, fontWeight: '600' }}>
-                  Cancel
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={handleSave}
-                style={{
-                  paddingHorizontal: 18,
-                  paddingVertical: 10,
-                  borderRadius: 999,
-                  backgroundColor: colors.primary,
-                  opacity: isValid ? 1 : 0.5,
-                }}
-              >
-                <Text style={{ color: colors.textInverse || '#fff', fontWeight: '700' }}>
-                  Save
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </Card>
+          <MaterialIcons
+            name="fastfood"
+            size={18}
+            color={colors.textSecondary || colors.text}
+            style={styles.inputIcon}
+          />
+          <AppBottomSheetTextInput
+            value={itemName}
+            onChangeText={setItemName}
+            placeholder="Enter extra item name"
+            placeholderTextColor={colors.textSecondary || colors.text}
+            style={[styles.input, { color: colors.text }]}
+          />
         </View>
-      </KeyboardAvoidingView>
-    </Modal>
+      </View>
+
+      <View style={styles.formSection}>
+        <Text style={[styles.label, { color: colors.textSecondary || colors.text }]}>Price</Text>
+        <View
+          style={[
+            styles.inputWrap,
+            {
+              borderColor: colors.border,
+              backgroundColor: colors.searchBackground || colors.surface,
+            },
+          ]}
+        >
+          <MaterialIcons
+            name="euro-symbol"
+            size={18}
+            color={colors.textSecondary || colors.text}
+            style={styles.inputIcon}
+          />
+          <AppBottomSheetTextInput
+            value={priceInput}
+            onChangeText={setPriceInput}
+            placeholder="0.00"
+            placeholderTextColor={colors.textSecondary || colors.text}
+            keyboardType="decimal-pad"
+            style={[styles.input, { color: colors.text }]}
+          />
+        </View>
+      </View>
+
+      <View style={styles.formSection}>
+        <Text style={[styles.label, { color: colors.textSecondary || colors.text }]}>Category</Text>
+        <View style={styles.categoryRow}>
+          {[
+            { id: EXTRA_CATEGORY.FOOD, label: 'Food' },
+            { id: EXTRA_CATEGORY.DRINK, label: 'Drink' },
+          ].map((entry) => {
+            const selected = extraCategory === entry.id;
+            return (
+              <TouchableOpacity
+                key={entry.id}
+                onPress={() => setExtraCategory(entry.id)}
+                activeOpacity={0.85}
+                style={[
+                  styles.categoryChip,
+                  {
+                    borderColor: selected ? colors.primary : colors.border,
+                    backgroundColor: selected ? `${colors.primary}18` : colors.searchBackground || colors.surface,
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.categoryChipText,
+                    { color: selected ? colors.primary : colors.text },
+                  ]}
+                >
+                  {entry.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </View>
+    </AppBottomSheet>
   );
 }
+
+const styles = StyleSheet.create({
+  formSection: {
+    marginBottom: 18,
+  },
+  label: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: 8,
+    letterSpacing: 0.2,
+  },
+  inputWrap: {
+    borderWidth: 1,
+    borderRadius: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    minHeight: 56,
+  },
+  inputIcon: {
+    marginRight: 12,
+  },
+  input: {
+    flex: 1,
+    fontSize: 16,
+    paddingVertical: 14,
+  },
+  categoryRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  categoryChip: {
+    flex: 1,
+    minHeight: 50,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 14,
+  },
+  categoryChipText: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  footerActions: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  secondaryButton: {
+    flex: 0.42,
+    minHeight: 54,
+    borderRadius: 18,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  secondaryButtonText: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  primaryButton: {
+    flex: 1,
+    minHeight: 56,
+    borderRadius: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  primaryButtonText: {
+    fontSize: 16,
+    fontWeight: '800',
+    marginLeft: 10,
+  },
+});

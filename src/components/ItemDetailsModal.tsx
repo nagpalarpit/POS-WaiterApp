@@ -4,7 +4,6 @@ import {
     Text,
     TouchableOpacity,
     ScrollView,
-    Modal,
     FlatList,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -12,6 +11,7 @@ import { useTheme } from '../theme/ThemeProvider';
 import { formatCurrency } from '../utils/currency';
 import Card from './Card';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import AppBottomSheet from './AppBottomSheet';
 
 interface MenuItemVariant {
     id: number;
@@ -267,19 +267,15 @@ export default function ItemDetailsModal({
     if (!item) return null;
 
     return (
-        <Modal
+        <AppBottomSheet
             visible={visible}
-            transparent
-            animationType="slide"
-            onRequestClose={onClose}
-            statusBarTranslucent
-            allowSwipeDismissal={true}
+            onClose={onClose}
+            snapPoints={['92%']}
+            showCloseButton={false}
         >
             <View
                 style={{
-                    flex: 1,
-                    backgroundColor: colors.overlay,
-                    justifyContent: 'flex-end',
+                    paddingBottom: insets.bottom + 12,
                 }}
             >
                 <Card
@@ -507,6 +503,6 @@ export default function ItemDetailsModal({
                     </View>
                 </Card>
             </View>
-        </Modal>
+        </AppBottomSheet>
     );
 }

@@ -6,7 +6,17 @@ import { useTheme } from '../theme/ThemeProvider';
 import { useConnection } from '../contexts/ConnectionProvider';
 import ConnectionScreen from '../screens/ConnectionScreen';
 
-export default function StatusBarIndicator() {
+type StatusBarIndicatorProps = {
+    hidden?: boolean;
+    connectionModalVisible: boolean;
+    onConnectionModalVisibleChange: (visible: boolean) => void;
+};
+
+export default function StatusBarIndicator({
+    hidden = false,
+    connectionModalVisible,
+    onConnectionModalVisibleChange,
+}: StatusBarIndicatorProps) {
     const { colors } = useTheme();
     const insets = useSafeAreaInsets();
     const {
@@ -16,7 +26,12 @@ export default function StatusBarIndicator() {
         pauseLocalServerRetry,
         resumeLocalServerRetry,
     } = useConnection();
-    const [showConnectionModal, setShowConnectionModal] = React.useState(false);
+
+    React.useEffect(() => {
+        if (hidden) {
+            onConnectionModalVisibleChange(false);
+        }
+    }, [hidden, onConnectionModalVisibleChange]);
 
     const showLocalServerBanner = !isLocalServerReachable && !isCheckingLocal;
     const showInternetBanner = !isInternetReachable && isLocalServerReachable;
@@ -34,17 +49,21 @@ export default function StatusBarIndicator() {
     const openConnectionDrawer = () => {
         if (!isActionable) return;
         pauseLocalServerRetry();
-        setShowConnectionModal(true);
+        onConnectionModalVisibleChange(true);
     };
 
     const closeConnectionDrawer = () => {
-        setShowConnectionModal(false);
+        onConnectionModalVisibleChange(false);
         resumeLocalServerRetry().catch(() => { });
     };
 
     const handleConnected = () => {
-        setShowConnectionModal(false);
+        onConnectionModalVisibleChange(false);
     };
+
+    if (hidden) {
+        return null;
+    }
 
     return (
         <>
@@ -67,7 +86,7 @@ export default function StatusBarIndicator() {
             )}
 
             <ConnectionScreen
-                visible={showConnectionModal}
+                visible={connectionModalVisible}
                 onClose={closeConnectionDrawer}
                 onConnected={handleConnected}
             />
@@ -78,6 +97,7 @@ export default function StatusBarIndicator() {
 const styles = StyleSheet.create({
     container: {
         zIndex: 10,
+        elevation: 10,
     },
     content: {
         flexDirection: 'row',

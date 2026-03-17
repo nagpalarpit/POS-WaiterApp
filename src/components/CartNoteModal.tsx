@@ -1,15 +1,16 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, TouchableOpacity, Modal, TextInput, Pressable, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../constants/storageKeys';
 import { useTheme } from '../theme/ThemeProvider';
 import { getCurrencySymbol } from '../utils/currency';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import Card from './Card';
 import PinModal from './PinModal';
 import { CartDiscount } from '../services/cartService';
 import { DiscountOption, fetchDiscountsForCompany, loadCachedDiscounts } from '../services/discountService';
 import { useToast } from '../components/ToastProvider';
+import AppBottomSheet from './AppBottomSheet';
+import AppBottomSheetTextInput from './AppBottomSheetTextInput';
 
 interface Props {
     visible: boolean;
@@ -177,137 +178,121 @@ export default function CartNoteModal({ visible, initialNote = '', initialDiscou
     };
 
     return (
-        <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose} statusBarTranslucent>
-            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
-                {/* Backdrop Pressable */}
-                <Pressable
-                    onPress={onClose}
-                    style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)' }}
+        <AppBottomSheet
+            visible={visible}
+            onClose={onClose}
+            title="Notes & Discounts"
+            snapPoints={['72%']}
+        >
+            <View style={{ marginBottom: 16 }}>
+                <Text style={{ color: colors.textSecondary, fontSize: 12, fontWeight: '600', marginBottom: 8 }}>Order Note</Text>
+                <AppBottomSheetTextInput
+                    value={note}
+                    onChangeText={setNote}
+                    placeholder="Add a note for this order..."
+                    placeholderTextColor={colors.textSecondary}
+                    style={{ minHeight: 80, color: colors.text, borderWidth: 1, borderColor: colors.border, borderRadius: 8, padding: 10, backgroundColor: colors.surface }}
+                    multiline
                 />
-                
-                {/* Modal Content */}
-                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 16 }}>
-                    <Card style={{ width: '100%', maxWidth: 400 }} rounded={12}>
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                            <Text style={{ color: colors.text, fontWeight: '700', fontSize: 16 }}>Notes & Discounts</Text>
-                            <TouchableOpacity onPress={onClose}><MaterialCommunityIcons name="close" size={24} color={colors.text} /></TouchableOpacity>
-                        </View>
+            </View>
 
-                        {/* Order Note Section */}
-                        <View style={{ marginBottom: 16 }}>
-                            <Text style={{ color: colors.textSecondary, fontSize: 12, fontWeight: '600', marginBottom: 8 }}>Order Note</Text>
-                            <TextInput
-                                value={note}
-                                onChangeText={setNote}
-                                placeholder="Add a note for this order..."
-                                placeholderTextColor={colors.textSecondary}
-                                style={{ minHeight: 80, color: colors.text, borderWidth: 1, borderColor: colors.border, borderRadius: 8, padding: 10, backgroundColor: colors.surface }}
-                                multiline
-                            />
-                        </View>
+            <View style={{ marginBottom: 16 }}>
+                <Text style={{ color: colors.textSecondary, fontSize: 12, fontWeight: '600', marginBottom: 8 }}>Discount</Text>
 
-                        {/* Discount Section */}
-                        <View style={{ marginBottom: 16 }}>
-                            <Text style={{ color: colors.textSecondary, fontSize: 12, fontWeight: '600', marginBottom: 8 }}>Discount</Text>
-
-                            {discountsLoading ? (
-                                <Text style={{ color: colors.textSecondary, fontSize: 12 }}>Loading discounts...</Text>
-                            ) : discounts.length === 0 ? (
-                                <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
-                                    No discounts available for this company.
-                                </Text>
-                            ) : (
-                                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
-                                    <TouchableOpacity
-                                        onPress={() => requestPinForDiscount(null)}
-                                        style={{
-                                            paddingHorizontal: 12,
-                                            paddingVertical: 8,
-                                            borderRadius: 999,
-                                            borderWidth: 1.5,
-                                            borderColor: !selectedDiscountId ? colors.primary : colors.border,
-                                            backgroundColor: !selectedDiscountId ? colors.primary + '20' : colors.surface,
-                                        }}
-                                    >
-                                        <Text style={{ color: !selectedDiscountId ? colors.primary : colors.text, fontWeight: '600', fontSize: 12 }}>
-                                            No Discount
-                                        </Text>
-                                    </TouchableOpacity>
-                                    {discounts.map((discount, index) => {
-                                        const discountId = getDiscountKey(discount, index);
-                                        const selected = selectedDiscountId === discountId;
-                                        const label = discount.discountName || discount.name || 'Discount';
-                                        return (
-                                            <TouchableOpacity
-                                                key={`${discountId}`}
-                                                onPress={() => requestPinForDiscount(discountId ?? null)}
-                                                style={{
-                                                    paddingHorizontal: 12,
-                                                    paddingVertical: 8,
-                                                    borderRadius: 999,
-                                                    borderWidth: 1.5,
-                                                    borderColor: selected ? colors.primary : colors.border,
-                                                    backgroundColor: selected ? colors.primary + '20' : colors.surface,
-                                                }}
-                                            >
-                                                <Text style={{ color: selected ? colors.primary : colors.text, fontWeight: '600', fontSize: 12 }}>
-                                                    {label} · {getDiscountValueLabel(discount)}
-                                                </Text>
-                                            </TouchableOpacity>
-                                        );
-                                    })}
-                                </ScrollView>
-                            )}
-
-                            {selectedDiscount?.discountType === 'CUSTOM' && (
-                                <View style={{ marginTop: 10 }}>
-                                    <Text style={{ color: colors.textSecondary, fontSize: 11, marginBottom: 6 }}>
-                                        Custom Discount (%)
+                {discountsLoading ? (
+                    <Text style={{ color: colors.textSecondary, fontSize: 12 }}>Loading discounts...</Text>
+                ) : discounts.length === 0 ? (
+                    <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                        No discounts available for this company.
+                    </Text>
+                ) : (
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+                        <TouchableOpacity
+                            onPress={() => requestPinForDiscount(null)}
+                            style={{
+                                paddingHorizontal: 12,
+                                paddingVertical: 8,
+                                borderRadius: 999,
+                                borderWidth: 1.5,
+                                borderColor: !selectedDiscountId ? colors.primary : colors.border,
+                                backgroundColor: !selectedDiscountId ? colors.primary + '20' : colors.surface,
+                            }}
+                        >
+                            <Text style={{ color: !selectedDiscountId ? colors.primary : colors.text, fontWeight: '600', fontSize: 12 }}>
+                                No Discount
+                            </Text>
+                        </TouchableOpacity>
+                        {discounts.map((discount, index) => {
+                            const discountId = getDiscountKey(discount, index);
+                            const selected = selectedDiscountId === discountId;
+                            const label = discount.discountName || discount.name || 'Discount';
+                            return (
+                                <TouchableOpacity
+                                    key={`${discountId}`}
+                                    onPress={() => requestPinForDiscount(discountId ?? null)}
+                                    style={{
+                                        paddingHorizontal: 12,
+                                        paddingVertical: 8,
+                                        borderRadius: 999,
+                                        borderWidth: 1.5,
+                                        borderColor: selected ? colors.primary : colors.border,
+                                        backgroundColor: selected ? colors.primary + '20' : colors.surface,
+                                    }}
+                                >
+                                    <Text style={{ color: selected ? colors.primary : colors.text, fontWeight: '600', fontSize: 12 }}>
+                                        {label} · {getDiscountValueLabel(discount)}
                                     </Text>
-                                    <TextInput
-                                        value={customDiscountValue}
-                                        onChangeText={setCustomDiscountValue}
-                                        editable={pinVerified || discountChanged}
-                                        placeholder="Enter custom percentage"
-                                        placeholderTextColor={colors.textSecondary}
-                                        keyboardType="decimal-pad"
-                                        style={{
-                                            color: colors.text,
-                                            borderWidth: 1,
-                                            borderColor: colors.border,
-                                            borderRadius: 8,
-                                            padding: 10,
-                                            backgroundColor: colors.surface,
-                                            fontWeight: '600',
-                                        }}
-                                    />
-                                </View>
-                            )}
-                        </View>
+                                </TouchableOpacity>
+                            );
+                        })}
+                    </ScrollView>
+                )}
 
-                        {/* Buttons */}
-                        <View style={{ flexDirection: 'row', gap: 8 }}>
-                            <TouchableOpacity onPress={onClose} style={{ flex: 1, padding: 12, borderRadius: 8, borderWidth: 1.5, borderColor: colors.border, backgroundColor: colors.surface }}>
-                                <Text style={{ textAlign: 'center', color: colors.text, fontWeight: '600' }}>Cancel</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity onPress={() => {
-                                const didSave = save();
-                                if (didSave) {
-                                    onClose();
-                                }
-                            }} style={{ flex: 1, padding: 12, borderRadius: 8, backgroundColor: colors.primary }}>
-                                <Text style={{ textAlign: 'center', color: colors.textInverse, fontWeight: '700' }}>Save Changes</Text>
-                            </TouchableOpacity>
-                        </View>
-                    </Card>
-                </View>
+                {selectedDiscount?.discountType === 'CUSTOM' && (
+                    <View style={{ marginTop: 10 }}>
+                        <Text style={{ color: colors.textSecondary, fontSize: 11, marginBottom: 6 }}>
+                            Custom Discount (%)
+                        </Text>
+                        <AppBottomSheetTextInput
+                            value={customDiscountValue}
+                            onChangeText={setCustomDiscountValue}
+                            editable={pinVerified || discountChanged}
+                            placeholder="Enter custom percentage"
+                            placeholderTextColor={colors.textSecondary}
+                            keyboardType="decimal-pad"
+                            style={{
+                                color: colors.text,
+                                borderWidth: 1,
+                                borderColor: colors.border,
+                                borderRadius: 8,
+                                padding: 10,
+                                backgroundColor: colors.surface,
+                                fontWeight: '600',
+                            }}
+                        />
+                    </View>
+                )}
+            </View>
 
-                <PinModal
-                    visible={pinModalVisible}
-                    onClose={handlePinClose}
-                    onVerified={handlePinVerified}
-                />
-            </KeyboardAvoidingView>
-        </Modal>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+                <TouchableOpacity onPress={onClose} style={{ flex: 1, padding: 12, borderRadius: 8, borderWidth: 1.5, borderColor: colors.border, backgroundColor: colors.surface }}>
+                    <Text style={{ textAlign: 'center', color: colors.text, fontWeight: '600' }}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => {
+                    const didSave = save();
+                    if (didSave) {
+                        onClose();
+                    }
+                }} style={{ flex: 1, padding: 12, borderRadius: 8, backgroundColor: colors.primary }}>
+                    <Text style={{ textAlign: 'center', color: colors.textInverse, fontWeight: '700' }}>Save Changes</Text>
+                </TouchableOpacity>
+            </View>
+
+            <PinModal
+                visible={pinModalVisible}
+                onClose={handlePinClose}
+                onVerified={handlePinVerified}
+            />
+        </AppBottomSheet>
     );
 }

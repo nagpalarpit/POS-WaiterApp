@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SERVER_BASE_URL } from '../config/env';
 import { STORAGE_KEYS } from '../constants/storageKeys';
 import posIdService from './posIdService';
+import { ensureTokenLicenseIsValid } from './tokenService';
 
 const api: AxiosInstance = axios.create({
   timeout: 20000,
@@ -12,18 +13,24 @@ const api: AxiosInstance = axios.create({
 // Set up request interceptor to add auth token and POS ID (same as POS_V2)
 api.interceptors.request.use(
   async (config) => {
+    const headers: any = config.headers || {};
     const token =
       (await AsyncStorage.getItem(STORAGE_KEYS.cloudAuthToken)) ||
       (await AsyncStorage.getItem(STORAGE_KEYS.legacyCloudAuthToken));
+
     if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+      await ensureTokenLicenseIsValid(token);
+      headers.Authorization = `Bearer ${token}`;
     }
 
-    // Append POS ID to request headers if available (same header name as POS_V2)
-    const posId = posIdService.getPosId();
+    const posId = posIdService.getPosId() || (await posIdService.loadPosId());
     if (posId) {
-      config.headers['PosId'] = posId;
+      headers['PosId'] = posId;
     }
+
+    headers['TimeZone'] = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    headers['type'] = 'POS';
+    config.headers = headers;
 
     return config;
   },
