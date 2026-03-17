@@ -13,7 +13,6 @@ import { useTheme } from '../../theme/ThemeProvider';
 import { useMenuCart } from '../../hooks/useMenuCart';
 import { useCartNotes } from '../../hooks/useCartNotes';
 import { useToast } from '../ToastProvider';
-import { useConnection } from '../../contexts/ConnectionProvider';
 import cartService from '../../services/cartService';
 import { CartItemRow } from './CartItemRow';
 import { CartSummary } from './CartSummary';
@@ -41,7 +40,6 @@ export default function CartScreen({ navigation, route }: any) {
     const { colors } = useTheme();
     const insets = useSafeAreaInsets();
     const { showToast } = useToast();
-    const { canModifyOrders } = useConnection();
     const params: CartRouteParams = route?.params || {};
     const {
         tableNo = null,
@@ -106,12 +104,6 @@ export default function CartScreen({ navigation, route }: any) {
         });
     }, [navigation, colors]);
 
-    const ensureCanModify = (message?: string) => {
-        if (canModifyOrders) return true;
-        showToast('error', message || 'Local server is offline. Orders are view-only.');
-        return false;
-    };
-
     const shouldRequireDecreasePin = (cartId: string, nextQty?: number) => {
         if (!existingOrder) return false;
         const item = cartData.cart.items.find((entry) => entry.cartId === cartId);
@@ -124,7 +116,6 @@ export default function CartScreen({ navigation, route }: any) {
     };
 
     const handleUpdateQuantity = async (cartId: string, quantity: number) => {
-        if (!ensureCanModify()) return;
         if (!decreasePinChecked && shouldRequireDecreasePin(cartId, quantity)) {
             pendingDecreaseRef.current = { type: 'update', cartId, quantity };
             setPinModalVisible(true);
@@ -134,7 +125,6 @@ export default function CartScreen({ navigation, route }: any) {
     };
 
     const handleRemoveItem = async (cartId: string) => {
-        if (!ensureCanModify()) return;
         if (!decreasePinChecked && shouldRequireDecreasePin(cartId)) {
             pendingDecreaseRef.current = { type: 'remove', cartId };
             setPinModalVisible(true);
@@ -163,7 +153,6 @@ export default function CartScreen({ navigation, route }: any) {
     };
 
     const proceedToCheckout = async () => {
-        if (!ensureCanModify()) return;
         if (cartData.cart.items.length === 0) {
             showToast('error', 'Please add items to cart');
             return;
@@ -271,7 +260,6 @@ export default function CartScreen({ navigation, route }: any) {
                             cart={cartData.cart}
                             cartQuantity={cartData.cartQuantity}
                             onEditOrderMeta={() => {
-                                if (!ensureCanModify()) return;
                                 cartNotes.setShowCartNoteModal(true);
                             }}
                             onCheckout={proceedToCheckout}
@@ -409,7 +397,6 @@ export default function CartScreen({ navigation, route }: any) {
                 onClose={() => cartNotes.setShowCartNoteModal(false)}
                 onSave={async (note: string, discount: any) => {
                     try {
-                        if (!ensureCanModify()) return;
                         await cartData.updateOrderNote(note || '');
                         if (discount) {
                             await cartData.updateDiscount(discount);

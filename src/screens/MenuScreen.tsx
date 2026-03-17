@@ -38,7 +38,6 @@ import {
 import cartService from '../services/cartService';
 import { lockOrder, lockTable, unlockOrder, unlockTable } from '../services/orderSyncService';
 import { useToast } from '../components/ToastProvider';
-import { useConnection } from '../contexts/ConnectionProvider';
 
 
 interface MenuScreenProps {
@@ -58,7 +57,6 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
   const cartData = useMenuCart();
   const feedback = useCartFeedback();
   const { showToast } = useToast();
-  const { canModifyOrders } = useConnection();
   const settingsData = useSettings();
   const groupLabelEnabled = settingsData.settings?.enableGroupLabel === true;
 
@@ -74,12 +72,6 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
     hasVariants: boolean;
   } | null>(null);
   const [showAddExtraModal, setShowAddExtraModal] = useState(false);
-
-  const ensureCanModify = (message?: string) => {
-    if (canModifyOrders) return true;
-    showToast('error', message || 'Local server is offline. Orders are view-only.');
-    return false;
-  };
 
   // Cart notes management
   const cartNotes = useCartNotes(cartData.cart, cartData.updateItemNote, cartData.updateDiscount);
@@ -253,30 +245,21 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
           {groupLabelEnabled ? (
             <TouchableOpacity
-              onPress={() => {
-                if (!ensureCanModify()) return;
-                handleAddGroup();
-              }}
-              style={{ padding: 8, opacity: canModifyOrders ? 1 : 0.5 }}
+              onPress={handleAddGroup}
+              style={{ padding: 8 }}
             >
               <MaterialCommunityIcons name="layers-plus" size={20} color={colors.text} />
             </TouchableOpacity>
           ) : null}
           <TouchableOpacity
-            onPress={() => {
-              if (!ensureCanModify()) return;
-              setShowAddExtraModal(true);
-            }}
-            style={{ padding: 8, opacity: canModifyOrders ? 1 : 0.5 }}
+            onPress={() => setShowAddExtraModal(true)}
+            style={{ padding: 8 }}
           >
             <MaterialCommunityIcons name="plus-box-outline" size={20} color={colors.text} />
           </TouchableOpacity>
           <TouchableOpacity
-            onPress={() => {
-              if (!ensureCanModify()) return;
-              cartNotes.setShowCartNoteModal(true);
-            }}
-            style={{ padding: 8, opacity: canModifyOrders ? 1 : 0.5 }}
+            onPress={() => cartNotes.setShowCartNoteModal(true)}
+            style={{ padding: 8 }}
           >
             <MaterialCommunityIcons name="note-edit-outline" size={20} color={colors.text} />
           </TouchableOpacity>
@@ -289,8 +272,6 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
     tableNo,
     deliveryType,
     cartNotes,
-    canModifyOrders,
-    showToast,
     groupLabelEnabled,
     handleAddGroup,
   ]);
@@ -325,7 +306,6 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
   };
 
   const addToCart = (item: any) => {
-    if (!ensureCanModify()) return;
     const normalizedItem = normalizeMenuItemForOptions(item);
     const hasVariants =
       Array.isArray(normalizedItem.menuItemVariants) &&
@@ -356,7 +336,6 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
     attributeValues?: any[]
   ) => {
     try {
-      if (!ensureCanModify()) return;
       if (groupLabelEnabled) {
         cartService.useTempGroupIfAvailable();
       }
@@ -430,7 +409,6 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
     price: number;
     extraCategory: number;
   }) => {
-    if (!ensureCanModify()) return;
     const categories = menuData.cartCategories || [];
     if (!categories.length) {
       showToast('error', 'Extras are not configured.');
@@ -468,7 +446,6 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
   };
 
   const proceedToCheckout = async () => {
-    if (!ensureCanModify()) return;
     if (cartData.cart.items.length === 0) {
       showToast('error', 'Please add items to cart');
       return;
@@ -485,7 +462,6 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
 
   const handleSaveCartNote = async (note: string, discount: any) => {
     try {
-      if (!ensureCanModify()) return;
       await cartData.updateOrderNote(note || '');
       if (discount) {
         await cartData.updateDiscount(discount);

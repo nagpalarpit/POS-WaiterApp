@@ -17,6 +17,7 @@ import {
   StyleSheet,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import NetInfo from "@react-native-community/netinfo";
 import { STORAGE_KEYS } from "../constants/storageKeys";
 import { useTheme } from "../theme/ThemeProvider";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
@@ -50,7 +51,7 @@ import {
 } from "../services/orderSyncService";
 import { useToast } from "../components/ToastProvider";
 import { setPaymentFlowHandlers } from "../services/paymentFlowStore";
-import { useConnection } from "../contexts/ConnectionProvider";
+import serverConnection from "../services/serverConnection";
 
 const TSC_OFFLINE_MESSAGE =
   "Active TSS not found for the given POS and company.";
@@ -592,19 +593,6 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
   const [marking, setMarking] = useState(false);
   const editingRef = useRef(false);
   const { showToast } = useToast();
-  const {
-    canModifyOrders,
-    isInternetReachable,
-    isLocalServerReachable,
-  } = useConnection();
-  const isReadOnly = !canModifyOrders;
-  const isLocalServerDisconnected = !isLocalServerReachable;
-  const showLocalServerOfflineNotice = isInternetReachable && isLocalServerDisconnected;
-  const ensureCanModify = (message?: string) => {
-    if (canModifyOrders) return true;
-    showToast("error", message || "Local server is offline. Orders are view-only.");
-    return false;
-  };
   const [pinModalVisible, setPinModalVisible] = useState(false);
   const [cancelModalVisible, setCancelModalVisible] = useState(false);
   const [canceling, setCanceling] = useState(false);
@@ -781,7 +769,6 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
   }, [order?._id, order?.id]);
 
   const onEdit = () => {
-    if (!ensureCanModify()) return;
     editingRef.current = true;
     lockOrder(order);
     navigation.navigate("Menu", {
@@ -793,7 +780,6 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
   };
 
   const handleDeletePress = () => {
-    if (!ensureCanModify()) return;
     if (isOrderPaid) {
       showToast("error", "Paid orders cannot be cancelled");
       return;
@@ -809,7 +795,6 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
 
   const cancelOrder = async (reason: string) => {
     if (!order) return;
-    if (!ensureCanModify()) return;
     const trimmed = reason.trim();
     if (!trimmed) {
       showToast("error", "Please enter a reason");
@@ -1061,9 +1046,6 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
 
   const settleOrderWithPayment = async (option: any) => {
     try {
-      if (!ensureCanModify()) {
-        return { success: false, keepModalOpen: false };
-      }
       setMarking(true);
       const now = new Date().toISOString();
       const selectedPaymentMethod = toNumber(
@@ -2004,7 +1986,11 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
         orderInfo,
       };
 
-      const allowOfflineFallback = isLocalServerReachable && !isInternetReachable;
+      const networkState = await NetInfo.fetch();
+      const hasInternet =
+        networkState.isConnected === true &&
+        networkState.isInternetReachable !== false;
+      const allowOfflineFallback = serverConnection.isConnected() && !hasInternet;
       const settleRes = await orderService.settleOrder(
         order._id || order.id || order.orderId,
         settlePayload,
@@ -2151,14 +2137,6 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
   };
 
   const openPaymentScreen = (mode: "settle" | "method") => {
-    if (isLocalServerDisconnected) {
-      showToast(
-        "error",
-        "Local server is disconnected. Payments are disabled until it reconnects.",
-      );
-      return;
-    }
-
     const shouldSettle = mode === "settle";
     setPendingSettle(shouldSettle);
     pendingSettleRef.current = shouldSettle;
@@ -2656,13 +2634,11 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
               </View>
               <TouchableOpacity
                 onPress={handleOpenPaymentModal}
-                disabled={isLocalServerDisconnected}
                 style={[
                   styles.changePaymentBtn,
                   {
                     borderColor: colors.border,
                     backgroundColor: colors.surfaceHover || colors.background,
-                    opacity: isLocalServerDisconnected ? 0.6 : 1,
                   },
                 ]}
               >
@@ -2764,12 +2740,12 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
           {!hideDeleteForSplit ? (
             <TouchableOpacity
               onPress={handleDeletePress}
-              disabled={isOrderPaid || canceling || isReadOnly}
+              disabled={isOrderPaid || canceling}
               style={[
                 styles.footerIconBtn,
                 {
                   backgroundColor:
-                    isOrderPaid || canceling || isReadOnly ? colors.border : colors.error,
+                    isOrderPaid || canceling ? colors.border : colors.error,
                 },
               ]}
             >
@@ -2782,13 +2758,11 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
           ) : null}
           <TouchableOpacity
             onPress={onEdit}
-            disabled={isReadOnly}
             style={[
               styles.footerBtn,
               {
                 borderColor: colors.border,
                 backgroundColor: colors.surface,
-                opacity: isReadOnly ? 0.6 : 1,
               },
             ]}
           >
@@ -2815,12 +2789,12 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
               lockPayment(order);
               openPaymentScreen("settle");
             }}
-            disabled={marking || isPaid || isReadOnly}
+            disabled={marking || isPaid}
             style={[
               styles.footerBtnPrimary,
               {
                 backgroundColor:
-                  marking || isPaid || isReadOnly ? colors.border : colors.primary,
+                  marking || isPaid ? colors.border : colors.primary,
               },
             ]}
           >

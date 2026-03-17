@@ -12,7 +12,6 @@ import { formatCurrency } from '../utils/currency';
 import { isOrderLocked, isTableLocked, lockOrder, lockTable } from '../services/orderSyncService';
 import { useToast } from '../components/ToastProvider';
 import cartService from '../services/cartService';
-import { useConnection } from '../contexts/ConnectionProvider';
 
 // Hooks
 import { useOrdersData, DELIVERY_TYPE, Order } from '../hooks/useOrdersData';
@@ -35,7 +34,6 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
   const settingsData = useSettings();
   const tableStats = useTableStatistics(ordersData.dineInTables, settingsData.settings);
   const { showToast } = useToast();
-  const { canModifyOrders } = useConnection();
 
   const getOrderDisplayLabel = (order: Order | any) => {
     const tableNo = order?.orderDetails?.tableNo;
@@ -293,22 +291,19 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
         {activeTab !== DELIVERY_TYPE.DINE_IN && (
           <TouchableOpacity
             onPress={() =>
-              canModifyOrders
-                ? navigation.navigate('Menu', {
-                  tableNo: null,
-                  deliveryType: activeTab,
-                })
-                : showToast('error', 'Local server is offline. Orders are view-only.')
+              navigation.navigate('Menu', {
+                tableNo: null,
+                deliveryType: activeTab,
+              })
             }
-            disabled={!canModifyOrders}
-            style={{ padding: 8, opacity: canModifyOrders ? 1 : 0.5 }}
+            style={{ padding: 8 }}
           >
             <MaterialIcons name="add-circle-outline" size={22} color={colors.primary} />
           </TouchableOpacity>
         )}
       </View>
     ),
-    [colors, activeTab, navigation, canModifyOrders, showToast]
+    [colors, activeTab, navigation]
   );
 
   /**
@@ -566,11 +561,6 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
 
               if (isTableLocked(table.tableNo)) {
                 showToast('error', `Table ${table.tableNo} is currently selected on another device.`);
-                return;
-              }
-
-              if (!canModifyOrders) {
-                showToast('error', 'Local server is offline. Orders are view-only.');
                 return;
               }
 

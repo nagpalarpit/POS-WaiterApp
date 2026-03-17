@@ -26,7 +26,6 @@ import Card from "./Card";
 import { formatCurrency } from "../utils/currency";
 import giftCardService from "../services/giftCardService";
 import { useToast } from "./ToastProvider";
-import { useConnection } from "../contexts/ConnectionProvider";
 import {
   clearPaymentFlowHandlers,
   getPaymentFlowHandlers,
@@ -95,9 +94,6 @@ type PaymentModalProps = {
   splitItems?: SplitSelectableItem[];
   allowSplitOption?: boolean;
   hidePrintPreview?: boolean;
-  isBlocked?: boolean;
-  blockTitle?: string;
-  blockMessage?: string;
 };
 
 const toAmount = (value: string): number => {
@@ -196,9 +192,6 @@ export default function PaymentScreen(props: PaymentModalProps) {
     onClose,
     onSelect,
     onPrintPreview,
-    isBlocked: forcedBlocked,
-    blockTitle: forcedBlockTitle,
-    blockMessage: forcedBlockMessage,
   } = props;
   const params: PaymentRouteParams = route?.params || props;
   const {
@@ -211,7 +204,6 @@ export default function PaymentScreen(props: PaymentModalProps) {
   } = params;
   const { colors } = useTheme();
   const { showToast } = useToast();
-  const { isInternetReachable, isLocalServerReachable } = useConnection();
   const handlers = useMemo(() => getPaymentFlowHandlers(), []);
   const effectiveOnSelect = onSelect || handlers?.onSelect;
   const effectiveOnPrintPreview = onPrintPreview || handlers?.onPrintPreview;
@@ -219,20 +211,6 @@ export default function PaymentScreen(props: PaymentModalProps) {
   const isFocused = useIsFocused();
   const insets = useSafeAreaInsets();
   const closeHandledRef = useRef(false);
-  const isBlocked = forcedBlocked ?? !isLocalServerReachable;
-  const showLocalServerOfflineNotice =
-    isInternetReachable && !isLocalServerReachable;
-  const blockTitle = forcedBlockTitle || (
-    showLocalServerOfflineNotice
-      ? "Local Server Disconnected"
-      : "Local Server Unavailable"
-  );
-  const blockMessage = forcedBlockMessage || (
-    showLocalServerOfflineNotice
-      ? "Internet is available, but the local POS server is disconnected. Reconnect to continue payment."
-      : "Local server is disconnected. Payments are disabled until it reconnects."
-  );
-  const [connectionModalVisible, setConnectionModalVisible] = useState(false);
   const primaryTabs = [
     { id: 0, label: "Cash" },
     { id: 1, label: "Card" },
@@ -314,7 +292,6 @@ export default function PaymentScreen(props: PaymentModalProps) {
 
   const footerHeight = 200;
   const sectionGap = 8;
-  const blockInteractions = isBlocked;
   const activeGiftCard = isSplitMode ? splitGiftCard : giftCard;
   const resolvedOrderTotal = round2(toNumber(orderTotal, 0));
 
@@ -353,9 +330,6 @@ export default function PaymentScreen(props: PaymentModalProps) {
     if (count <= 1) return styles.footerBtnFull;
     return styles.footerBtnFlex;
   };
-
-  const openConnectionModal = () => setConnectionModalVisible(true);
-  const closeConnectionModal = () => setConnectionModalVisible(false);
 
   const handlePrimaryTabPress = (tabId: number) => {
     if (tabId === 2) {
@@ -446,7 +420,7 @@ export default function PaymentScreen(props: PaymentModalProps) {
   };
 
   const handleConfirm = async (print = false, isCorporate = false) => {
-    if (isProcessing || blockInteractions) return;
+    if (isProcessing) return;
     if (isSplitInvalid) {
       showToast("error", "Select at least one item to split.");
       return;
@@ -474,7 +448,7 @@ export default function PaymentScreen(props: PaymentModalProps) {
   };
 
   const handlePrintPreview = async () => {
-    if (isProcessing || blockInteractions) return;
+    if (isProcessing) return;
     setIsProcessing(true);
     try {
       const option = buildPaymentOption(true);
@@ -720,50 +694,7 @@ export default function PaymentScreen(props: PaymentModalProps) {
               )}
             </Card>
 
-            {blockInteractions ? (
-              <Card
-                rounded={14}
-                style={{
-                  padding: 12,
-                  borderColor: colors.warning || colors.error,
-                  backgroundColor: (colors.warning || colors.error) + "12",
-                  marginBottom: sectionGap,
-                }}
-              >
-                <Text style={{ color: colors.text, fontWeight: "800" }}>
-                  {blockTitle}
-                </Text>
-                <Text style={{ color: colors.textSecondary, marginTop: 6 }}>
-                  {blockMessage}
-                </Text>
-                <TouchableOpacity
-                  onPress={openConnectionModal}
-                  disabled={connectionModalVisible}
-                  style={[
-                    styles.blockBannerBtn,
-                    {
-                      backgroundColor: colors.primary,
-                      opacity: connectionModalVisible ? 0.6 : 1,
-                    },
-                  ]}
-                >
-                  {connectionModalVisible ? (
-                    <ActivityIndicator color={colors.textInverse} />
-                  ) : (
-                    <Text
-                      style={{ color: colors.textInverse, fontWeight: "700" }}
-                    >
-                      Connect
-                    </Text>
-                  )}
-                </TouchableOpacity>
-              </Card>
-            ) : null}
-
-            <View
-              style={{ opacity: blockInteractions ? 0.5 : 1 }}
-              pointerEvents={blockInteractions ? "none" : "auto"}
-            >
+            <View>
               <Card style={{ padding: 12, borderColor: colors.border }}>
                 {!isSplitMode && !showOtherMethods && activeTab === 0 && (
                   <View>
@@ -1131,17 +1062,17 @@ export default function PaymentScreen(props: PaymentModalProps) {
                 {showPrintPreview ? (
                   <TouchableOpacity
                     onPress={handlePrintPreview}
-                    disabled={isProcessing || blockInteractions}
+                    disabled={isProcessing}
                     style={[
                       styles.footerBtn,
                       getRowBtnStyle(row1Count),
                       {
                         borderColor: colors.border,
                         backgroundColor:
-                          isProcessing || blockInteractions
+                          isProcessing
                             ? colors.border
                             : colors.surface,
-                        opacity: isProcessing || blockInteractions ? 0.6 : 1,
+                        opacity: isProcessing ? 0.6 : 1,
                       },
                     ]}
                   >
@@ -1158,13 +1089,13 @@ export default function PaymentScreen(props: PaymentModalProps) {
                   onPress={() => {
                     handleConfirm(false);
                   }}
-                  disabled={isSplitInvalid || isProcessing || blockInteractions}
+                  disabled={isSplitInvalid || isProcessing}
                   style={[
                     styles.footerBtnPrimary,
                     getRowBtnStyle(row1Count),
                     {
                       backgroundColor:
-                        isSplitInvalid || isProcessing || blockInteractions
+                        isSplitInvalid || isProcessing
                           ? colors.border
                           : colors.primary,
                     },
@@ -1189,13 +1120,13 @@ export default function PaymentScreen(props: PaymentModalProps) {
                   onPress={() => {
                     handleConfirm(true);
                   }}
-                  disabled={isSplitInvalid || isProcessing || blockInteractions}
+                  disabled={isSplitInvalid || isProcessing}
                   style={[
                     styles.footerBtnPrimary,
                     getRowBtnStyle(row2Count),
                     {
                       backgroundColor:
-                        isSplitInvalid || isProcessing || blockInteractions
+                        isSplitInvalid || isProcessing
                           ? colors.border
                           : colors.primary,
                     },
@@ -1216,15 +1147,13 @@ export default function PaymentScreen(props: PaymentModalProps) {
                     onPress={() => {
                       handleConfirm(true, true);
                     }}
-                    disabled={
-                      isSplitInvalid || isProcessing || blockInteractions
-                    }
+                    disabled={isSplitInvalid || isProcessing}
                     style={[
                       styles.footerBtnPrimary,
                       getRowBtnStyle(row2Count),
                       {
                         backgroundColor:
-                          isSplitInvalid || isProcessing || blockInteractions
+                          isSplitInvalid || isProcessing
                             ? colors.border
                             : colors.success ||
                             colors.secondary ||
