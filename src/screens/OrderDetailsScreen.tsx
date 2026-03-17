@@ -35,7 +35,6 @@ import {
   getItemOptionsSummary,
   getItemUnitTotal,
 } from "../utils/cartCalculations";
-import PaymentModal from "../components/PaymentModal";
 import ConnectionSettingsModal from "../components/ConnectionSettingsModal";
 import PinModal from "../components/PinModal";
 import CancelOrderModal from "../components/CancelOrderModal";
@@ -50,6 +49,7 @@ import {
   unlockOrder,
 } from "../services/orderSyncService";
 import { useToast } from "../components/ToastProvider";
+import { setPaymentFlowHandlers } from "../services/paymentFlowStore";
 import { useConnection } from "../contexts/ConnectionProvider";
 
 const TSC_OFFLINE_MESSAGE =
@@ -724,8 +724,12 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
   const [selectedPaymentId, setSelectedPaymentId] = useState<number | null>(
     paymentProcessorId ?? null,
   );
-  const [paymentModalVisible, setPaymentModalVisible] = useState(false);
   const [pendingSettle, setPendingSettle] = useState(false);
+  const pendingSettleRef = useRef(false);
+
+  useEffect(() => {
+    pendingSettleRef.current = pendingSettle;
+  }, [pendingSettle]);
   const [expandedGroupType, setExpandedGroupType] = useState<number | null>(
     null,
   );
@@ -2136,7 +2140,30 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
     openConnectionModal();
   };
 
-  const handleOpenPaymentModal = () => {
+  const handlePaymentSelect = async (option: any) => {
+    setSelectedPaymentId(
+      toNumber(option?.paymentMethod ?? option?.id, 0),
+    );
+
+    if (!pendingSettleRef.current) {
+      return { keepOpen: true };
+    }
+
+    const isSplitSelection = option?.isItemSplit === true;
+    const settleResult = await settleOrderWithPayment(option);
+
+    if (isSplitSelection && settleResult?.keepModalOpen) {
+      setPendingSettle(true);
+      pendingSettleRef.current = true;
+      return { keepOpen: true };
+    }
+
+    setPendingSettle(false);
+    pendingSettleRef.current = false;
+    return { keepOpen: false };
+  };
+
+  const openPaymentScreen = (mode: "settle" | "method") => {
     if (isLocalServerDisconnected) {
       showToast(
         "error",
@@ -2144,7 +2171,33 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
       );
       return;
     }
-    setPaymentModalVisible(true);
+
+    const shouldSettle = mode === "settle";
+    setPendingSettle(shouldSettle);
+    pendingSettleRef.current = shouldSettle;
+
+    setPaymentFlowHandlers({
+      onSelect: handlePaymentSelect,
+      onPrintPreview: handlePrintPreview,
+      onClose: () => {
+        setPendingSettle(false);
+        pendingSettleRef.current = false;
+      },
+    });
+
+    navigation.navigate("Payment", {
+      title: shouldSettle ? "Settle Payment" : "Change Payment Method",
+      orderTotal: totals.total,
+      companyId: resolvedCompanyId,
+      splitItems: splitPaymentItems,
+      allowSplitOption,
+      hidePrintPreview: hideDeleteForSplit,
+    });
+  };
+
+  
+  const handleOpenPaymentModal = () => {
+    openPaymentScreen("method");
   };
 
   const handlePrintPreview = async (option: any) => {
@@ -2696,54 +2749,6 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
         onConnected={closeConnectionModal}
       />
 
-      <PaymentModal
-        visible={paymentModalVisible}
-        onClose={() => {
-          setPaymentModalVisible(false);
-          setPendingSettle(false);
-        }}
-        onPrintPreview={handlePrintPreview}
-        hidePrintPreview={hideDeleteForSplit}
-        isBlocked={isLocalServerDisconnected}
-        blockTitle={
-          showLocalServerOfflineNotice
-            ? "Local Server Disconnected"
-            : "Local Server Unavailable"
-        }
-        blockMessage={
-          showLocalServerOfflineNotice
-            ? "Internet is available, but the local POS server is disconnected. Reconnect to continue payment."
-            : "Local server is disconnected. Payments are disabled until it reconnects."
-        }
-        onReconnect={isLocalServerDisconnected ? handleReconnectLocal : undefined}
-        reconnectLabel="Connect"
-        isReconnecting={connectionModalVisible}
-        onSelect={async (option: any) => {
-          setSelectedPaymentId(
-            toNumber(option?.paymentMethod ?? option?.id, 0),
-          );
-          if (!pendingSettle) return;
-
-          const isSplitSelection = option?.isItemSplit === true;
-          if (!isSplitSelection) {
-            setPaymentModalVisible(false);
-          }
-
-          const settleResult = await settleOrderWithPayment(option);
-          if (isSplitSelection && settleResult?.keepModalOpen) {
-            setPaymentModalVisible(true);
-            setPendingSettle(true);
-            return;
-          }
-
-          setPendingSettle(false);
-        }}
-        orderTotal={totals.total}
-        companyId={resolvedCompanyId}
-        splitItems={splitPaymentItems}
-        allowSplitOption={allowSplitOption}
-      />
-
       <PinModal
         visible={pinModalVisible}
         onClose={() => setPinModalVisible(false)}
@@ -2870,8 +2875,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
             onPress={() => {
               if (isPaid) return;
               lockPayment(order);
-              setPendingSettle(true);
-              setPaymentModalVisible(true);
+              openPaymentScreen("settle");
             }}
             disabled={marking || isPaid || isReadOnly}
             style={[

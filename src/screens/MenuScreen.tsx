@@ -3,7 +3,6 @@ import {
   View,
   TouchableOpacity,
   ActivityIndicator,
-  Dimensions,
   Text,
   TextInput,
 } from 'react-native';
@@ -17,7 +16,6 @@ import {
   normalizeMenuItemForOptions,
 } from '../hooks/useMenuData';
 import { useMenuCart } from '../hooks/useMenuCart';
-import { useCartDrawerAnimation } from '../hooks/useCartDrawerAnimation';
 import { useCartNotes } from '../hooks/useCartNotes';
 import { useCartFeedback } from '../hooks/useCartFeedback';
 import { useSettings } from '../hooks/useSettings';
@@ -27,25 +25,21 @@ import {
   CategoryTabs,
   MenuItemsGrid,
   CartFAB,
-  CartDrawer,
 } from '../components/MenuScreen';
 import ItemDetailsModal from '../components/ItemDetailsModal';
 import ItemNoteModal from '../components/ItemNoteModal';
 import CartNoteModal from '../components/CartNoteModal';
 import GroupModal from '../components/GroupModal';
-import PinModal from '../components/PinModal';
 import AddExtraModal from '../components/AddExtraModal';
 import {
   getCartSubtotal,
   getDiscountAmount,
-  getCartItemQuantity,
 } from '../utils/cartCalculations';
 import cartService from '../services/cartService';
 import { lockOrder, lockTable, unlockOrder, unlockTable } from '../services/orderSyncService';
 import { useToast } from '../components/ToastProvider';
 import { useConnection } from '../contexts/ConnectionProvider';
 
-const { width } = Dimensions.get('window');
 
 interface MenuScreenProps {
   navigation: any;
@@ -59,12 +53,9 @@ interface MenuScreenProps {
 export default function MenuScreen({ navigation, route }: MenuScreenProps) {
   const { colors } = useTheme();
   const { tableNo = null, deliveryType = 0, tableArea = null, existingOrder = null } = route.params || {};
-  const cartDrawerWidth = Math.min(width * 0.84, 400);
-
   // Use custom hooks for complex logic
   const menuData = useMenuData();
   const cartData = useMenuCart();
-  const cartAnimation = useCartDrawerAnimation(cartDrawerWidth);
   const feedback = useCartFeedback();
   const { showToast } = useToast();
   const { canModifyOrders } = useConnection();
@@ -97,25 +88,6 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
   const discount = getDiscountAmount(subtotal, cartData.cart.discount);
   const cartTotal = Math.max(subtotal - discount, 0);
 
-  const orderContextLabel = useMemo(() => {
-    if (tableNo) return `Table ${tableNo}`;
-    if (deliveryType === 1) return 'Delivery Order';
-    if (deliveryType === 2) return 'Pickup Order';
-    return 'Walk-in Order';
-  }, [tableNo, deliveryType]);
-
-  const orderContextIcon = useMemo(() => {
-    if (tableNo) return 'table-chair';
-    if (deliveryType === 1) return 'bike-fast';
-    if (deliveryType === 2) return 'shopping-outline';
-    return 'silverware-fork-knife';
-  }, [tableNo, deliveryType]);
-
-  const [decreasePinChecked, setDecreasePinChecked] = useState(false);
-  const [pinModalVisible, setPinModalVisible] = useState(false);
-  const pendingDecreaseRef = useRef<
-    { type: 'update' | 'remove'; cartId: string; quantity?: number } | null
-  >(null);
 
   const getExtrasCategoryPercent = (category: any): number | null => {
     const rawValues = [
@@ -161,11 +133,6 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
 
     return match || categories[0];
   };
-
-  useEffect(() => {
-    setDecreasePinChecked(false);
-    pendingDecreaseRef.current = null;
-  }, [existingOrder?._id, existingOrder?.id]);
 
   useEffect(() => {
     if (!existingOrder) return;
@@ -218,50 +185,15 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
     return unsubscribe;
   }, [navigation, existingOrder, tableNo]);
 
-  const shouldRequireDecreasePin = (cartId: string, nextQty?: number) => {
-    if (!existingOrder) return false;
-    const item = cartData.cart.items.find((entry) => entry.cartId === cartId);
-    if (!item) return false;
-    const isOldItem = item.isOld === true || item.oldQuantity != null;
-    if (!isOldItem) return false;
-    if (nextQty == null) return true;
-    const currentQty = getCartItemQuantity(item);
-    return nextQty < currentQty;
-  };
 
-  const handleUpdateQuantity = async (cartId: string, quantity: number) => {
-    if (!ensureCanModify()) return;
-    if (!decreasePinChecked && shouldRequireDecreasePin(cartId, quantity)) {
-      pendingDecreaseRef.current = { type: 'update', cartId, quantity };
-      setPinModalVisible(true);
+  const handleAddGroup = () => {
+    const cart = cartData.cart;
+    if (!groupLabelEnabled) {
+      cartService.startNewGroup(cart);
       return;
     }
-    await cartData.updateQuantity(cartId, quantity);
-  };
-
-  const handleRemoveItem = async (cartId: string) => {
-    if (!ensureCanModify()) return;
-    if (!decreasePinChecked && shouldRequireDecreasePin(cartId)) {
-      pendingDecreaseRef.current = { type: 'remove', cartId };
-      setPinModalVisible(true);
-      return;
-    }
-    await cartData.removeFromCart(cartId);
-  };
-
-  const handlePinVerified = async () => {
-    setPinModalVisible(false);
-    setDecreasePinChecked(true);
-    const pending = pendingDecreaseRef.current;
-    pendingDecreaseRef.current = null;
-    if (!pending) return;
-    if (pending.type === 'update' && typeof pending.quantity === 'number') {
-      await cartData.updateQuantity(pending.cartId, pending.quantity);
-      return;
-    }
-    if (pending.type === 'remove') {
-      await cartData.removeFromCart(pending.cartId);
-    }
+    setGroupModalMode('addGroup');
+    setShowGroupModal(true);
   };
 
   const activeCategory = menuData.categories[menuData.activeCategory];
@@ -319,6 +251,17 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
       ),
       headerRight: () => (
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          {groupLabelEnabled ? (
+            <TouchableOpacity
+              onPress={() => {
+                if (!ensureCanModify()) return;
+                handleAddGroup();
+              }}
+              style={{ padding: 8, opacity: canModifyOrders ? 1 : 0.5 }}
+            >
+              <MaterialCommunityIcons name="layers-plus" size={20} color={colors.text} />
+            </TouchableOpacity>
+          ) : null}
           <TouchableOpacity
             onPress={() => {
               if (!ensureCanModify()) return;
@@ -340,7 +283,17 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
         </View>
       ),
     });
-  }, [navigation, colors, tableNo, deliveryType, cartNotes, canModifyOrders, showToast]);
+  }, [
+    navigation,
+    colors,
+    tableNo,
+    deliveryType,
+    cartNotes,
+    canModifyOrders,
+    showToast,
+    groupLabelEnabled,
+    handleAddGroup,
+  ]);
 
   // ===== Cart Operation Handlers =====
 
@@ -441,7 +394,6 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
     const cart = cartData.cart;
     if (groupModalMode === 'addGroup') {
       cartService.startNewGroup(cart, label);
-      cartAnimation.closeCartDrawer();
       setShowGroupModal(false);
       setGroupModalMode(null);
       return;
@@ -471,20 +423,6 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
 
     setShowGroupModal(false);
     setGroupModalMode(null);
-  };
-
-  const handleAddGroup = () => {
-    const cart = cartData.cart;
-    if (!groupLabelEnabled) {
-      cartService.startNewGroup(cart);
-      return;
-    }
-    setGroupModalMode('addGroup');
-    setShowGroupModal(true);
-  };
-
-  const handleSelectGroup = (groupType: number, groupLabel?: string) => {
-    cartService.setActiveGroup(groupType, groupLabel || '');
   };
 
   const handleAddExtraSave = async (payload: {
@@ -534,10 +472,6 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
     if (cartData.cart.items.length === 0) {
       showToast('error', 'Please add items to cart');
       return;
-    }
-
-    if (cartAnimation.showCart) {
-      cartAnimation.closeCartDrawer();
     }
 
     navigation.navigate('Checkout', {
@@ -647,51 +581,16 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
         <CartFAB
           cartQuantity={cartData.cartQuantity}
           totalAmount={cartTotal}
-          onPress={cartAnimation.toggleCartDrawer}
+          onPress={() =>
+            navigation.navigate('Cart', {
+              tableNo,
+              deliveryType,
+              tableArea,
+              existingOrder,
+            })
+          }
           scaleAnim={feedback.cartFabScaleAnim}
           badgeScaleAnim={feedback.cartBadgeScaleAnim}
-          colors={colors}
-        />
-
-        {/* Cart Drawer */}
-        <CartDrawer
-          visible={cartAnimation.showCart}
-          cart={cartData.cart}
-          cartQuantity={cartData.cartQuantity}
-          cartDrawerWidth={cartDrawerWidth}
-          cartDrawerTranslateAnim={cartAnimation.cartDrawerTranslateAnim}
-          cartDrawerBackdropAnim={cartAnimation.cartDrawerBackdropAnim}
-          editingItemNoteId={cartNotes.editingItemNoteId}
-          itemNoteDraft={cartNotes.itemNoteDraft}
-          onItemNoteDraftChange={cartNotes.setItemNoteDraft}
-          onOpenItemNoteModal={(item) =>
-            cartNotes.openItemNoteModal(item.cartId || '', item.orderItemNote || '')
-          }
-          onCancelItemNoteEdit={cartNotes.cancelItemNoteEdit}
-          onSaveItemNote={async () => {
-            if (cartNotes.editingItemNoteId) {
-              try {
-                await cartData.updateItemNote(
-                  cartNotes.editingItemNoteId,
-                  cartNotes.itemNoteDraft
-                );
-                cartNotes.cancelItemNoteEdit();
-              } catch (err) {
-                showToast('error', 'Failed to save item note');
-              }
-            }
-          }}
-          onUpdateQuantity={handleUpdateQuantity}
-          onRemoveItem={handleRemoveItem}
-          onEditOrderMeta={() => {
-            if (!ensureCanModify()) return;
-            cartNotes.setShowCartNoteModal(true);
-          }}
-          onAddGroup={handleAddGroup}
-          showAddGroup={groupLabelEnabled}
-          onSelectGroup={handleSelectGroup}
-          onCheckout={proceedToCheckout}
-          onClose={cartAnimation.closeCartDrawer}
           colors={colors}
         />
       </View>
@@ -731,15 +630,6 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
         visible={showAddExtraModal}
         onClose={() => setShowAddExtraModal(false)}
         onSave={handleAddExtraSave}
-      />
-
-      <PinModal
-        visible={pinModalVisible}
-        onClose={() => {
-          setPinModalVisible(false);
-          pendingDecreaseRef.current = null;
-        }}
-        onVerified={handlePinVerified}
       />
 
       <GroupModal

@@ -13,6 +13,8 @@ import DashboardScreen from '../screens/DashboardScreen';
 import MenuScreen from '../screens/MenuScreen';
 import CheckoutScreen from '../screens/CheckoutScreen';
 import OrderDetailsScreen from '../screens/OrderDetailsScreen';
+import PaymentScreen from '../components/PaymentModal';
+import CartScreen from '../components/MenuScreen/CartDrawer';
 import serverConnection from '../services/serverConnection';
 import authService from '../services/authService';
 import posIdService from '../services/posIdService';
@@ -32,6 +34,12 @@ export type RootStackParamList = {
     existingOrder?: any;
     tableArea?: any;
   };
+  Cart: {
+    tableNo?: number;
+    deliveryType: number;
+    existingOrder?: any;
+    tableArea?: any;
+  };
   Checkout: {
     cart: any;
     tableNo?: number;
@@ -41,6 +49,14 @@ export type RootStackParamList = {
   };
   OrderDetails: {
     order: any;
+  };
+  Payment: {
+    title?: string;
+    orderTotal?: number;
+    companyId?: number;
+    splitItems?: any[];
+    allowSplitOption?: boolean;
+    hidePrintPreview?: boolean;
   };
 };
 
@@ -69,8 +85,10 @@ function MainStack() {
       initialRouteName="Dashboard">
       <Stack.Screen name="Dashboard" component={DashboardScreen} options={{ headerShown: true }} />
       <Stack.Screen name="Menu" component={MenuScreen} options={{ headerShown: true }} />
+      <Stack.Screen name="Cart" component={CartScreen} options={{ headerShown: true }} />
       <Stack.Screen name="Checkout" component={CheckoutScreen} options={{ headerShown: true }} />
       <Stack.Screen name="OrderDetails" component={OrderDetailsScreen} options={{ headerShown: true }} />
+      <Stack.Screen name="Payment" component={PaymentScreen} options={{ headerShown: true }} />
     </Stack.Navigator>
   );
 }

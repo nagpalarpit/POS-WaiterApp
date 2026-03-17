@@ -16,10 +16,9 @@ interface CartSummaryProps {
     cartQuantity: number;
     onCheckout: () => void;
     onEditOrderMeta: () => void;
-    onAddGroup?: () => void;
-    showAddGroup?: boolean;
     colors: any;
     isOrderNoteOrDiscountPresent: boolean;
+    showCheckout?: boolean;
 }
 
 /**
@@ -30,10 +29,9 @@ export const CartSummary: React.FC<CartSummaryProps> = ({
     cartQuantity,
     onCheckout,
     onEditOrderMeta,
-    onAddGroup,
-    showAddGroup = false,
     colors,
     isOrderNoteOrDiscountPresent = true,
+    showCheckout = true,
 }) => {
     const insets = useSafeAreaInsets();
     const subtotal = getCartSubtotal(cart);
@@ -154,56 +152,36 @@ export const CartSummary: React.FC<CartSummaryProps> = ({
                     )
                 }
 
-                {showAddGroup && (
-                    <TouchableOpacity
-                        onPress={onAddGroup}
-                        style={{
-                            borderWidth: 1,
-                            borderColor: colors.border,
-                            borderRadius: 10,
-                            paddingVertical: 10,
-                            paddingHorizontal: 12,
-                            marginBottom: 12,
-                            flexDirection: 'row',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            backgroundColor: colors.surface,
-                        }}
-                    >
-                        <MaterialCommunityIcons name="layers-plus" size={16} color={colors.text} />
-                        <Text style={{ color: colors.text, fontWeight: '600', marginLeft: 6, fontSize: 12 }}>
-                            Add Group
-                        </Text>
-                    </TouchableOpacity>
-                )}
             </ScrollView>
 
             {/* Checkout Button */}
-            <TouchableOpacity
-                onPress={onCheckout}
-                style={{
-                    backgroundColor: colors.primary,
-                    borderRadius: 12,
-                    paddingVertical: 13,
-                    paddingHorizontal: 12,
-                    shadowColor: colors.primary,
-                    shadowOpacity: 0.3,
-                    shadowRadius: 8,
-                    elevation: 4,
-                }}
-            >
-                <Text
+            {showCheckout && (
+                <TouchableOpacity
+                    onPress={onCheckout}
                     style={{
-                        textAlign: 'center',
-                        fontWeight: '800',
-                        fontSize: 13,
-                        color: colors.textInverse,
-                        letterSpacing: 0.3,
+                        backgroundColor: colors.primary,
+                        borderRadius: 12,
+                        paddingVertical: 13,
+                        paddingHorizontal: 12,
+                        shadowColor: colors.primary,
+                        shadowOpacity: 0.3,
+                        shadowRadius: 8,
+                        elevation: 4,
                     }}
                 >
-                    Continue to Checkout ({cartQuantity} {cartQuantity === 1 ? 'item' : 'items'})
-                </Text>
-            </TouchableOpacity>
+                    <Text
+                        style={{
+                            textAlign: 'center',
+                            fontWeight: '800',
+                            fontSize: 13,
+                            color: colors.textInverse,
+                            letterSpacing: 0.3,
+                        }}
+                    >
+                        Continue to Checkout ({cartQuantity} {cartQuantity === 1 ? 'item' : 'items'})
+                    </Text>
+                </TouchableOpacity>
+            )}
         </View>
     );
 };
