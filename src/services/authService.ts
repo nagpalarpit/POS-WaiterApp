@@ -6,6 +6,7 @@ import posIdService from './posIdService';
 import { initLocalSocket, initCloudSocket, disconnectSocket } from './socket';
 import { initOrderSync } from './orderSyncService';
 import { API_ENDPOINTS } from '../config/apiEndpoints';
+import { ensureTokenLicenseIsValid } from './tokenService';
 
 export interface LoginResponse {
   token: string;
@@ -93,6 +94,8 @@ class AuthService {
         throw new Error('No cached credentials found');
       }
 
+      await ensureTokenLicenseIsValid(loginData.token);
+
       // Set local auth token
       await setLocalAuthToken(loginData.token);
 
@@ -134,6 +137,8 @@ class AuthService {
           token: response.data.token,
           user: response.data.user,
         };
+
+        await ensureTokenLicenseIsValid(loginResponse.token);
 
         // Set cloud auth token
         await setAuthToken(loginResponse.token);

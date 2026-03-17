@@ -3,5 +3,6 @@ module.exports = function (api) {
   return {
     // Place nativewind/babel in presets to avoid `.plugins` validation errors
     presets: ['babel-preset-expo', 'nativewind/babel'],
+    plugins: ['react-native-reanimated/plugin'],
   };
 };

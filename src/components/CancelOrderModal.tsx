@@ -1,14 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  ActivityIndicator,
-} from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useTheme } from '../theme/ThemeProvider';
 import { useToast } from './ToastProvider';
-import BottomDrawer from './BottomDrawer';
+import AppBottomSheet from './AppBottomSheet';
+import AppBottomSheetTextInput from './AppBottomSheetTextInput';
 
 type Props = {
   visible: boolean;
@@ -42,101 +37,138 @@ export default function CancelOrderModal({
     onConfirm(trimmed);
   };
 
+  const footer = (
+    <View style={styles.footerActions}>
+      <TouchableOpacity
+        onPress={onClose}
+        disabled={loading}
+        activeOpacity={0.85}
+        style={[
+          styles.secondaryButton,
+          {
+            borderColor: colors.border,
+            backgroundColor: colors.searchBackground || colors.surface,
+          },
+        ]}
+      >
+        <Text style={[styles.secondaryButtonText, { color: colors.textSecondary || colors.text }]}>
+          Cancel
+        </Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        onPress={handleConfirm}
+        disabled={!reason.trim() || loading}
+        activeOpacity={0.85}
+        style={[
+          styles.primaryButton,
+          {
+            backgroundColor: !reason.trim() || loading ? colors.border : colors.error,
+          },
+        ]}
+      >
+        <View style={styles.buttonContent}>
+          <Text
+            style={[
+              styles.primaryButtonText,
+              { color: colors.textInverse || '#fff', opacity: loading ? 0 : 1 },
+            ]}
+          >
+            Confirm
+          </Text>
+          {loading ? (
+            <ActivityIndicator
+              size="small"
+              color={colors.textInverse || '#fff'}
+              style={styles.buttonLoader}
+            />
+          ) : null}
+        </View>
+      </TouchableOpacity>
+    </View>
+  );
+
   return (
-    <BottomDrawer
+    <AppBottomSheet
       visible={visible}
       onClose={onClose}
-      closeDisabled={loading}
       title="Cancel Order"
-      subtitle="Enter a reason to continue."
-      footer={
-        <View style={{ flexDirection: 'row', gap: 8 }}>
-          <TouchableOpacity
-            onPress={onClose}
-            disabled={loading}
-            style={{
-              flex: 1,
-              padding: 12,
-              borderRadius: 10,
-              borderWidth: 1.5,
-              borderColor: colors.border,
-            }}
-          >
-            <Text
-              style={{
-                textAlign: 'center',
-                color: colors.textSecondary,
-                fontWeight: '600',
-              }}
-            >
-              Cancel
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={handleConfirm}
-            disabled={!reason.trim() || loading}
-            style={{
-              flex: 1,
-              padding: 12,
-              borderRadius: 10,
-              backgroundColor:
-                !reason.trim() || loading ? colors.border : colors.error,
-            }}
-          >
-            <View style={{ alignItems: 'center', justifyContent: 'center' }}>
-              <Text
-                style={{
-                  textAlign: 'center',
-                  color: colors.textInverse,
-                  fontWeight: '700',
-                  opacity: loading ? 0 : 1,
-                }}
-              >
-                Confirm
-              </Text>
-              {loading ? (
-                <ActivityIndicator
-                  size="small"
-                  color={colors.textInverse}
-                  style={{ position: 'absolute' }}
-                />
-              ) : null}
-            </View>
-          </TouchableOpacity>
-        </View>
-      }
-      maxHeightRatio={0.7}
-      keyboardBehavior="expand"
+      subtitle="Enter a short reason to continue."
+      snapPoints={['56%']}
+      footer={footer}
     >
-      <View style={{ marginTop: 4 }}>
-        <Text
-          style={{
-            color: colors.textSecondary,
-            fontSize: 12,
-            fontWeight: '600',
-            marginBottom: 8,
-          }}
-        >
-          Reason
-        </Text>
-        <TextInput
+      <View style={styles.formSection}>
+        <Text style={[styles.label, { color: colors.textSecondary || colors.text }]}>Reason</Text>
+        <AppBottomSheetTextInput
           value={reason}
           onChangeText={setReason}
           placeholder="Enter cancel reason"
-          placeholderTextColor={colors.textSecondary}
-          style={{
-            color: colors.text,
-            borderWidth: 1,
-            borderColor: colors.border,
-            borderRadius: 10,
-            padding: 12,
-            minHeight: 120,
-            textAlignVertical: 'top',
-            backgroundColor: colors.surface,
-          }}
+          placeholderTextColor={colors.textSecondary || colors.text}
+          style={[
+            styles.textArea,
+            {
+              color: colors.text,
+              borderColor: colors.border,
+              backgroundColor: colors.searchBackground || colors.surface,
+            },
+          ]}
           multiline
         />
       </View>
-    </BottomDrawer>
+    </AppBottomSheet>
   );
 }
+
+const styles = StyleSheet.create({
+  formSection: {
+    marginBottom: 18,
+  },
+  label: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: 8,
+    letterSpacing: 0.2,
+  },
+  textArea: {
+    minHeight: 132,
+    borderWidth: 1,
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    textAlignVertical: 'top',
+    fontSize: 16,
+  },
+  footerActions: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  secondaryButton: {
+    flex: 0.42,
+    minHeight: 54,
+    borderRadius: 18,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  secondaryButtonText: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  primaryButton: {
+    flex: 1,
+    minHeight: 56,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  primaryButtonText: {
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  buttonContent: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  buttonLoader: {
+    position: 'absolute',
+  },
+});

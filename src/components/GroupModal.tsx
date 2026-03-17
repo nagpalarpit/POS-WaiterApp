@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity } from 'react-native';
 import { useTheme } from '../theme/ThemeProvider';
-import BottomDrawer from './BottomDrawer';
+import AppBottomSheet from './AppBottomSheet';
 
 type Props = {
   visible: boolean;
@@ -32,11 +32,7 @@ const buildAvailableLabels = (existingLabels: string[] = []) => {
   return labels;
 };
 
-export default function GroupModal({
-  visible,
-  existingLabels = [],
-  onSelect,
-}: Props) {
+export default function GroupModal({ visible, existingLabels = [], onSelect }: Props) {
   const { colors } = useTheme();
   const labels = useMemo(
     () => buildAvailableLabels(existingLabels),
@@ -48,43 +44,56 @@ export default function GroupModal({
   };
 
   return (
-    <BottomDrawer
+    <AppBottomSheet
       visible={visible}
       onClose={handleClose}
-      eyebrow="GROUP"
       title="Select Group Label"
-      maxHeightRatio={0.62}
+      subtitle="Choose the course label for this section."
+      snapPoints={['58%']}
     >
-      <View
-        style={{
-          flexDirection: 'row',
-          flexWrap: 'wrap',
-          gap: 12,
-        }}
-      >
+      <View style={styles.grid}>
         {labels.map((label) => (
           <TouchableOpacity
             key={label}
             onPress={() => onSelect(label)}
-            style={{
-              flexGrow: 1,
-              flexBasis: '45%',
-              minWidth: 150,
-              paddingVertical: 16,
-              paddingHorizontal: 12,
-              borderRadius: 14,
-              borderWidth: 2,
-              borderColor: colors.border,
-              backgroundColor: colors.backgroundSecondary || colors.surface,
-              alignItems: 'center',
-            }}
+            activeOpacity={0.85}
+            style={[
+              styles.groupCard,
+              {
+                borderColor: colors.border,
+                backgroundColor: colors.searchBackground || colors.surface,
+              },
+            ]}
           >
-            <Text style={{ color: colors.text, fontWeight: '700', fontSize: 15 }}>
+            <Text style={[styles.groupCardText, { color: colors.text }]}>
               {label}
             </Text>
           </TouchableOpacity>
         ))}
       </View>
-    </BottomDrawer>
+    </AppBottomSheet>
   );
 }
+
+const styles = StyleSheet.create({
+  grid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  groupCard: {
+    flexGrow: 1,
+    flexBasis: '45%',
+    minWidth: 150,
+    minHeight: 72,
+    paddingHorizontal: 16,
+    borderRadius: 18,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  groupCardText: {
+    fontWeight: '700',
+    fontSize: 15,
+  },
+});

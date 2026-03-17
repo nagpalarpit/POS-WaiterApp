@@ -2,6 +2,7 @@ import axios, { AxiosInstance, AxiosError } from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../constants/storageKeys';
 import posIdService from './posIdService';
+import { ensureTokenLicenseIsValid } from './tokenService';
 
 const localApi: AxiosInstance = axios.create({
   timeout: 15000,
@@ -21,15 +22,17 @@ localApi.interceptors.request.use(
 
     const token = await AsyncStorage.getItem(STORAGE_KEYS.localAuthToken);
     if (token) {
+      await ensureTokenLicenseIsValid(token);
       headers.Authorization = `Bearer ${token}`;
     }
 
-    // Append POS ID to request headers for local API calls (same header name as POS_V2)
-    const posId = posIdService.getPosId();
+    const posId = posIdService.getPosId() || (await posIdService.loadPosId());
     if (posId) {
       headers['PosId'] = posId;
     }
 
+    headers['TimeZone'] = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    headers['type'] = 'POS';
     config.headers = headers;
     return config;
   },

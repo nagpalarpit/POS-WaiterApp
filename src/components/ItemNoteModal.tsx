@@ -1,88 +1,129 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, TextInput } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { StyleSheet, View, Text, TouchableOpacity } from 'react-native';
 import { useTheme } from '../theme/ThemeProvider';
-import BottomDrawer from './BottomDrawer';
+import AppBottomSheet from './AppBottomSheet';
+import AppBottomSheetTextInput from './AppBottomSheetTextInput';
 
 interface Props {
-  visible: boolean;
-  initialNote?: string;
-  onClose: () => void;
-  onSave: (note: string) => void;
+    visible: boolean;
+    initialNote?: string;
+    onClose: () => void;
+    onSave: (note: string) => void;
 }
 
-export default function ItemNoteModal({
-  visible,
-  initialNote = '',
-  onClose,
-  onSave,
-}: Props) {
-  const { colors } = useTheme();
-  const [note, setNote] = useState(initialNote || '');
+export default function ItemNoteModal({ visible, initialNote = '', onClose, onSave }: Props) {
+    const { colors } = useTheme();
+    const [note, setNote] = useState(initialNote || '');
 
-  useEffect(() => {
-    setNote(initialNote || '');
-  }, [initialNote, visible]);
+    useEffect(() => {
+        setNote(initialNote || '');
+    }, [initialNote, visible]);
 
-  const footer = (
-    <View style={{ flexDirection: 'row', gap: 8 }}>
-      <TouchableOpacity
-        onPress={onClose}
-        style={{
-          flex: 1,
-          padding: 12,
-          borderRadius: 10,
-          borderWidth: 1,
-          borderColor: colors.border,
-        }}
-      >
-        <Text style={{ textAlign: 'center', color: colors.text }}>Cancel</Text>
-      </TouchableOpacity>
-      <TouchableOpacity
-        onPress={() => {
-          onSave(note);
-          onClose();
-        }}
-        style={{
-          flex: 1,
-          padding: 12,
-          borderRadius: 10,
-          backgroundColor: colors.primary,
-        }}
-      >
-        <Text style={{ textAlign: 'center', color: colors.textInverse }}>
-          Save
-        </Text>
-      </TouchableOpacity>
-    </View>
-  );
+    const footer = (
+        <View style={styles.footerActions}>
+            <TouchableOpacity
+                onPress={onClose}
+                activeOpacity={0.85}
+                style={[
+                    styles.secondaryButton,
+                    {
+                        borderColor: colors.border,
+                        backgroundColor: colors.searchBackground || colors.surface,
+                    },
+                ]}
+            >
+                <Text style={[styles.secondaryButtonText, { color: colors.textSecondary || colors.text }]}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+                onPress={() => { onSave(note); onClose(); }}
+                activeOpacity={0.85}
+                style={[
+                    styles.primaryButton,
+                    {
+                        backgroundColor: colors.primary,
+                    },
+                ]}
+            >
+                <Text style={[styles.primaryButtonText, { color: colors.textInverse || '#fff' }]}>Save Note</Text>
+            </TouchableOpacity>
+        </View>
+    );
 
-  return (
-    <BottomDrawer
-      visible={visible}
-      onClose={onClose}
-      title="Item Note"
-      subtitle="Add a note for this item."
-      footer={footer}
-      maxHeightRatio={0.66}
-      keyboardBehavior="expand"
-    >
-      <TextInput
-        value={note}
-        onChangeText={setNote}
-        placeholder="Add note for this item"
-        placeholderTextColor={colors.textSecondary}
-        style={{
-          minHeight: 110,
-          color: colors.text,
-          borderWidth: 1,
-          borderColor: colors.border,
-          borderRadius: 10,
-          padding: 12,
-          backgroundColor: colors.surface,
-          textAlignVertical: 'top',
-        }}
-        multiline
-      />
-    </BottomDrawer>
-  );
+    return (
+        <AppBottomSheet
+            visible={visible}
+            onClose={onClose}
+            title="Item Note"
+            subtitle="Add a quick instruction for this item."
+            snapPoints={['56%']}
+            footer={footer}
+        >
+            <View style={styles.formSection}>
+                <Text style={[styles.label, { color: colors.textSecondary || colors.text }]}>Note</Text>
+                <AppBottomSheetTextInput
+                    value={note}
+                    onChangeText={setNote}
+                    placeholder="Add note for this item"
+                    placeholderTextColor={colors.textSecondary || colors.text}
+                    style={[
+                        styles.textArea,
+                        {
+                            color: colors.text,
+                            borderColor: colors.border,
+                            backgroundColor: colors.searchBackground || colors.surface,
+                        },
+                    ]}
+                    multiline
+                />
+            </View>
+        </AppBottomSheet>
+    );
 }
+
+const styles = StyleSheet.create({
+    formSection: {
+        marginBottom: 18,
+    },
+    label: {
+        fontSize: 12,
+        fontWeight: '600',
+        marginBottom: 8,
+        letterSpacing: 0.2,
+    },
+    textArea: {
+        minHeight: 132,
+        borderWidth: 1,
+        borderRadius: 16,
+        paddingHorizontal: 16,
+        paddingVertical: 14,
+        textAlignVertical: 'top',
+        fontSize: 16,
+    },
+    footerActions: {
+        flexDirection: 'row',
+        gap: 10,
+    },
+    secondaryButton: {
+        flex: 0.42,
+        minHeight: 54,
+        borderRadius: 18,
+        borderWidth: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    secondaryButtonText: {
+        fontSize: 15,
+        fontWeight: '700',
+    },
+    primaryButton: {
+        flex: 1,
+        minHeight: 56,
+        borderRadius: 18,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    primaryButtonText: {
+        fontSize: 16,
+        fontWeight: '800',
+    },
+});

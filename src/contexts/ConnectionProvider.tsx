@@ -50,6 +50,8 @@ export function ConnectionProvider({ children }: { children: React.ReactNode }) 
       setIsInternetReachable(false);
       return;
     }
+
+    setIsInternetReachable(true);
   }, []);
 
   const refreshInternetStatus = useCallback(async () => {
@@ -174,7 +176,9 @@ export function ConnectionProvider({ children }: { children: React.ReactNode }) 
         return;
       }
 
-      setIsInternetReachable(connected);
+      if (connected) {
+        setIsInternetReachable(true);
+      }
     });
 
     void initCloudStatusSocket();

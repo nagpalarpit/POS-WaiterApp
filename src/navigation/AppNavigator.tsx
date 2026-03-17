@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { DrawerActions, NavigationContainer } from '@react-navigation/native';
+import { DrawerActions, NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createDrawerNavigator, DrawerContentComponentProps } from '@react-navigation/drawer';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -17,7 +17,6 @@ import CheckoutScreen from '../screens/CheckoutScreen';
 import OrderDetailsScreen from '../screens/OrderDetailsScreen';
 import CartScreen from '../components/MenuScreen/CartDrawer';
 import PaymentModal from '../components/PaymentModal';
-import authService from '../services/authService';
 import posIdService from '../services/posIdService';
 import serverConnection from '../services/serverConnection';
 import { onOrderSync } from '../services/orderSyncService';
@@ -27,6 +26,7 @@ import { useConnection } from '../contexts/ConnectionProvider';
 import { useAuth } from '../contexts/AuthContext';
 import { STORAGE_KEYS } from '../constants/storageKeys';
 import StatusBarIndicator from '../components/StatusBarIndicator';
+import LocalServerLockOverlay from '../components/LocalServerLockOverlay';
 
 export type RootStackParamList = {
   IPEntry: undefined;
@@ -75,6 +75,7 @@ type RootDrawerParamList = {
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Drawer = createDrawerNavigator<RootDrawerParamList>();
+const navigationRef = createNavigationContainerRef();
 
 type DrawerRouteName = keyof RootDrawerParamList;
 
@@ -158,6 +159,7 @@ function SupportScreen() {
 function CustomDrawerContent(props: DrawerContentComponentProps) {
   const { colors } = useTheme();
   const { showToast } = useToast();
+  const { logout: performLogout } = useAuth();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [drawerUser, setDrawerUser] = useState<DrawerUser>({
     displayName: 'Waiter',
@@ -230,7 +232,7 @@ function CustomDrawerContent(props: DrawerContentComponentProps) {
 
     setIsLoggingOut(true);
     try {
-      await authService.logout();
+      await performLogout();
       await posIdService.clearPosId();
       await serverConnection.disconnect();
       await AsyncStorage.clear();
@@ -404,6 +406,8 @@ export default function AppNavigator() {
   const { showToast } = useToast();
   const { isAuthenticated, isLoading } = useAuth();
   const { isLocalServerReachable } = useConnection();
+  const [currentRouteName, setCurrentRouteName] = useState<string | undefined>();
+  const [isConnectionModalVisible, setIsConnectionModalVisible] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onOrderSync((payload) => {
@@ -435,20 +439,40 @@ export default function AppNavigator() {
     : isLocalServerReachable
       ? 'Login'
       : 'IPEntry';
-  const navigatorKey = isAuthenticated ? 'authenticated' : initialRouteName;
+  const navigatorKey = `${isAuthenticated ? 'authenticated' : 'guest'}-${initialRouteName}`;
+  const shouldLockMainApp =
+    isAuthenticated && !isLocalServerReachable && !isConnectionModalVisible;
+  const hideStatusBarIndicator = !currentRouteName || currentRouteName === 'IPEntry';
+  const syncCurrentRoute = () => {
+    if (!navigationRef.isReady()) {
+      return;
+    }
+
+    const route = navigationRef.getCurrentRoute();
+    setCurrentRouteName(route?.name);
+  };
 
   return (
-    <NavigationContainer>
+    <NavigationContainer
+      ref={navigationRef}
+      onReady={syncCurrentRoute}
+      onStateChange={syncCurrentRoute}
+    >
       <View style={{ flex: 1, backgroundColor: colors.background }}>
-        <StatusBarIndicator />
+        <StatusBarIndicator
+          hidden={hideStatusBarIndicator}
+          connectionModalVisible={isConnectionModalVisible}
+          onConnectionModalVisibleChange={setIsConnectionModalVisible}
+        />
         <View style={{ flex: 1 }}>
           <Drawer.Navigator
             key={navigatorKey}
             initialRouteName={initialRouteName}
-            drawerContent={(props) => <CustomDrawerContent {...props} />}
+            drawerContent={(props) => (isAuthenticated ? <CustomDrawerContent {...props} /> : null)}
             screenOptions={{
               headerShown: false,
               drawerType: 'front',
+              swipeEnabled: isAuthenticated,
               overlayColor: colors.overlay || 'rgba(0, 0, 0, 0.35)',
               drawerStyle: {
                 width: '82%',
@@ -458,62 +482,67 @@ export default function AppNavigator() {
               },
             }}
           >
-            <Drawer.Screen name="Main" component={MainStack} />
             <Drawer.Screen name="IPEntry" component={IPEntryScreen} />
             <Drawer.Screen name="Login" component={LoginScreen} />
-            <Drawer.Screen
-              name="Account"
-              component={AccountScreen}
-              options={({ navigation }) => ({
-                headerShown: true,
-                title: 'Account',
-                headerStyle: { backgroundColor: colors.background },
-                headerTintColor: colors.text,
-                headerShadowVisible: false,
-                headerLeft: ({ tintColor }) => (
-                  <HeaderMenuButton
-                    color={tintColor || colors.text}
-                    onPress={() => navigation.dispatch(DrawerActions.openDrawer())}
-                  />
-                ),
-              })}
-            />
-            <Drawer.Screen
-              name="Settings"
-              component={SettingsScreen}
-              options={({ navigation }) => ({
-                headerShown: true,
-                title: 'Settings',
-                headerStyle: { backgroundColor: colors.background },
-                headerTintColor: colors.text,
-                headerShadowVisible: false,
-                headerLeft: ({ tintColor }) => (
-                  <HeaderMenuButton
-                    color={tintColor || colors.text}
-                    onPress={() => navigation.dispatch(DrawerActions.openDrawer())}
-                  />
-                ),
-              })}
-            />
-            <Drawer.Screen
-              name="Support"
-              component={SupportScreen}
-              options={({ navigation }) => ({
-                headerShown: true,
-                title: 'Help & Support',
-                headerStyle: { backgroundColor: colors.background },
-                headerTintColor: colors.text,
-                headerShadowVisible: false,
-                headerLeft: ({ tintColor }) => (
-                  <HeaderMenuButton
-                    color={tintColor || colors.text}
-                    onPress={() => navigation.dispatch(DrawerActions.openDrawer())}
-                  />
-                ),
-              })}
-            />
+            {isAuthenticated ? (
+              <>
+                <Drawer.Screen name="Main" component={MainStack} />
+                <Drawer.Screen
+                  name="Account"
+                  component={AccountScreen}
+                  options={({ navigation }) => ({
+                    headerShown: true,
+                    title: 'Account',
+                    headerStyle: { backgroundColor: colors.background },
+                    headerTintColor: colors.text,
+                    headerShadowVisible: false,
+                    headerLeft: ({ tintColor }) => (
+                      <HeaderMenuButton
+                        color={tintColor || colors.text}
+                        onPress={() => navigation.dispatch(DrawerActions.openDrawer())}
+                      />
+                    ),
+                  })}
+                />
+                <Drawer.Screen
+                  name="Settings"
+                  component={SettingsScreen}
+                  options={({ navigation }) => ({
+                    headerShown: true,
+                    title: 'Settings',
+                    headerStyle: { backgroundColor: colors.background },
+                    headerTintColor: colors.text,
+                    headerShadowVisible: false,
+                    headerLeft: ({ tintColor }) => (
+                      <HeaderMenuButton
+                        color={tintColor || colors.text}
+                        onPress={() => navigation.dispatch(DrawerActions.openDrawer())}
+                      />
+                    ),
+                  })}
+                />
+                <Drawer.Screen
+                  name="Support"
+                  component={SupportScreen}
+                  options={({ navigation }) => ({
+                    headerShown: true,
+                    title: 'Help & Support',
+                    headerStyle: { backgroundColor: colors.background },
+                    headerTintColor: colors.text,
+                    headerShadowVisible: false,
+                    headerLeft: ({ tintColor }) => (
+                      <HeaderMenuButton
+                        color={tintColor || colors.text}
+                        onPress={() => navigation.dispatch(DrawerActions.openDrawer())}
+                      />
+                    ),
+                  })}
+                />
+              </>
+            ) : null}
           </Drawer.Navigator>
         </View>
+        <LocalServerLockOverlay visible={shouldLockMainApp} />
       </View>
     </NavigationContainer>
   );

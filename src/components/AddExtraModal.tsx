@@ -1,8 +1,15 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, TouchableOpacity, TextInput } from 'react-native';
+import {
+  StyleSheet,
+  View,
+  Text,
+  TouchableOpacity,
+} from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeProvider';
 import { useToast } from './ToastProvider';
-import BottomDrawer from './BottomDrawer';
+import AppBottomSheet from './AppBottomSheet';
+import AppBottomSheetTextInput from './AppBottomSheetTextInput';
 
 const EXTRA_CATEGORY = {
   FOOD: 1,
@@ -61,38 +68,36 @@ export default function AddExtraModal({ visible, onClose, onSave }: Props) {
   };
 
   const footer = (
-    <View style={{ flexDirection: 'row', gap: 10 }}>
+    <View style={styles.footerActions}>
       <TouchableOpacity
         onPress={onClose}
-        style={{
-          flex: 1,
-          paddingHorizontal: 16,
-          paddingVertical: 12,
-          borderRadius: 12,
-          borderWidth: 1,
-          borderColor: colors.border,
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
+        activeOpacity={0.85}
+        style={[
+          styles.secondaryButton,
+          {
+            borderColor: colors.border,
+            backgroundColor: colors.searchBackground || colors.surface,
+          },
+        ]}
       >
-        <Text style={{ color: colors.textSecondary, fontWeight: '600' }}>
+        <Text style={[styles.secondaryButtonText, { color: colors.textSecondary || colors.text }]}>
           Cancel
         </Text>
       </TouchableOpacity>
 
       <TouchableOpacity
         onPress={handleSave}
-        style={{
-          flex: 1,
-          paddingHorizontal: 16,
-          paddingVertical: 12,
-          borderRadius: 12,
-          backgroundColor: isValid ? colors.primary : colors.border,
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
+        activeOpacity={0.85}
+        style={[
+          styles.primaryButton,
+          {
+            backgroundColor: colors.primary,
+            opacity: isValid ? 1 : 0.5,
+          },
+        ]}
       >
-        <Text style={{ color: colors.textInverse, fontWeight: '700' }}>
+        <MaterialIcons name="add-circle-outline" size={18} color={colors.textInverse || '#fff'} />
+        <Text style={[styles.primaryButtonText, { color: colors.textInverse || '#fff' }]}>
           Save Extra
         </Text>
       </TouchableOpacity>
@@ -100,84 +105,72 @@ export default function AddExtraModal({ visible, onClose, onSave }: Props) {
   );
 
   return (
-    <BottomDrawer
+    <AppBottomSheet
       visible={visible}
       onClose={onClose}
       title="Add Extra"
-      subtitle="Create a quick extra item for this order."
+      subtitle="Create an extra item with a name, price, and category."
+      snapPoints={['70%']}
       footer={footer}
-      maxHeightRatio={0.78}
-      keyboardBehavior="expand"
     >
-      <View style={{ marginBottom: 12 }}>
-        <Text
-          style={{
-            color: colors.textSecondary,
-            fontSize: 12,
-            fontWeight: '600',
-            marginBottom: 6,
-          }}
+      <View style={styles.formSection}>
+        <Text style={[styles.label, { color: colors.textSecondary || colors.text }]}>Item Name</Text>
+        <View
+          style={[
+            styles.inputWrap,
+            {
+              borderColor: colors.border,
+              backgroundColor: colors.searchBackground || colors.surface,
+            },
+          ]}
         >
-          Item Name
-        </Text>
-        <TextInput
-          value={itemName}
-          onChangeText={setItemName}
-          placeholder="Enter extra item name"
-          placeholderTextColor={colors.textSecondary}
-          style={{
-            color: colors.text,
-            borderWidth: 1,
-            borderColor: colors.border,
-            borderRadius: 10,
-            paddingHorizontal: 12,
-            paddingVertical: 10,
-            backgroundColor: colors.surface,
-          }}
-        />
+          <MaterialIcons
+            name="fastfood"
+            size={18}
+            color={colors.textSecondary || colors.text}
+            style={styles.inputIcon}
+          />
+          <AppBottomSheetTextInput
+            value={itemName}
+            onChangeText={setItemName}
+            placeholder="Enter extra item name"
+            placeholderTextColor={colors.textSecondary || colors.text}
+            style={[styles.input, { color: colors.text }]}
+          />
+        </View>
       </View>
 
-      <View style={{ marginBottom: 16 }}>
-        <Text
-          style={{
-            color: colors.textSecondary,
-            fontSize: 12,
-            fontWeight: '600',
-            marginBottom: 6,
-          }}
+      <View style={styles.formSection}>
+        <Text style={[styles.label, { color: colors.textSecondary || colors.text }]}>Price</Text>
+        <View
+          style={[
+            styles.inputWrap,
+            {
+              borderColor: colors.border,
+              backgroundColor: colors.searchBackground || colors.surface,
+            },
+          ]}
         >
-          Price
-        </Text>
-        <TextInput
-          value={priceInput}
-          onChangeText={setPriceInput}
-          placeholder="0.00"
-          placeholderTextColor={colors.textSecondary}
-          keyboardType="decimal-pad"
-          style={{
-            color: colors.text,
-            borderWidth: 1,
-            borderColor: colors.border,
-            borderRadius: 10,
-            paddingHorizontal: 12,
-            paddingVertical: 10,
-            backgroundColor: colors.surface,
-          }}
-        />
+          <MaterialIcons
+            name="euro-symbol"
+            size={18}
+            color={colors.textSecondary || colors.text}
+            style={styles.inputIcon}
+          />
+          <AppBottomSheetTextInput
+            value={priceInput}
+            onChangeText={setPriceInput}
+            placeholder="0.00"
+            placeholderTextColor={colors.textSecondary || colors.text}
+            keyboardType="decimal-pad"
+            style={[styles.input, { color: colors.text }]}
+          />
+        </View>
       </View>
 
-      <View style={{ marginBottom: 8 }}>
-        <Text
-          style={{
-            color: colors.textSecondary,
-            fontSize: 12,
-            fontWeight: '600',
-            marginBottom: 8,
-          }}
-        >
-          Category
-        </Text>
-        <View style={{ flexDirection: 'row', gap: 8 }}>
+      <View style={styles.formSection}>
+        <Text style={[styles.label, { color: colors.textSecondary || colors.text }]}>Category</Text>
+        <View style={styles.categoryRow}>
           {[
             { id: EXTRA_CATEGORY.FOOD, label: 'Food' },
             { id: EXTRA_CATEGORY.DRINK, label: 'Drink' },
@@ -187,24 +180,20 @@ export default function AddExtraModal({ visible, onClose, onSave }: Props) {
               <TouchableOpacity
                 key={entry.id}
                 onPress={() => setExtraCategory(entry.id)}
-                style={{
-                  flex: 1,
-                  paddingVertical: 10,
-                  borderRadius: 999,
-                  borderWidth: 1.5,
-                  borderColor: selected ? colors.primary : colors.border,
-                  backgroundColor: selected
-                    ? `${colors.primary}20`
-                    : colors.surface,
-                  alignItems: 'center',
-                }}
+                activeOpacity={0.85}
+                style={[
+                  styles.categoryChip,
+                  {
+                    borderColor: selected ? colors.primary : colors.border,
+                    backgroundColor: selected ? `${colors.primary}18` : colors.searchBackground || colors.surface,
+                  },
+                ]}
               >
                 <Text
-                  style={{
-                    color: selected ? colors.primary : colors.text,
-                    fontWeight: '600',
-                    fontSize: 12,
-                  }}
+                  style={[
+                    styles.categoryChipText,
+                    { color: selected ? colors.primary : colors.text },
+                  ]}
                 >
                   {entry.label}
                 </Text>
@@ -213,6 +202,80 @@ export default function AddExtraModal({ visible, onClose, onSave }: Props) {
           })}
         </View>
       </View>
-    </BottomDrawer>
+    </AppBottomSheet>
   );
 }
+
+const styles = StyleSheet.create({
+  formSection: {
+    marginBottom: 18,
+  },
+  label: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: 8,
+    letterSpacing: 0.2,
+  },
+  inputWrap: {
+    borderWidth: 1,
+    borderRadius: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    minHeight: 56,
+  },
+  inputIcon: {
+    marginRight: 12,
+  },
+  input: {
+    flex: 1,
+    fontSize: 16,
+    paddingVertical: 14,
+  },
+  categoryRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  categoryChip: {
+    flex: 1,
+    minHeight: 50,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 14,
+  },
+  categoryChipText: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  footerActions: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  secondaryButton: {
+    flex: 0.42,
+    minHeight: 54,
+    borderRadius: 18,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  secondaryButtonText: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  primaryButton: {
+    flex: 1,
+    minHeight: 56,
+    borderRadius: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  primaryButtonText: {
+    fontSize: 16,
+    fontWeight: '800',
+    marginLeft: 10,
+  },
+});

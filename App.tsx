@@ -10,11 +10,14 @@ import { ToastProvider } from './src/components/ToastProvider';
 import { ConnectionProvider } from './src/contexts/ConnectionProvider';
 import { AuthProvider } from './src/contexts/AuthContext';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
+import posIdService from './src/services/posIdService';
 export default function App() {
   useEffect(() => {
     // Load server and local base URLs from storage so services can use them
     setServerBaseUrlFromStorage();
     setLocalBaseUrlFromStorage();
+    posIdService.loadPosId();
   }, []);
 
   return (
@@ -22,13 +25,15 @@ export default function App() {
       <ThemeProvider>
         <GestureHandlerRootView style={{ flex: 1 }}>
           <SafeAreaProvider>
-            <ToastProvider>
-              <ConnectionProvider>
-                <AuthProvider>
-                  <AppNavigator />
-                </AuthProvider>
-              </ConnectionProvider>
-            </ToastProvider>
+            <BottomSheetModalProvider>
+              <ToastProvider>
+                <ConnectionProvider>
+                  <AuthProvider>
+                    <AppNavigator />
+                  </AuthProvider>
+                </ConnectionProvider>
+              </ToastProvider>
+            </BottomSheetModalProvider>
           </SafeAreaProvider>
         </GestureHandlerRootView>
       </ThemeProvider>
