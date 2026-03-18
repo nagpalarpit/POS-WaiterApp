@@ -100,7 +100,6 @@ export default function LoginScreen() {
         console.error('Error preloading data:', storageError);
       }
 
-      navigation.reset({ index: 0, routes: [{ name: 'Main' as never }] });
     } catch (err: any) {
       fireErrorNotification();
       showToast('error', err?.message || 'An unexpected error occurred');

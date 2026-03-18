@@ -1,9 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { DrawerActions, NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
+import { ActivityIndicator, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import {
+  DefaultTheme,
+  DrawerActions,
+  NavigationContainer,
+  createNavigationContainerRef,
+} from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createDrawerNavigator, DrawerContentComponentProps } from '@react-navigation/drawer';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 
@@ -111,6 +116,7 @@ function MainStack() {
         headerStyle: { backgroundColor: colors.background },
         headerTintColor: colors.text,
         headerShadowVisible: false,
+        contentStyle: { backgroundColor: colors.background },
       }}
       initialRouteName="Dashboard"
     >
@@ -430,8 +436,28 @@ export default function AppNavigator() {
     return unsubscribe;
   }, [showToast]);
 
+  const navigationTheme = useMemo(
+    () => ({
+      ...DefaultTheme,
+      colors: {
+        ...DefaultTheme.colors,
+        primary: colors.primary,
+        background: colors.background,
+        card: colors.background,
+        text: colors.text,
+        border: colors.border,
+        notification: colors.accent,
+      },
+    }),
+    [colors]
+  );
+
   if (isLoading) {
-    return null;
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
   }
 
   const initialRouteName: DrawerRouteName = isAuthenticated
@@ -455,6 +481,7 @@ export default function AppNavigator() {
   return (
     <NavigationContainer
       ref={navigationRef}
+      theme={navigationTheme}
       onReady={syncCurrentRoute}
       onStateChange={syncCurrentRoute}
     >
@@ -474,6 +501,9 @@ export default function AppNavigator() {
               drawerType: 'front',
               swipeEnabled: isAuthenticated,
               overlayColor: colors.overlay || 'rgba(0, 0, 0, 0.35)',
+              sceneStyle: {
+                backgroundColor: colors.background,
+              },
               drawerStyle: {
                 width: '82%',
                 borderTopRightRadius: 18,
