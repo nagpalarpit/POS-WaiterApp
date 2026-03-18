@@ -42,8 +42,6 @@ export interface PlaceOrderDetailsPayload {
   orderType: string;
   isSandbox: boolean;
   isPriceIncludingTax: boolean;
-  orderTaxTotal: number;
-  orderCartTaxAndChargesTotal: number;
   orderDeliveryTypeId: number;
   orderPromoCodeDiscountTotal: number;
   countryCode: string;
@@ -76,6 +74,10 @@ export interface CreateOrderPayload {
 
 class OrderService {
   private static readonly ORDER_STATUS_DELIVERED = 5;
+  private readonly omittedOrderCalculationKeys = new Set([
+    'orderTaxTotal',
+    'orderCartTaxAndChargesTotal',
+  ]);
 
   private isNetworkError(error: any): boolean {
     const code = `${error?.code || ''}`.toUpperCase();
@@ -109,6 +111,118 @@ class OrderService {
     if (!target.some((item) => item === normalized)) {
       target.push(normalized);
     }
+  }
+
+  private removeNullishDeep<T>(value: T): T {
+    if (value === undefined || value === null) {
+      return undefined as T;
+    }
+
+    if (Array.isArray(value)) {
+      return value
+        .map((item) => this.removeNullishDeep(item))
+        .filter((item) => item !== undefined) as T;
+    }
+
+    if (value instanceof Date) {
+      return value;
+    }
+
+    if (typeof value === 'object') {
+      const sanitized: Record<string, any> = {};
+
+      Object.entries(value as Record<string, any>).forEach(([key, itemValue]) => {
+        if (this.omittedOrderCalculationKeys.has(key)) return;
+        if (itemValue === undefined || itemValue === null) return;
+
+        const cleanedValue = this.removeNullishDeep(itemValue);
+        if (cleanedValue !== undefined) {
+          sanitized[key] = cleanedValue;
+        }
+      });
+
+      return sanitized as T;
+    }
+
+    return value;
+  }
+
+  private pickDefinedFields(source: any, keys: string[]): Record<string, any> {
+    const picked: Record<string, any> = {};
+
+    keys.forEach((key) => {
+      const value = source?.[key];
+      if (value !== undefined && value !== null) {
+        picked[key] = value;
+      }
+    });
+
+    return picked;
+  }
+
+  private buildCompactSettleOrderInfo(orderInfo: any): any {
+    return this.removeNullishDeep(
+      this.pickDefinedFields(orderInfo, [
+        'companyId',
+        'currency',
+        'orderStatusId',
+        'localOrderId',
+        'customOrderId',
+        'updatedAt',
+        'paidAt',
+        'paymentMethod',
+        'tip',
+        'deliveryCharge',
+        'paidBy',
+        'invoiceNumber',
+        'tsc',
+        'isCorporate',
+        'isFinalBillPrint',
+        'canceledOrderPayment',
+        'isfullPaidWithGiftCard',
+        'giftCard',
+        'appliedGiftCard',
+        'giftCardTotal',
+        'giftCardLogs',
+        'orderPaymentSummary',
+        'orderPaymentDetails',
+        'orderCustomerDetails',
+        'isTscOffline',
+      ]),
+    );
+  }
+
+  buildLocalSettleInfo(
+    settlePayload: any,
+    orderInfo?: any,
+    extra: any = {},
+  ): any {
+    const extraOrderInfo = extra?.orderInfo || {};
+    const compactOrderInfo = {
+      ...this.buildCompactSettleOrderInfo(orderInfo ?? settlePayload?.orderInfo),
+      ...this.buildCompactSettleOrderInfo(extraOrderInfo),
+    };
+    const extraFields = { ...(extra || {}) };
+    delete extraFields.orderInfo;
+
+    return this.removeNullishDeep({
+      ...this.pickDefinedFields(settlePayload, [
+        'currency',
+        'paymentMethod',
+        'amount',
+        'tip',
+        'deliveryCharge',
+        'isEditPayment',
+        'print',
+        'splitLog',
+        'isOrderPaid',
+        'isTscOffline',
+      ]),
+      ...extraFields,
+      ...(Object.keys(compactOrderInfo).length > 0
+        ? { orderInfo: compactOrderInfo }
+        : {}),
+    });
   }
 
   private async resolveOrderIdCandidates(
@@ -317,21 +431,15 @@ class OrderService {
       orderDetails.orderCustomerDetails = normalized.orderCustomerDetails;
     }
 
-    const settleInfo = {
-      ...settlePayload,
-      orderInfo: {
-        ...orderInfo,
-        ...orderDetails,
-      },
-    };
+    const settleInfo = this.buildLocalSettleInfo(settlePayload, orderDetails);
 
     // Match POS local update payload structure
-    return {
+    return this.removeNullishDeep({
       orderStatusId: OrderService.ORDER_STATUS_DELIVERED,
       isSynced,
       settleInfo,
       orderDetails,
-    };
+    });
   }
 
   /**
@@ -339,7 +447,8 @@ class OrderService {
    */
   async createOrder(orderData: CreateOrderPayload) {
     try {
-      const result = await localDatabase.insert("order", orderData);
+      const sanitizedOrderData = this.removeNullishDeep(orderData);
+      const result = await localDatabase.insert("order", sanitizedOrderData);
       return result;
     } catch (error) {
       console.error("Error creating order:", error);
@@ -352,7 +461,8 @@ class OrderService {
    */
   async updateOrder(orderId: string, newData: any) {
     try {
-      const result = await this.updateOrderWithFallback(orderId, newData);
+      const sanitizedData = this.removeNullishDeep(newData);
+      const result = await this.updateOrderWithFallback(orderId, sanitizedData);
       return result;
     } catch (error) {
       console.error("Error updating order:", error);
@@ -451,15 +561,18 @@ class OrderService {
     settlePayload?: any,
   ) {
     try {
+      const sanitizedSettlePayload = this.removeNullishDeep(
+        settlePayload || { orderInfo: {} },
+      );
       const paidAt =
         paymentSummary?.paidAt ??
         paymentSummary?.createdAt ??
         new Date().toISOString();
       const updatePayload = this.buildSettleUpdatePayload(
-        settlePayload || { orderInfo: {} },
+        sanitizedSettlePayload,
         {
           orderPaymentSummary: paymentSummary,
-          orderPaymentDetails: settlePayload?.orderInfo?.orderPaymentDetails,
+          orderPaymentDetails: sanitizedSettlePayload?.orderInfo?.orderPaymentDetails,
           paidAt,
         },
         false,
@@ -483,15 +596,17 @@ class OrderService {
    */
   async settleOrder(orderId: string, settlePayload: any, allowOfflineFallback: boolean = false) {
     try {
+      const sanitizedSettlePayload = this.removeNullishDeep(settlePayload);
+
       // POST to remote settle endpoint
-      const res = await api.post(API_ENDPOINTS.order.SETTLE, settlePayload);
+      const res = await api.post(API_ENDPOINTS.order.SETTLE, sanitizedSettlePayload);
 
       console.log("res===>", res);
 
       const data = res?.data || {};
-      const normalized = this.normalizeSettleResponse(data, settlePayload);
+      const normalized = this.normalizeSettleResponse(data, sanitizedSettlePayload);
       const updatePayload = this.buildSettleUpdatePayload(
-        settlePayload,
+        sanitizedSettlePayload,
         normalized,
         true,
       );
@@ -503,7 +618,7 @@ class OrderService {
       const result = await this.updateOrderWithFallback(
         orderId,
         updatePayload,
-        settlePayload?.orderInfo,
+        sanitizedSettlePayload?.orderInfo,
       );
       return { remote: true, result, data, normalized };
     } catch (error) {
@@ -516,7 +631,8 @@ class OrderService {
         error,
       );
       // fallback: mark locally as paid with provided payment summary if available
-      const normalized = this.normalizeSettleResponse({}, settlePayload);
+      const sanitizedSettlePayload = this.removeNullishDeep(settlePayload);
+      const normalized = this.normalizeSettleResponse({}, sanitizedSettlePayload);
       const fallbackPaymentSummary = {
         ...(normalized.orderPaymentSummary || {}),
         paidAt:
@@ -527,7 +643,7 @@ class OrderService {
       const result = await this.markOrderAsPaid(
         orderId,
         fallbackPaymentSummary,
-        settlePayload,
+        sanitizedSettlePayload,
       );
       return {
         remote: false,
@@ -544,7 +660,8 @@ class OrderService {
    */
   async placeOrder(orderPayload: any) {
     try {
-      const res = await api.post(API_ENDPOINTS.order.CREATE, orderPayload);
+      const sanitizedOrderPayload = this.removeNullishDeep(orderPayload);
+      const res = await api.post(API_ENDPOINTS.order.CREATE, sanitizedOrderPayload);
       return res?.data ?? res;
     } catch (error) {
       console.error("Error placing order:", error);
@@ -558,7 +675,8 @@ class OrderService {
    */
   async settleBulkOrder(items: any[]) {
     try {
-      const res = await api.post(API_ENDPOINTS.order.SETTLE_BULK, items);
+      const sanitizedItems = this.removeNullishDeep(items);
+      const res = await api.post(API_ENDPOINTS.order.SETTLE_BULK, sanitizedItems);
       return res?.data ?? res;
     } catch (error) {
       console.warn("Remote bulk settle failed:", error);

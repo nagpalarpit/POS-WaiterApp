@@ -249,128 +249,6 @@ const resolveDiscountAmount = (orderDetails: any, subtotal: number): number => {
 
   return round2(Math.min(discountValue, subtotal));
 };
-const computeDiscountedTax = (
-  orderDetails: any,
-  subtotal: number,
-  discount: number,
-): number => {
-  const rawTax = toNumber(
-    orderDetails?.orderTaxTotal ?? orderDetails?.orderCartTaxAndChargesTotal,
-    0,
-  );
-  const baseSubtotal = toNumber(
-    orderDetails?.orderSubTotal ?? orderDetails?.orderCartSubTotal,
-    subtotal,
-  );
-  const discountedSubtotal = Math.max(baseSubtotal - discount, 0);
-
-  const fallbackTax = () => {
-    if (rawTax <= 0) return 0;
-    if (baseSubtotal <= 0) return rawTax;
-    if (discountedSubtotal === baseSubtotal) return round2(rawTax);
-    const ratio = discountedSubtotal / baseSubtotal;
-    return round2(rawTax * ratio);
-  };
-
-  const items = getOrderItemsForTax(orderDetails);
-  if (items.length === 0) {
-    return fallbackTax();
-  }
-
-  const discountInfo =
-    orderDetails?.discount ?? orderDetails?.orderInfo?.discount;
-  const discountPercentFromConfig = toNumber(
-    discountInfo?.discountValue,
-    0,
-  );
-  const discountPercent =
-    discountPercentFromConfig > 0
-      ? discountPercentFromConfig
-      : baseSubtotal > 0 && discount > 0
-        ? (discount / baseSubtotal) * 100
-        : 0;
-  const deliveryCharge = toNumber(orderDetails?.deliveryCharge, 0);
-  const orderTotalForDelivery = Math.max(
-    toNumber(orderDetails?.orderTotal, discountedSubtotal),
-    0,
-  );
-
-  const taxes: Record<string, { itemTotal: number; taxAmount: number }> = {};
-  let foodDeliveryChargeSum = 0;
-  let drinkDeliveryChargeSum = 0;
-
-  items.forEach((item: any) => {
-    const quantity = Math.max(toNumber(item?.quantity, 0), 0);
-    if (quantity <= 0) return;
-
-    const toppings = getPosItemToppings(item);
-    const toppingsPrice = toppings.reduce(
-      (acc: number, current) =>
-        acc + current.price * (current.toppingCount || 1),
-      0,
-    );
-
-    const unitTotal = getPosItemUnitPrice(item) + toppingsPrice;
-    const grossBeforeDiscount = unitTotal * quantity;
-    const discountAmount =
-      discountPercent > 0
-        ? (discountPercent / 100) * grossBeforeDiscount
-        : 0;
-    const grossAfterDiscount = grossBeforeDiscount - discountAmount;
-
-    const { taxKey, taxAmount } = resolveTaxMeta(orderDetails, item);
-    if (!taxKey) return;
-
-    if (!taxes[taxKey]) {
-      taxes[taxKey] = {
-        itemTotal: 0,
-        taxAmount,
-      };
-    }
-
-    taxes[taxKey].itemTotal += grossAfterDiscount;
-
-    if (deliveryCharge > 0) {
-      const percentage =
-        ((grossBeforeDiscount / (orderTotalForDelivery || 1)) * 100) || 0;
-      const chargePart = deliveryCharge * (percentage / 100);
-      if (taxKey === "7%") {
-        foodDeliveryChargeSum += chargePart;
-      } else {
-        drinkDeliveryChargeSum += chargePart;
-      }
-    }
-  });
-
-  if (taxes["7%"]) {
-    taxes["7%"].itemTotal += foodDeliveryChargeSum;
-  }
-  if (taxes["19%"]) {
-    taxes["19%"].itemTotal += drinkDeliveryChargeSum;
-  }
-
-  let totalTax = 0;
-  Object.keys(taxes).forEach((key) => {
-    const taxItem = taxes[key];
-    if (!taxItem || taxItem.itemTotal <= 0) return;
-    const parsedTax = parseFloat(key.replace("%", "").replace(",", "."));
-    const taxAmount =
-      taxItem.taxAmount ||
-      (Number.isFinite(parsedTax) ? 1 + parsedTax / 100 : 1);
-    const isZeroTax =
-      (!Number.isNaN(parsedTax) && parsedTax === 0) || taxAmount === 1;
-    if (!isZeroTax) {
-      totalTax += taxItem.itemTotal - taxItem.itemTotal / taxAmount;
-    }
-  });
-
-  const roundedTotalTax = round2(totalTax);
-  if (roundedTotalTax === 0 && rawTax > 0) {
-    return fallbackTax();
-  }
-  return roundedTotalTax;
-};
-
 const mergeCartItems = (cartItems: any[] = []) => {
   const mergedItems: Record<string, any> = {};
   cartItems.forEach((item: any) => {
@@ -692,9 +570,8 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
     const od = displayedOrderDetails || {};
     const subtotal = Number(od.orderSubTotal ?? od.orderCartSubTotal ?? 0) || 0;
     const discount = resolveDiscountAmount(od, subtotal);
-    const tax = computeDiscountedTax(od, subtotal, discount);
     const total = round2(Math.max(subtotal - discount, 0));
-    return { subtotal, discount, tax, total };
+    return { subtotal, discount, total };
   }, [displayedOrderDetails]);
 
   const paymentProcessorId =
@@ -871,11 +748,6 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
         currency: orderDetails?.currency || "EUR",
         isPriceIncludingTax: orderDetails?.isPriceIncludingTax ?? false,
         orderSubTotal: toNumber(orderDetails?.orderSubTotal, 0),
-        orderTaxTotal: toNumber(orderDetails?.orderTaxTotal, 0),
-        orderCartTaxAndChargesTotal: toNumber(
-          orderDetails?.orderCartTaxAndChargesTotal,
-          0,
-        ),
         orderPromoCodeDiscountTotal: toNumber(
           orderDetails?.orderPromoCodeDiscountTotal,
           0,
@@ -890,7 +762,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
         userFirstName: orderDetails?.userFirstName || "",
         userLastName: orderDetails?.userLastName || "",
         userMobile: orderDetails?.userMobile ?? null,
-        customerAddressId: orderDetails?.customerAddressId ?? null,
+        customerAddressId: orderDetails?.customerAddressId ?? undefined,
         addresses: orderDetails?.addresses || [],
         addedBy: orderDetails?.addedBy ?? null,
         posId: orderDetails?.posId || "",
@@ -1162,11 +1034,6 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
         orderDetails,
         payableSubTotal,
       );
-      let payableTax = computeDiscountedTax(
-        orderDetails,
-        payableSubTotal,
-        payableDiscount,
-      );
       let payableTotal = round2(
         Math.max(payableSubTotal - payableDiscount, 0),
       );
@@ -1252,20 +1119,13 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
           orderDetails,
           sourceSubTotal,
         );
-        const sourceTax = computeDiscountedTax(
-          orderDetails,
-          sourceSubTotal,
-          sourceDiscount,
-        );
         const splitRatio =
           effectiveSubTotal > 0
             ? Math.min(1, selectedSubTotal / effectiveSubTotal)
             : 1;
 
         const selectedDiscount = round2(sourceDiscount * splitRatio);
-        const selectedTax = round2(sourceTax * splitRatio);
         const remainingDiscount = round2(sourceDiscount - selectedDiscount);
-        const remainingTax = round2(sourceTax - selectedTax);
         const selectedTotal = round2(
           Math.max(0, selectedSubTotal - selectedDiscount),
         );
@@ -1308,8 +1168,6 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
           orderType,
           isSandbox: orderDetails?.isSandbox ?? false,
           isPriceIncludingTax: orderDetails?.isPriceIncludingTax ?? false,
-          orderTaxTotal: selectedTax,
-          orderCartTaxAndChargesTotal: selectedTax,
           orderDeliveryTypeId,
           orderPromoCodeDiscountTotal: toNumber(
             orderDetails?.orderPromoCodeDiscountTotal,
@@ -1462,8 +1320,6 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
             orderSubTotal: remainingSubTotal,
             orderTotal: remainingTotal,
             orderDiscountTotal: remainingDiscount,
-            orderTaxTotal: remainingTax,
-            orderCartTaxAndChargesTotal: remainingTax,
             orderPaymentSummary: { paymentProcessorId: 3 },
             paymentMethod: 3,
             count: remainingOrderItems.length,
@@ -1556,7 +1412,6 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
         let mainOrderSubTotal = 0;
         let mainOrderTotal = 0;
         let mainOrderDiscount = 0;
-        let mainOrderTax = 0;
         let finalOrderTip = 0;
         let finalOrderDeliveryCharge = 0;
 
@@ -1565,10 +1420,6 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
           mainOrderSubTotal += toNumber(details.orderSubTotal, 0);
           mainOrderTotal += toNumber(details.orderTotal, 0);
           mainOrderDiscount += toNumber(details.orderDiscountTotal, 0);
-          mainOrderTax += toNumber(
-            details.orderTaxTotal ?? details.orderCartTaxAndChargesTotal,
-            0,
-          );
           finalOrderTip += toNumber(details.tip, 0);
           finalOrderDeliveryCharge += toNumber(details.deliveryCharge, 0);
 
@@ -1603,8 +1454,6 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
           orderSubTotal: round2(mainOrderSubTotal),
           orderTotal: round2(mainOrderTotal),
           orderDiscountTotal: round2(mainOrderDiscount),
-          orderTaxTotal: round2(mainOrderTax),
-          orderCartTaxAndChargesTotal: round2(mainOrderTax),
           orderStatusId: ORDER_STATUS.DELIVERED,
           updatedAt: now,
           paidAt: now,
@@ -1902,8 +1751,6 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
         orderType,
         isSandbox: orderDetails?.isSandbox ?? false,
         isPriceIncludingTax: orderDetails?.isPriceIncludingTax ?? false,
-        orderTaxTotal: payableTax,
-        orderCartTaxAndChargesTotal: payableTax,
         orderDeliveryTypeId,
         orderPromoCodeDiscountTotal: toNumber(
           orderDetails?.orderPromoCodeDiscountTotal,
@@ -2007,14 +1854,16 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
                 ...offlineOrderInfo,
                 isTscOffline: true,
               },
-              settleInfo: {
-                ...settlePayload,
-                isTscOffline: true,
-                orderInfo: {
+              settleInfo: orderService.buildLocalSettleInfo(
+                settlePayload,
+                {
                   ...offlineOrderInfo,
                   isTscOffline: true,
                 },
-              },
+                {
+                  isTscOffline: true,
+                },
+              ),
               isSynced: false,
             });
             setWorkingOrderDetails({ ...offlineOrderInfo });
@@ -2074,13 +1923,13 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
             orderDetails: {
               ...orderInfo,
             },
-            settleInfo: {
-              ...(order?.settleInfo || {}),
-              orderInfo: {
-                ...(order?.settleInfo?.orderInfo || {}),
-                ...orderInfo,
+            settleInfo: orderService.buildLocalSettleInfo(
+              settlePayload,
+              orderInfo,
+              {
+                splitLog: order?.settleInfo?.splitLog,
               },
-            },
+            ),
             isSynced: true,
           });
           setWorkingOrderDetails({ ...orderInfo });
@@ -2145,7 +1994,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
       },
     });
 
-    navigation.navigate("Payment", {
+    navigation.push("Payment", {
       title: shouldSettle ? "Settle Payment" : "Change Payment Method",
       orderTotal: totals.total,
       companyId: resolvedCompanyId,
@@ -2696,14 +2545,6 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
               {formatCurrency(totals.subtotal)}
             </Text>
           </View>
-          {totals.tax > 0 ? (
-            <View style={styles.summaryRow}>
-              <Text style={{ color: colors.textSecondary }}>Tax</Text>
-              <Text style={{ color: colors.text, fontWeight: "700" }}>
-                {formatCurrency(totals.tax)}
-              </Text>
-            </View>
-          ) : null}
           {totals.discount > 0 ? (
             <View style={styles.summaryRow}>
               <Text style={{ color: colors.textSecondary }}>Discount</Text>

@@ -149,6 +149,7 @@ export const useOrderSubmit = (
    */
   const submitOrder = async (tax: number): Promise<{ success: boolean; order?: any }> => {
     try {
+      void tax;
       if (!cart.items?.length) {
         throw new Error('No items in cart');
       }
@@ -184,7 +185,7 @@ export const useOrderSubmit = (
         : undefined;
       const now = new Date().toISOString();
       const orderItems = prepareOrderItems(companyId);
-      const total = subtotal + tax - discount;
+      const total = subtotal - discount;
       const existingOrderId =
         existingOrder?._id || existingOrder?.id || existingOrder?.orderId || null;
       const addedBy =
@@ -238,9 +239,6 @@ export const useOrderSubmit = (
           orderType: getOrderType(deliveryType),
           isSandbox: existingDetails?.isSandbox ?? false,
           isPriceIncludingTax: existingDetails?.isPriceIncludingTax ?? false,
-          orderTaxTotal: tax,
-          orderCartTaxAndChargesTotal:
-            existingDetails?.orderCartTaxAndChargesTotal ?? 0,
           orderDeliveryTypeId: deliveryType,
           orderPromoCodeDiscountTotal:
             existingDetails?.orderPromoCodeDiscountTotal ?? 0,
@@ -381,8 +379,6 @@ export const useOrderSubmit = (
         orderType: getOrderType(deliveryType),
         isSandbox: false,
         isPriceIncludingTax: false,
-        orderTaxTotal: tax,
-        orderCartTaxAndChargesTotal: 0,
         orderDeliveryTypeId: deliveryType, // 0=dine-in, 1=delivery, 2=pickup
         orderPromoCodeDiscountTotal: 0,
         countryCode: 'IN',

@@ -40,6 +40,9 @@ export type RootStackParamList = {
   IPEntry: undefined;
   Login: undefined;
   Dashboard: undefined;
+  Account: undefined;
+  Settings: undefined;
+  Support: undefined;
   Menu: {
     tableNo?: number;
     deliveryType: number;
@@ -76,9 +79,6 @@ type RootDrawerParamList = {
   Main: undefined;
   IPEntry: undefined;
   Login: undefined;
-  Account: undefined;
-  Settings: undefined;
-  Support: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -86,6 +86,7 @@ const Drawer = createDrawerNavigator<RootDrawerParamList>();
 const navigationRef = createNavigationContainerRef();
 
 type DrawerRouteName = keyof RootDrawerParamList;
+type DrawerItemScreen = 'Dashboard' | 'Account' | 'Settings' | 'Support';
 
 type DrawerUser = {
   displayName: string;
@@ -147,6 +148,45 @@ function MainStack({ initialRouteName }: MainStackProps) {
           ),
         })}
       />
+      <Stack.Screen
+        name="Account"
+        component={AccountScreen}
+        options={({ navigation }) => ({
+          title: 'Account',
+          headerLeft: ({ tintColor }) => (
+            <HeaderMenuButton
+              color={tintColor || colors.text}
+              onPress={() => navigation.getParent()?.dispatch(DrawerActions.openDrawer())}
+            />
+          ),
+        })}
+      />
+      <Stack.Screen
+        name="Settings"
+        component={SettingsScreen}
+        options={({ navigation }) => ({
+          title: 'Settings',
+          headerLeft: ({ tintColor }) => (
+            <HeaderMenuButton
+              color={tintColor || colors.text}
+              onPress={() => navigation.getParent()?.dispatch(DrawerActions.openDrawer())}
+            />
+          ),
+        })}
+      />
+      <Stack.Screen
+        name="Support"
+        component={SupportScreen}
+        options={({ navigation }) => ({
+          title: 'Help & Support',
+          headerLeft: ({ tintColor }) => (
+            <HeaderMenuButton
+              color={tintColor || colors.text}
+              onPress={() => navigation.getParent()?.dispatch(DrawerActions.openDrawer())}
+            />
+          ),
+        })}
+      />
       <Stack.Screen name="Menu" component={MenuScreen} options={{ title: 'Menu' }} />
       <Stack.Screen name="Cart" component={CartScreen} options={{ title: 'Order Summary' }} />
       <Stack.Screen name="Payment" component={PaymentModal} options={{ title: 'Payment' }} />
@@ -176,7 +216,9 @@ function SupportScreen() {
   );
 }
 
-function CustomDrawerContent(props: DrawerContentComponentProps) {
+function CustomDrawerContent(
+  props: DrawerContentComponentProps & { currentScreenName?: string },
+) {
   const { colors } = useTheme();
   const { showToast } = useToast();
   const { logout: performLogout } = useAuth();
@@ -213,8 +255,6 @@ function CustomDrawerContent(props: DrawerContentComponentProps) {
     hydrateDrawer();
   }, [props.state.index]);
 
-  const activeRoute = props.state.routeNames[props.state.index] as DrawerRouteName;
-
   const initials = useMemo(() => {
     const text = drawerUser.displayName.trim();
     if (!text) return 'WA';
@@ -224,18 +264,20 @@ function CustomDrawerContent(props: DrawerContentComponentProps) {
   }, [drawerUser.displayName]);
 
   const drawerItems: Array<{
-    route: DrawerRouteName;
+    screen: DrawerItemScreen;
     label: string;
     icon: React.ComponentProps<typeof MaterialIcons>['name'];
   }> = [
-      { route: 'Main', label: 'Dashboard', icon: 'dashboard' },
-      { route: 'Account', label: 'Account', icon: 'person-outline' },
-      { route: 'Settings', label: 'Settings', icon: 'settings' },
-      { route: 'Support', label: 'Help & Support', icon: 'help-outline' },
+      { screen: 'Dashboard', label: 'Dashboard', icon: 'dashboard' },
+      { screen: 'Account', label: 'Account', icon: 'person-outline' },
+      { screen: 'Settings', label: 'Settings', icon: 'settings' },
+      { screen: 'Support', label: 'Help & Support', icon: 'help-outline' },
     ];
 
-  const navigateTo = (routeName: DrawerRouteName) => {
-    props.navigation.navigate(routeName);
+  const navigateTo = (screenName: DrawerItemScreen) => {
+    props.navigation.dispatch(
+      DrawerActions.jumpTo('Main', { screen: screenName }),
+    );
     props.navigation.closeDrawer();
   };
 
@@ -341,12 +383,12 @@ function CustomDrawerContent(props: DrawerContentComponentProps) {
           </Text>
 
           {drawerItems.map((item) => {
-            const isActive = activeRoute === item.route;
+            const isActive = props.currentScreenName === item.screen;
 
             return (
               <TouchableOpacity
-                key={item.route}
-                onPress={() => navigateTo(item.route)}
+                key={item.screen}
+                onPress={() => navigateTo(item.screen)}
                 activeOpacity={0.8}
                 style={{
                   borderRadius: 16,
@@ -474,7 +516,7 @@ export default function AppNavigator() {
     };
 
     void resolveOnboarding();
-  }, [currentRouteName, isAuthenticated, user]);
+  }, [isAuthenticated, user]);
 
   const navigationTheme = useMemo(
     () => ({
@@ -535,7 +577,11 @@ export default function AppNavigator() {
           <Drawer.Navigator
             key={navigatorKey}
             initialRouteName={initialRouteName}
-            drawerContent={(props) => (isAuthenticated && !shouldShowOnboarding ? <CustomDrawerContent {...props} /> : null)}
+            drawerContent={(props) =>
+              isAuthenticated && !shouldShowOnboarding ? (
+                <CustomDrawerContent {...props} currentScreenName={currentRouteName} />
+              ) : null
+            }
             screenOptions={{
               headerShown: false,
               headerStatusBarHeight: Platform.OS === 'android' ? 0 : undefined,
@@ -560,57 +606,6 @@ export default function AppNavigator() {
                 <Drawer.Screen name="Main">
                   {() => <MainStack initialRouteName={shouldShowOnboarding ? 'Onboarding' : 'Dashboard'} />}
                 </Drawer.Screen>
-                <Drawer.Screen
-                  name="Account"
-                  component={AccountScreen}
-                  options={({ navigation }) => ({
-                    headerShown: true,
-                    title: 'Account',
-                    headerStyle: { backgroundColor: colors.background },
-                    headerTintColor: colors.text,
-                    headerShadowVisible: false,
-                    headerLeft: ({ tintColor }) => (
-                      <HeaderMenuButton
-                        color={tintColor || colors.text}
-                        onPress={() => navigation.dispatch(DrawerActions.openDrawer())}
-                      />
-                    ),
-                  })}
-                />
-                <Drawer.Screen
-                  name="Settings"
-                  component={SettingsScreen}
-                  options={({ navigation }) => ({
-                    headerShown: true,
-                    title: 'Settings',
-                    headerStyle: { backgroundColor: colors.background },
-                    headerTintColor: colors.text,
-                    headerShadowVisible: false,
-                    headerLeft: ({ tintColor }) => (
-                      <HeaderMenuButton
-                        color={tintColor || colors.text}
-                        onPress={() => navigation.dispatch(DrawerActions.openDrawer())}
-                      />
-                    ),
-                  })}
-                />
-                <Drawer.Screen
-                  name="Support"
-                  component={SupportScreen}
-                  options={({ navigation }) => ({
-                    headerShown: true,
-                    title: 'Help & Support',
-                    headerStyle: { backgroundColor: colors.background },
-                    headerTintColor: colors.text,
-                    headerShadowVisible: false,
-                    headerLeft: ({ tintColor }) => (
-                      <HeaderMenuButton
-                        color={tintColor || colors.text}
-                        onPress={() => navigation.dispatch(DrawerActions.openDrawer())}
-                      />
-                    ),
-                  })}
-                />
               </>
             ) : null}
           </Drawer.Navigator>

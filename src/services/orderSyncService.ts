@@ -164,6 +164,30 @@ const resolveCompanyId = async (): Promise<number> => {
   return companyId;
 };
 
+const removeOrderCalculationTaxFields = <T>(value: T): T => {
+  if (value === undefined || value === null) {
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item) => removeOrderCalculationTaxFields(item)) as T;
+  }
+
+  if (value instanceof Date || typeof value !== 'object') {
+    return value;
+  }
+
+  const sanitized: Record<string, any> = {};
+  Object.entries(value as Record<string, any>).forEach(([key, itemValue]) => {
+    if (key === 'orderTaxTotal' || key === 'orderCartTaxAndChargesTotal') {
+      return;
+    }
+    sanitized[key] = removeOrderCalculationTaxFields(itemValue);
+  });
+
+  return sanitized as T;
+};
+
 export const initOrderSync = () => {
   const socket = getSocket();
   if (!socket) return;
@@ -250,7 +274,10 @@ export const emitPosPrint = (orderInfo: any, paymentMethod?: number) => {
   const socket = getSocket();
   if (!socket) return;
   const printRequestId = registerPrintRequest();
-  const orderInfoWithRequest = { ...orderInfo, printRequestId };
+  const orderInfoWithRequest = removeOrderCalculationTaxFields({
+    ...orderInfo,
+    printRequestId,
+  });
   const payload = {
     isFinal: true,
     isPrint: true,
@@ -267,7 +294,10 @@ export const emitPosPrintPreview = (orderInfo: any, paymentMethod?: number) => {
   const socket = getSocket();
   if (!socket) return;
   const printRequestId = registerPrintRequest();
-  const orderInfoWithRequest = { ...orderInfo, printRequestId };
+  const orderInfoWithRequest = removeOrderCalculationTaxFields({
+    ...orderInfo,
+    printRequestId,
+  });
   const payload = {
     isFinal: true,
     isPrint: true,
@@ -298,7 +328,7 @@ export const emitPosCancelPrint = (order: any) => {
   };
   const payload = {
     ...order,
-    orderDetails: normalizedDetails,
+    orderDetails: removeOrderCalculationTaxFields(normalizedDetails),
     isCanceled: true,
     isPrint: true,
     isWaiterApp: true,
@@ -311,10 +341,10 @@ export const emitPosKotPrint = (printOrder: any) => {
   const socket = getSocket();
   if (!socket) return;
   const printRequestId = registerPrintRequest();
-  const orderInfoWithRequest = {
+  const orderInfoWithRequest = removeOrderCalculationTaxFields({
     ...(printOrder?.orderInfo || {}),
     printRequestId,
-  };
+  });
   socket.emit('new-order', {
     ...printOrder,
     isPrint: true,

@@ -204,7 +204,7 @@ export default function PaymentScreen(props: PaymentModalProps) {
   } = params;
   const { colors } = useTheme();
   const { showToast } = useToast();
-  const handlers = useMemo(() => getPaymentFlowHandlers(), []);
+  const handlers = getPaymentFlowHandlers();
   const effectiveOnSelect = onSelect || handlers?.onSelect;
   const effectiveOnPrintPreview = onPrintPreview || handlers?.onPrintPreview;
   const scrollRef = useRef<ScrollView>(null);
@@ -400,7 +400,6 @@ export default function PaymentScreen(props: PaymentModalProps) {
       label: getPaymentLabel(paymentMethod),
       paymentMethod,
       tip: tipNum,
-      giftCard: activeGiftCard ?? null,
       giftCardTotal,
       cashProvided: paymentMethod === 0 ? toAmount(cashProvided) : undefined,
       isCorporate,
@@ -408,6 +407,7 @@ export default function PaymentScreen(props: PaymentModalProps) {
       isItemSplit: isSplitMode,
       splitSelections: isSplitMode ? splitSelections : undefined,
       splitItemTotal: isSplitMode ? splitItemTotal : undefined,
+      ...(activeGiftCard ? { giftCard: activeGiftCard } : {}),
       ...(print ? { print } : {}),
     };
   };
@@ -1003,7 +1003,7 @@ export default function PaymentScreen(props: PaymentModalProps) {
                       fontSize: 17,
                     }}
                   >
-                    {formatCurrency(resolvedOrderTotal)}
+                    {formatCurrency(due)}
                   </Text>
                 </View>
               </Card>
