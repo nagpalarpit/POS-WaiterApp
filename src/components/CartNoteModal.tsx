@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, ScrollView } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../constants/storageKeys';
 import { useTheme } from '../theme/ThemeProvider';
@@ -218,7 +218,7 @@ export default function CartNoteModal({ visible, initialNote = '', initialDiscou
             onClose={onClose}
             title="Notes & Discounts"
             subtitle="Add an order note or apply a discount."
-            snapPoints={['80%']}
+            snapPoints={['70%']}
             footer={footer}
         >
             <View style={styles.formSection}>
@@ -250,7 +250,7 @@ export default function CartNoteModal({ visible, initialNote = '', initialDiscou
                         No discounts available for this company.
                     </Text>
                 ) : (
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.discountRow}>
+                    <View style={styles.discountGrid}>
                         <TouchableOpacity
                             onPress={() => requestPinForDiscount(null)}
                             activeOpacity={0.85}
@@ -289,7 +289,7 @@ export default function CartNoteModal({ visible, initialNote = '', initialDiscou
                                 </TouchableOpacity>
                             );
                         })}
-                    </ScrollView>
+                    </View>
                 )}
 
                 {selectedDiscount?.discountType === 'CUSTOM' && (
@@ -346,10 +346,13 @@ const styles = StyleSheet.create({
         textAlignVertical: 'top',
         fontSize: 16,
     },
-    discountRow: {
+    discountGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
         gap: 10,
     },
     discountChip: {
+        width: '48%',
         minHeight: 48,
         paddingHorizontal: 14,
         borderRadius: 16,
@@ -360,6 +363,7 @@ const styles = StyleSheet.create({
     discountChipText: {
         fontSize: 13,
         fontWeight: '700',
+        textAlign: 'center',
     },
     customDiscountSection: {
         marginTop: 12,

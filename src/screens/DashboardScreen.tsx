@@ -12,7 +12,6 @@ import { formatCurrency } from '../utils/currency';
 import { isOrderLocked, isTableLocked, lockOrder, lockTable } from '../services/orderSyncService';
 import { useToast } from '../components/ToastProvider';
 import cartService from '../services/cartService';
-import { useConnection } from '../contexts/ConnectionProvider';
 
 // Hooks
 import { useOrdersData, DELIVERY_TYPE, Order } from '../hooks/useOrdersData';
@@ -35,7 +34,6 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
   const settingsData = useSettings();
   const tableStats = useTableStatistics(ordersData.dineInTables, settingsData.settings);
   const { showToast } = useToast();
-  const { canModifyOrders } = useConnection();
 
   const getOrderDisplayLabel = (order: Order | any) => {
     const tableNo = order?.orderDetails?.tableNo;
@@ -50,16 +48,21 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
   const [logoLoadFailed, setLogoLoadFailed] = useState(false);
   const [selectedTableArea, setSelectedTableArea] = useState<any | null>(null);
 
-  /**
-   * Get company initials for placeholder logo
-   */
-  const getCompanyInitials = () => {
-    const companyName = (settingsData.settings as any)?.company?.companyName || 'POS';
+  const companyDisplayName = useMemo(() => {
+    const rawName =
+      settingsData.settings?.companyName ||
+      settingsData.settings?.company?.name ||
+      '';
+    return rawName.trim();
+  }, [settingsData.settings?.companyName, settingsData.settings?.company?.name]);
+
+  const companyInitials = useMemo(() => {
+    const companyName = companyDisplayName || 'POS';
     const parts = companyName.split(' ').filter(Boolean);
     if (parts.length === 0) return 'POS';
     if (parts.length === 1) return parts[0].slice(0, 3).toUpperCase();
     return (parts[0][0] + parts[1][0]).toUpperCase();
-  };
+  }, [companyDisplayName]);
 
   /**
    * Load and set logo from user data - only on mount
@@ -265,14 +268,14 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
                   fontWeight: '800',
                 }}
               >
-                {getCompanyInitials()}
+                {companyInitials}
               </Text>
             </View>
           )}
         </TouchableOpacity>
       </View>
     ),
-    [colors, logoLoadFailed, logoUri, navigation]
+    [colors, companyInitials, logoLoadFailed, logoUri, navigation]
   );
 
   /**
@@ -293,22 +296,19 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
         {activeTab !== DELIVERY_TYPE.DINE_IN && (
           <TouchableOpacity
             onPress={() =>
-              canModifyOrders
-                ? navigation.navigate('Menu', {
-                  tableNo: null,
-                  deliveryType: activeTab,
-                })
-                : showToast('error', 'Local server is offline. Orders are view-only.')
+              navigation.navigate('Menu', {
+                tableNo: null,
+                deliveryType: activeTab,
+              })
             }
-            disabled={!canModifyOrders}
-            style={{ padding: 8, opacity: canModifyOrders ? 1 : 0.5 }}
+            style={{ padding: 8 }}
           >
             <MaterialIcons name="add-circle-outline" size={22} color={colors.primary} />
           </TouchableOpacity>
         )}
       </View>
     ),
-    [colors, activeTab, navigation, canModifyOrders, showToast]
+    [colors, activeTab, navigation]
   );
 
   /**
@@ -566,11 +566,6 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
 
               if (isTableLocked(table.tableNo)) {
                 showToast('error', `Table ${table.tableNo} is currently selected on another device.`);
-                return;
-              }
-
-              if (!canModifyOrders) {
-                showToast('error', 'Local server is offline. Orders are view-only.');
                 return;
               }
 

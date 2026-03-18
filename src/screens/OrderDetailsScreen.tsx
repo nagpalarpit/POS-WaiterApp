@@ -50,7 +50,7 @@ import {
 } from "../services/orderSyncService";
 import { useToast } from "../components/ToastProvider";
 import { setPaymentFlowHandlers } from "../services/paymentFlowStore";
-import { useConnection } from "../contexts/ConnectionProvider";
+import serverConnection from "../services/serverConnection";
 
 const TSC_OFFLINE_MESSAGE =
   "Active TSS not found for the given POS and company.";
@@ -207,8 +207,8 @@ const resolveTaxMeta = (
     const defaultThreshold = 8162;
     const deliveryTypeId = Number(
       orderDetails?.orderDeliveryTypeId ??
-        orderDetails?.orderInfo?.orderDeliveryTypeId ??
-        0,
+      orderDetails?.orderInfo?.orderDeliveryTypeId ??
+      0,
     );
     if (orderIdNum <= defaultThreshold && deliveryTypeId === 0) {
       taxKey = "19%";
@@ -415,7 +415,7 @@ const getCanceledPayment = (items: any[] = []) => {
         (acc: number, current: any) =>
           acc +
           toNumber(current?.attributeValuePrice ?? current?.price, 0) *
-            toNumber(current?.quantity, 1),
+          toNumber(current?.quantity, 1),
         total,
       ) || total;
     canceledOrderPayment += total * toNumber(item.quantity, 0);
@@ -436,9 +436,9 @@ const normalizeAttributeValues = (values: any[] = []) => {
       "",
     attributeValuePrice: toNumber(
       value.unitPrice ??
-        value.attributeValuePrice ??
-        value.price ??
-        value.menuItemVariantAttributeValue?.price,
+      value.attributeValuePrice ??
+      value.price ??
+      value.menuItemVariantAttributeValue?.price,
       0,
     ),
     attributeValueQuantity: Math.max(
@@ -464,9 +464,9 @@ const extractFromVariants = (variants: any[] = []) => {
 
     variantPrice += toNumber(
       variant?.unitPrice ??
-        variant?.price ??
-        variant?.variantPrice ??
-        variant?.menuItemVariant?.price,
+      variant?.price ??
+      variant?.variantPrice ??
+      variant?.menuItemVariant?.price,
       0,
     );
 
@@ -532,9 +532,9 @@ const normalizeOrderItem = (item: any, index: number) => {
       variantDetails.variantName,
     variantPrice: toNumber(
       item?.variantPrice ??
-        item?.orderItemVariant?.variantPrice ??
-        item?.orderItemVariant?.price ??
-        item?.orderItemVariant?.unitPrice,
+      item?.orderItemVariant?.variantPrice ??
+      item?.orderItemVariant?.price ??
+      item?.orderItemVariant?.unitPrice,
       variantDetails.variantPrice,
     ),
     attributeName: item?.attributeName || variantDetails.attributeName,
@@ -592,19 +592,6 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
   const [marking, setMarking] = useState(false);
   const editingRef = useRef(false);
   const { showToast } = useToast();
-  const {
-    canModifyOrders,
-    isInternetReachable,
-    isLocalServerReachable,
-  } = useConnection();
-  const isReadOnly = !canModifyOrders;
-  const isLocalServerDisconnected = !isLocalServerReachable;
-  const showLocalServerOfflineNotice = isInternetReachable && isLocalServerDisconnected;
-  const ensureCanModify = (message?: string) => {
-    if (canModifyOrders) return true;
-    showToast("error", message || "Local server is offline. Orders are view-only.");
-    return false;
-  };
   const [pinModalVisible, setPinModalVisible] = useState(false);
   const [cancelModalVisible, setCancelModalVisible] = useState(false);
   const [canceling, setCanceling] = useState(false);
@@ -754,7 +741,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
   useFocusEffect(
     useCallback(() => {
       editingRef.current = false;
-      return () => {};
+      return () => { };
     }, []),
   );
 
@@ -781,7 +768,6 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
   }, [order?._id, order?.id]);
 
   const onEdit = () => {
-    if (!ensureCanModify()) return;
     editingRef.current = true;
     lockOrder(order);
     navigation.navigate("Menu", {
@@ -793,7 +779,6 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
   };
 
   const handleDeletePress = () => {
-    if (!ensureCanModify()) return;
     if (isOrderPaid) {
       showToast("error", "Paid orders cannot be cancelled");
       return;
@@ -809,7 +794,6 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
 
   const cancelOrder = async (reason: string) => {
     if (!order) return;
-    if (!ensureCanModify()) return;
     const trimmed = reason.trim();
     if (!trimmed) {
       showToast("error", "Please enter a reason");
@@ -1061,9 +1045,6 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
 
   const settleOrderWithPayment = async (option: any) => {
     try {
-      if (!ensureCanModify()) {
-        return { success: false, keepModalOpen: false };
-      }
       setMarking(true);
       const now = new Date().toISOString();
       const selectedPaymentMethod = toNumber(
@@ -1079,9 +1060,9 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
       const companyId =
         Number(
           order.companyId ||
-            orderDetails?.companyId ||
-            userData?.companyId ||
-            0,
+          orderDetails?.companyId ||
+          userData?.companyId ||
+          0,
         ) || 0;
       const invoiceNumber =
         await commonFunctionService.generateInvoice(companyId);
@@ -1096,24 +1077,24 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
       const defaultAmount = totals.total + tip + deliveryCharge - giftCardTotal;
       const incomingPaymentDetails = Array.isArray(option?.orderPaymentDetails)
         ? option.orderPaymentDetails
-            .map((detail: any) => ({
-              paymentProcessorId: toNumber(
-                detail?.paymentProcessorId,
-                selectedPaymentMethod,
-              ),
-              paymentTotal: toNumber(detail?.paymentTotal, 0),
-            }))
-            .filter((detail: any) => detail.paymentTotal > 0)
+          .map((detail: any) => ({
+            paymentProcessorId: toNumber(
+              detail?.paymentProcessorId,
+              selectedPaymentMethod,
+            ),
+            paymentTotal: toNumber(detail?.paymentTotal, 0),
+          }))
+          .filter((detail: any) => detail.paymentTotal > 0)
         : [];
       let orderPaymentDetails =
         incomingPaymentDetails.length > 0
           ? incomingPaymentDetails
           : [
-              {
-                paymentProcessorId: selectedPaymentMethod,
-                paymentTotal: toNumber(defaultAmount, 0),
-              },
-            ];
+            {
+              paymentProcessorId: selectedPaymentMethod,
+              paymentTotal: toNumber(defaultAmount, 0),
+            },
+          ];
       const splitAmount = orderPaymentDetails.reduce(
         (sum: number, detail: any) => sum + toNumber(detail?.paymentTotal, 0),
         0,
@@ -1197,8 +1178,8 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
 
       let splitSelections = Array.isArray(option?.splitSelections)
         ? option.splitSelections.map((qty: any) =>
-            Math.max(0, Math.floor(toNumber(qty, 0))),
-          )
+          Math.max(0, Math.floor(toNumber(qty, 0))),
+        )
         : [];
       let isItemSplit =
         option?.isItemSplit === true &&
@@ -1303,11 +1284,11 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
           incomingPaymentDetails.length > 0
             ? incomingPaymentDetails
             : [
-                {
-                  paymentProcessorId: selectedPaymentMethod,
-                  paymentTotal: splitDefaultAmount,
-                },
-              ];
+              {
+                paymentProcessorId: selectedPaymentMethod,
+                paymentTotal: splitDefaultAmount,
+              },
+            ];
         const splitPaymentSummary = option?.orderPaymentSummary ?? {
           paymentProcessorId: selectedPaymentMethod,
         };
@@ -1646,7 +1627,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
           const details = splitOrder?.orderDetails || {};
           const paymentMethod = toNumber(
             details?.paymentMethod ??
-              details?.orderPaymentSummary?.paymentProcessorId,
+            details?.orderPaymentSummary?.paymentProcessorId,
             selectedPaymentMethod,
           );
           const splitLocalOrderId =
@@ -1833,15 +1814,15 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
                   giftCardTotal:
                     toNumber(
                       settledRow?.giftCardTotal ??
-                        settledDataValues?.giftCardTotal ??
-                        existingOrderDetails?.giftCardTotal,
+                      settledDataValues?.giftCardTotal ??
+                      existingOrderDetails?.giftCardTotal,
                       0,
                     ) || 0,
                   giftCardLogs: normalizeGiftCardLogs(
                     settledRow?.giftCardLogs ??
-                      settledDataValues?.giftCardLogs ??
-                      existingOrderDetails?.giftCardLogs ??
-                      null,
+                    settledDataValues?.giftCardLogs ??
+                    existingOrderDetails?.giftCardLogs ??
+                    null,
                   ),
                   orderCustomerDetails:
                     settledRow?.orderCustomerDetails ??
@@ -2004,7 +1985,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
         orderInfo,
       };
 
-      const allowOfflineFallback = isLocalServerReachable && !isInternetReachable;
+      const allowOfflineFallback = serverConnection.isConnected();
       const settleRes = await orderService.settleOrder(
         order._id || order.id || order.orderId,
         settlePayload,
@@ -2121,7 +2102,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
       return { keepModalOpen: false };
     } catch (err) {
       setMarking(false);
-      console.error("Error settling order after payment selection:", err);
+      console.error("Error settling order after payment selection:", JSON.stringify(err));
       showToast("error", "Unable to complete payment");
       return { keepModalOpen: false };
     }
@@ -2151,14 +2132,6 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
   };
 
   const openPaymentScreen = (mode: "settle" | "method") => {
-    if (isLocalServerDisconnected) {
-      showToast(
-        "error",
-        "Local server is disconnected. Payments are disabled until it reconnects.",
-      );
-      return;
-    }
-
     const shouldSettle = mode === "settle";
     setPendingSettle(shouldSettle);
     pendingSettleRef.current = shouldSettle;
@@ -2182,7 +2155,6 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
     });
   };
 
-  
   const handleOpenPaymentModal = () => {
     openPaymentScreen("method");
   };
@@ -2345,10 +2317,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
   };
 
   return (
-    <SafeAreaView
-      style={{ flex: 1, backgroundColor: colors.background }}
-      edges={["bottom"]}
-    >
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
       <View style={{ paddingHorizontal: 12, paddingTop: 10 }}>
         <Card rounded={14} style={{ padding: 12, borderColor: colors.border }}>
           <View
@@ -2639,54 +2608,52 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
         ) : (
           <>
             <Card style={{ padding: 12, borderColor: colors.border }}>
-            <Text
-              style={{ color: colors.text, fontWeight: "700", marginBottom: 8 }}
-            >
-              Payment Summary
-            </Text>
-            <View style={styles.paymentRow}>
-              <Text style={{ color: colors.textSecondary }}>
-                Current Method
-              </Text>
-              <Text style={{ color: colors.text, fontWeight: "700" }}>
-                {paymentLabel}
-              </Text>
-            </View>
-            <View style={styles.paymentRow}>
-              <Text style={{ color: colors.textSecondary }}>Total Amount</Text>
-              <Text style={{ color: colors.text, fontWeight: "700" }}>
-                {formatCurrency(totals.total)}
-              </Text>
-            </View>
-            <TouchableOpacity
-              onPress={handleOpenPaymentModal}
-              disabled={isLocalServerDisconnected}
-              style={[
-                styles.changePaymentBtn,
-                {
-                  borderColor: colors.border,
-                  backgroundColor: colors.surfaceHover || colors.background,
-                  opacity: isLocalServerDisconnected ? 0.6 : 1,
-                },
-              ]}
-            >
-              <MaterialCommunityIcons
-                name="credit-card-edit-outline"
-                size={16}
-                color={colors.text}
-              />
               <Text
-                style={{
-                  color: colors.text,
-                  fontWeight: "700",
-                  marginLeft: 6,
-                  fontSize: 12,
-                }}
+                style={{ color: colors.text, fontWeight: "700", marginBottom: 8 }}
               >
-                Change Payment Method
+                Payment Summary
               </Text>
-            </TouchableOpacity>
-          </Card>
+              <View style={styles.paymentRow}>
+                <Text style={{ color: colors.textSecondary }}>
+                  Current Method
+                </Text>
+                <Text style={{ color: colors.text, fontWeight: "700" }}>
+                  {paymentLabel}
+                </Text>
+              </View>
+              <View style={styles.paymentRow}>
+                <Text style={{ color: colors.textSecondary }}>Total Amount</Text>
+                <Text style={{ color: colors.text, fontWeight: "700" }}>
+                  {formatCurrency(totals.total)}
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={handleOpenPaymentModal}
+                style={[
+                  styles.changePaymentBtn,
+                  {
+                    borderColor: colors.border,
+                    backgroundColor: colors.surfaceHover || colors.background,
+                  },
+                ]}
+              >
+                <MaterialCommunityIcons
+                  name="credit-card-edit-outline"
+                  size={16}
+                  color={colors.text}
+                />
+                <Text
+                  style={{
+                    color: colors.text,
+                    fontWeight: "700",
+                    marginLeft: 6,
+                    fontSize: 12,
+                  }}
+                >
+                  Change Payment Method
+                </Text>
+              </TouchableOpacity>
+            </Card>
           </>
         )}
       </ScrollView>
@@ -2768,12 +2735,12 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
           {!hideDeleteForSplit ? (
             <TouchableOpacity
               onPress={handleDeletePress}
-              disabled={isOrderPaid || canceling || isReadOnly}
+              disabled={isOrderPaid || canceling}
               style={[
                 styles.footerIconBtn,
                 {
                   backgroundColor:
-                    isOrderPaid || canceling || isReadOnly ? colors.border : colors.error,
+                    isOrderPaid || canceling ? colors.border : colors.error,
                 },
               ]}
             >
@@ -2786,13 +2753,11 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
           ) : null}
           <TouchableOpacity
             onPress={onEdit}
-            disabled={isReadOnly}
             style={[
               styles.footerBtn,
               {
                 borderColor: colors.border,
                 backgroundColor: colors.surface,
-                opacity: isReadOnly ? 0.6 : 1,
               },
             ]}
           >
@@ -2819,12 +2784,12 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
               lockPayment(order);
               openPaymentScreen("settle");
             }}
-            disabled={marking || isPaid || isReadOnly}
+            disabled={marking || isPaid}
             style={[
               styles.footerBtnPrimary,
               {
                 backgroundColor:
-                  marking || isPaid || isReadOnly ? colors.border : colors.primary,
+                  marking || isPaid ? colors.border : colors.primary,
               },
             ]}
           >
@@ -2850,7 +2815,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
           </TouchableOpacity>
         </View>
       </View>
-    </SafeAreaView>
+    </View>
   );
 }
 

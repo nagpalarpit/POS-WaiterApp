@@ -11,13 +11,11 @@ import { ConnectionProvider } from './src/contexts/ConnectionProvider';
 import { AuthProvider } from './src/contexts/AuthContext';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
-import posIdService from './src/services/posIdService';
 export default function App() {
   useEffect(() => {
     // Load server and local base URLs from storage so services can use them
     setServerBaseUrlFromStorage();
     setLocalBaseUrlFromStorage();
-    posIdService.loadPosId();
   }, []);
 
   return (

@@ -35,6 +35,15 @@ class POSIdService {
     }
   }
 
+  async getStoredPosId(): Promise<string | null> {
+    try {
+      return await AsyncStorage.getItem(STORAGE_KEYS.posId);
+    } catch (error) {
+      console.log('Error reading stored POS ID:', error);
+      return null;
+    }
+  }
+
   /**
    * Clear POS ID
    */

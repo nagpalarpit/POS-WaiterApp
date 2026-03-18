@@ -1,7 +1,8 @@
 import axios, { AxiosInstance, AxiosError } from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
 import { SERVER_BASE_URL } from '../config/env';
-import { STORAGE_KEYS } from '../constants/storageKeys';
+import { SECURE_STORAGE_KEYS, STORAGE_KEYS } from '../constants/storageKeys';
 import posIdService from './posIdService';
 import { ensureTokenLicenseIsValid } from './tokenService';
 
@@ -16,14 +17,15 @@ api.interceptors.request.use(
     const headers: any = config.headers || {};
     const token =
       (await AsyncStorage.getItem(STORAGE_KEYS.cloudAuthToken)) ||
-      (await AsyncStorage.getItem(STORAGE_KEYS.legacyCloudAuthToken));
+      (await AsyncStorage.getItem(STORAGE_KEYS.legacyCloudAuthToken)) ||
+      (await SecureStore.getItemAsync(SECURE_STORAGE_KEYS.authToken));
 
     if (token) {
       await ensureTokenLicenseIsValid(token);
       headers.Authorization = `Bearer ${token}`;
     }
 
-    const posId = posIdService.getPosId() || (await posIdService.loadPosId());
+    const posId = posIdService.getPosId();
     if (posId) {
       headers['PosId'] = posId;
     }
