@@ -207,10 +207,12 @@ export default function PaymentScreen(props: PaymentModalProps) {
   const handlers = getPaymentFlowHandlers();
   const effectiveOnSelect = onSelect || handlers?.onSelect;
   const effectiveOnPrintPreview = onPrintPreview || handlers?.onPrintPreview;
+  const effectiveOnClose = onClose || handlers?.onClose;
   const scrollRef = useRef<ScrollView>(null);
   const isFocused = useIsFocused();
   const insets = useSafeAreaInsets();
   const closeHandledRef = useRef(false);
+  const latestOnCloseRef = useRef<typeof effectiveOnClose>(effectiveOnClose);
   const primaryTabs = [
     { id: 0, label: "Cash" },
     { id: 1, label: "Card" },
@@ -241,6 +243,13 @@ export default function PaymentScreen(props: PaymentModalProps) {
   const [isSplitMode, setIsSplitMode] = useState(false);
   const [showOtherMethods, setShowOtherMethods] = useState(false);
   const [splitPaymentMethod, setSplitPaymentMethod] = useState(0);
+  const [currentOrderTotal, setCurrentOrderTotal] = useState(() =>
+    round2(toNumber(orderTotal, 0)),
+  );
+  const [currentSplitItems, setCurrentSplitItems] =
+    useState<SplitSelectableItem[]>(splitItems);
+  const [currentAllowSplitOption, setCurrentAllowSplitOption] =
+    useState(allowSplitOption);
   const [splitSelections, setSplitSelections] = useState<number[]>(() =>
     splitItems.map(() => 0),
   );
@@ -250,14 +259,17 @@ export default function PaymentScreen(props: PaymentModalProps) {
       return;
     }
     closeHandledRef.current = true;
-    handlers?.onClose?.();
-    onClose?.();
+    latestOnCloseRef.current?.();
     clearPaymentFlowHandlers();
   };
 
   useEffect(() => {
     closeHandledRef.current = false;
   }, [visible]);
+
+  useEffect(() => {
+    latestOnCloseRef.current = effectiveOnClose;
+  }, [effectiveOnClose]);
 
   useLayoutEffect(() => {
     if (navigation?.setOptions) {
@@ -275,10 +287,13 @@ export default function PaymentScreen(props: PaymentModalProps) {
       }
       return;
     }
+  }, [effectiveOnSelect, navigation, onClose, showToast]);
+
+  useEffect(() => {
     return () => {
       notifyClose();
     };
-  }, [effectiveOnSelect, navigation, onClose, showToast]);
+  }, []);
 
   useEffect(() => {
     if (!isFocused) {
@@ -287,17 +302,29 @@ export default function PaymentScreen(props: PaymentModalProps) {
   }, [isFocused]);
 
   useEffect(() => {
-    setSplitSelections(splitItems.map(() => 0));
+    setCurrentOrderTotal(round2(toNumber(orderTotal, 0)));
+  }, [orderTotal]);
+
+  useEffect(() => {
+    setCurrentSplitItems(splitItems);
   }, [splitItems]);
+
+  useEffect(() => {
+    setCurrentAllowSplitOption(allowSplitOption);
+  }, [allowSplitOption]);
+
+  useEffect(() => {
+    setSplitSelections(currentSplitItems.map(() => 0));
+  }, [currentSplitItems]);
 
   const footerHeight = 200;
   const sectionGap = 8;
   const activeGiftCard = isSplitMode ? splitGiftCard : giftCard;
-  const resolvedOrderTotal = round2(toNumber(orderTotal, 0));
+  const resolvedOrderTotal = round2(toNumber(currentOrderTotal, 0));
 
   const splitItemTotal = useMemo(() => {
     return round2(
-      splitItems.reduce((sum, item, index) => {
+      currentSplitItems.reduce((sum, item, index) => {
         const selectedQty = Math.max(
           0,
           Math.floor(splitSelections[index] || 0),
@@ -306,7 +333,7 @@ export default function PaymentScreen(props: PaymentModalProps) {
         return sum + lineTotal;
       }, 0),
     );
-  }, [splitItems, splitSelections]);
+  }, [currentSplitItems, splitSelections]);
 
   const splitRemainingAmount = useMemo(
     () => round2(Math.max(resolvedOrderTotal - splitItemTotal, 0)),
@@ -323,8 +350,13 @@ export default function PaymentScreen(props: PaymentModalProps) {
   const showPrintPreview = !!effectiveOnPrintPreview && !hidePrintPreview;
   const isSplitInvalid = isSplitMode && splitItemTotal <= 0;
   const row1Count = 2 + (showPrintPreview ? 1 : 0);
-  const showExpenseButton = !isSplitMode;
+  const isOtherPaymentMode = showOtherMethods || activeTab === 99;
+  const showGiftCardSection = !showOtherMethods;
+  const showExpenseButton = !isSplitMode && !isOtherPaymentMode;
   const row2Count = 1 + (showExpenseButton ? 1 : 0);
+  const visiblePrimaryTabs = currentAllowSplitOption
+    ? primaryTabs
+    : primaryTabs.filter((tab) => tab.id !== 2);
 
   const getRowBtnStyle = (count: number) => {
     if (count <= 1) return styles.footerBtnFull;
@@ -333,10 +365,10 @@ export default function PaymentScreen(props: PaymentModalProps) {
 
   const handlePrimaryTabPress = (tabId: number) => {
     if (tabId === 2) {
-      if (!allowSplitOption) {
+      if (!currentAllowSplitOption) {
         return;
       }
-      if (splitItems.length === 0) {
+      if (currentSplitItems.length === 0) {
         showToast("error", "No items available for split payment.");
         return;
       }
@@ -347,6 +379,8 @@ export default function PaymentScreen(props: PaymentModalProps) {
     }
 
     if (tabId === 99) {
+      setGiftCard(null);
+      setGiftCode("");
       setIsSplitMode(false);
       setShowOtherMethods(true);
       setActiveTab(99);
@@ -368,7 +402,7 @@ export default function PaymentScreen(props: PaymentModalProps) {
     setShowOtherMethods(false);
     setActiveTab(0);
     setSplitPaymentMethod(0);
-    setSplitSelections(splitItems.map(() => 0));
+    setSplitSelections(currentSplitItems.map(() => 0));
     setSplitGiftCode("");
     setSplitGiftCard(null);
   };
@@ -376,12 +410,42 @@ export default function PaymentScreen(props: PaymentModalProps) {
   const updateSplitSelection = (index: number, delta: number) => {
     setSplitSelections((prev) => {
       const next = [...prev];
-      const item = splitItems[index];
+      const item = currentSplitItems[index];
       const maxQty = Math.max(0, Math.floor(toNumber(item?.quantity, 0)));
       const current = Math.max(0, Math.floor(next[index] || 0));
       next[index] = clamp(current + delta, 0, maxQty);
       return next;
     });
+  };
+
+  const resetAfterSplitPayment = (resetPayment?: {
+    orderTotal?: number;
+    splitItems?: SplitSelectableItem[];
+    allowSplitOption?: boolean;
+  }) => {
+    const nextSplitItems = Array.isArray(resetPayment?.splitItems)
+      ? resetPayment.splitItems
+      : [];
+    const nextAllowSplitOption =
+      resetPayment?.allowSplitOption ??
+      nextSplitItems.reduce(
+        (sum, item) => sum + Math.max(toNumber(item?.quantity, 0), 0),
+        0,
+      ) > 1;
+
+    setCurrentOrderTotal(toNumber(resetPayment?.orderTotal, currentOrderTotal));
+    setCurrentSplitItems(nextSplitItems);
+    setCurrentAllowSplitOption(nextAllowSplitOption);
+    setTipValue("");
+    setCashProvided("");
+    setGiftCode("");
+    setGiftCard(null);
+    setSplitGiftCode("");
+    setSplitGiftCard(null);
+    setSplitPaymentMethod(0);
+    setShowOtherMethods(false);
+    setActiveTab(nextAllowSplitOption && nextSplitItems.length > 0 ? 2 : 0);
+    setIsSplitMode(nextAllowSplitOption && nextSplitItems.length > 0);
   };
 
   const resolvePaymentMethod = () => {
@@ -419,6 +483,24 @@ export default function PaymentScreen(props: PaymentModalProps) {
     }
   };
 
+  const resetToDashboard = () => {
+    notifyClose();
+    if (navigation?.popToTop) {
+      navigation.popToTop();
+      return;
+    }
+    if (navigation?.reset) {
+      navigation.reset({
+        index: 0,
+        routes: [{ name: "Dashboard" }],
+      });
+      return;
+    }
+    if (navigation?.navigate) {
+      navigation.navigate("Dashboard");
+    }
+  };
+
   const handleConfirm = async (print = false, isCorporate = false) => {
     if (isProcessing) return;
     if (isSplitInvalid) {
@@ -435,6 +517,16 @@ export default function PaymentScreen(props: PaymentModalProps) {
     try {
       const option = buildPaymentOption(print, isCorporate);
       const result = await effectiveOnSelect?.(option);
+      if ((result as any)?.keepOpen) {
+        if ((result as any)?.resetPayment) {
+          resetAfterSplitPayment((result as any)?.resetPayment);
+        }
+        return;
+      }
+      if ((result as any)?.resetToDashboard) {
+        resetToDashboard();
+        return;
+      }
       if (!(result as any)?.keepOpen) {
         closeWithReset();
         return;
@@ -606,46 +698,41 @@ export default function PaymentScreen(props: PaymentModalProps) {
                     <Text style={{ color: colors.textSecondary }}>
                       Split items (pay selected quantity only)
                     </Text>
-                    <TouchableOpacity
-                      onPress={handleSplitBack}
-                      style={styles.linkBtn}
-                    >
-                      <Text style={{ color: colors.textSecondary }}>Back</Text>
-                    </TouchableOpacity>
                   </View>
                   <View style={styles.splitHeaderRow}>
-                    {[{ id: 0, label: "Cash" }, { id: 1, label: "Card" }].map(
-                      (method) => {
-                        const selected = splitPaymentMethod === method.id;
-                        return (
-                          <TouchableOpacity
-                            key={method.id}
-                            onPress={() => setSplitPaymentMethod(method.id)}
-                            style={[
-                              styles.splitMethodBtn,
-                              {
-                                borderColor: selected
-                                  ? colors.primary
-                                  : colors.border,
-                                backgroundColor: selected
-                                  ? colors.primary
-                                  : "transparent",
-                              },
-                            ]}
+                    {[
+                      { id: 0, label: "Cash" },
+                      { id: 1, label: "Card" },
+                    ].map((method) => {
+                      const selected = splitPaymentMethod === method.id;
+                      return (
+                        <TouchableOpacity
+                          key={method.id}
+                          onPress={() => setSplitPaymentMethod(method.id)}
+                          style={[
+                            styles.splitMethodBtn,
+                            {
+                              borderColor: selected
+                                ? colors.primary
+                                : colors.border,
+                              backgroundColor: selected
+                                ? colors.primary
+                                : "transparent",
+                            },
+                          ]}
+                        >
+                          <Text
+                            style={{
+                              color: selected
+                                ? colors.textInverse
+                                : colors.text,
+                            }}
                           >
-                            <Text
-                              style={{
-                                color: selected
-                                  ? colors.textInverse
-                                  : colors.text,
-                              }}
-                            >
-                              {method.label}
-                            </Text>
-                          </TouchableOpacity>
-                        );
-                      },
-                    )}
+                            {method.label}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
                   </View>
                 </View>
               ) : (
@@ -660,7 +747,7 @@ export default function PaymentScreen(props: PaymentModalProps) {
                     showsHorizontalScrollIndicator={false}
                     contentContainerStyle={styles.tabRow}
                   >
-                    {primaryTabs.map((tab) => (
+                    {visiblePrimaryTabs.map((tab) => (
                       <TouchableOpacity
                         key={tab.id}
                         onPress={() => handlePrimaryTabPress(tab.id)}
@@ -736,14 +823,14 @@ export default function PaymentScreen(props: PaymentModalProps) {
 
                 {isSplitMode ? (
                   <View>
-                    {splitItems.length == 0 ? (
+                    {currentSplitItems.length == 0 ? (
                       <Text
                         style={{ color: colors.textSecondary, marginTop: 8 }}
                       >
                         No items available for split.
                       </Text>
                     ) : (
-                      splitItems.map((item, index) => {
+                      currentSplitItems.map((item, index) => {
                         const selectedQty = Math.max(
                           0,
                           Math.floor(splitSelections[index] || 0),
@@ -832,7 +919,10 @@ export default function PaymentScreen(props: PaymentModalProps) {
                     )}
 
                     <View
-                      style={[styles.splitSummary, { borderColor: colors.border }]}
+                      style={[
+                        styles.splitSummary,
+                        { borderColor: colors.border },
+                      ]}
                     >
                       <Text style={{ color: colors.textSecondary }}>
                         Selected: {formatCurrency(splitItemTotal)}
@@ -861,93 +951,104 @@ export default function PaymentScreen(props: PaymentModalProps) {
                   />
                 </View>
 
-                <View style={{ marginTop: 12 }}>
-                  <Text style={{ color: colors.textSecondary }}>Gift Card</Text>
-                  {activeGiftCard ? (
-                    <View style={styles.giftCardRow}>
-                      <View
-                        style={[
-                          styles.giftCardBadge,
-                          {
-                            borderColor: colors.border,
-                            backgroundColor:
-                              colors.surfaceHover || colors.surface,
-                          },
-                        ]}
-                      >
-                        <Text style={{ color: colors.text, fontWeight: "700" }}>
-                          {getGiftCardLabel(activeGiftCard)}
-                        </Text>
-                        <Text
-                          style={{ color: colors.textSecondary, marginTop: 2 }}
+                {showGiftCardSection ? (
+                  <View style={{ marginTop: 12 }}>
+                    <Text style={{ color: colors.textSecondary }}>
+                      Gift Card
+                    </Text>
+                    {activeGiftCard ? (
+                      <View style={styles.giftCardRow}>
+                        <View
+                          style={[
+                            styles.giftCardBadge,
+                            {
+                              borderColor: colors.border,
+                              backgroundColor:
+                                colors.surfaceHover || colors.surface,
+                            },
+                          ]}
                         >
-                          Applied: {formatCurrency(giftCardTotal)}
-                        </Text>
+                          <Text
+                            style={{ color: colors.text, fontWeight: "700" }}
+                          >
+                            {getGiftCardLabel(activeGiftCard)}
+                          </Text>
+                          <Text
+                            style={{
+                              color: colors.textSecondary,
+                              marginTop: 2,
+                            }}
+                          >
+                            Applied: {formatCurrency(giftCardTotal)}
+                          </Text>
+                        </View>
+                        <TouchableOpacity
+                          onPress={() => removeGiftCard(isSplitMode)}
+                          style={[
+                            styles.ghostBtn,
+                            { borderColor: colors.border },
+                          ]}
+                        >
+                          <Text style={{ color: colors.textSecondary }}>
+                            Remove
+                          </Text>
+                        </TouchableOpacity>
                       </View>
-                      <TouchableOpacity
-                        onPress={() => removeGiftCard(isSplitMode)}
-                        style={[
-                          styles.ghostBtn,
-                          { borderColor: colors.border },
-                        ]}
-                      >
-                        <Text style={{ color: colors.textSecondary }}>
-                          Remove
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                  ) : (
-                    <View style={styles.giftCardInputRow}>
-                      <TextInput
-                        placeholder="Gift card code"
-                        placeholderTextColor={colors.textSecondary}
-                        value={isSplitMode ? splitGiftCode : giftCode}
-                        onChangeText={
-                          isSplitMode ? setSplitGiftCode : setGiftCode
-                        }
-                        onFocus={() =>
-                          scrollRef.current?.scrollToEnd({ animated: true })
-                        }
-                        style={[
-                          styles.input,
-                          styles.giftCardInput,
-                          {
-                            borderColor: colors.border,
-                            color: colors.text,
-                            marginTop: 0,
-                          },
-                        ]}
-                      />
-                      <TouchableOpacity
-                        onPress={() => addGiftCard(isSplitMode)}
-                        disabled={
-                          isApplyingGiftCard ||
-                          !(isSplitMode
-                            ? splitGiftCode.trim()
-                            : giftCode.trim())
-                        }
-                        style={[
-                          styles.giftCardAddBtn,
-                          {
-                            backgroundColor:
-                              isApplyingGiftCard ||
+                    ) : (
+                      <View style={styles.giftCardInputRow}>
+                        <TextInput
+                          placeholder="Gift card code"
+                          placeholderTextColor={colors.textSecondary}
+                          value={isSplitMode ? splitGiftCode : giftCode}
+                          onChangeText={
+                            isSplitMode ? setSplitGiftCode : setGiftCode
+                          }
+                          onFocus={() =>
+                            scrollRef.current?.scrollToEnd({ animated: true })
+                          }
+                          style={[
+                            styles.input,
+                            styles.giftCardInput,
+                            {
+                              borderColor: colors.border,
+                              color: colors.text,
+                              marginTop: 0,
+                            },
+                          ]}
+                        />
+                        <TouchableOpacity
+                          onPress={() => addGiftCard(isSplitMode)}
+                          disabled={
+                            isApplyingGiftCard ||
+                            !(isSplitMode
+                              ? splitGiftCode.trim()
+                              : giftCode.trim())
+                          }
+                          style={[
+                            styles.giftCardAddBtn,
+                            {
+                              backgroundColor:
+                                isApplyingGiftCard ||
                                 !(isSplitMode
                                   ? splitGiftCode.trim()
                                   : giftCode.trim())
-                                ? colors.border
-                                : colors.primary,
-                          },
-                        ]}
-                      >
-                        {isApplyingGiftCard ? (
-                          <ActivityIndicator color={colors.textInverse} />
-                        ) : (
-                          <Text style={{ color: colors.textInverse }}>Add</Text>
-                        )}
-                      </TouchableOpacity>
-                    </View>
-                  )}
-                </View>
+                                  ? colors.border
+                                  : colors.primary,
+                            },
+                          ]}
+                        >
+                          {isApplyingGiftCard ? (
+                            <ActivityIndicator color={colors.textInverse} />
+                          ) : (
+                            <Text style={{ color: colors.textInverse }}>
+                              Add
+                            </Text>
+                          )}
+                        </TouchableOpacity>
+                      </View>
+                    )}
+                  </View>
+                ) : null}
               </Card>
 
               <Card
@@ -977,7 +1078,9 @@ export default function PaymentScreen(props: PaymentModalProps) {
                 ) : null}
                 {giftCardTotal > 0 ? (
                   <View style={styles.summaryRow}>
-                    <Text style={{ color: colors.textSecondary }}>Gift Card</Text>
+                    <Text style={{ color: colors.textSecondary }}>
+                      Gift Card
+                    </Text>
                     <Text style={{ color: colors.error, fontWeight: "700" }}>
                       -{formatCurrency(giftCardTotal)}
                     </Text>
@@ -1025,12 +1128,14 @@ export default function PaymentScreen(props: PaymentModalProps) {
                 {isSplitMode ? (
                   <TouchableOpacity
                     onPress={handleSplitBack}
+                    disabled={isProcessing}
                     style={[
                       styles.footerBtn,
                       getRowBtnStyle(row1Count),
                       {
                         borderColor: colors.border,
                         backgroundColor: colors.surface,
+                        opacity: isProcessing ? 0.6 : 1,
                       },
                     ]}
                   >
@@ -1043,12 +1148,14 @@ export default function PaymentScreen(props: PaymentModalProps) {
                 ) : (
                   <TouchableOpacity
                     onPress={closeWithReset}
+                    disabled={isProcessing}
                     style={[
                       styles.footerBtn,
                       getRowBtnStyle(row1Count),
                       {
                         borderColor: colors.border,
                         backgroundColor: colors.surface,
+                        opacity: isProcessing ? 0.6 : 1,
                       },
                     ]}
                   >
@@ -1068,10 +1175,9 @@ export default function PaymentScreen(props: PaymentModalProps) {
                       getRowBtnStyle(row1Count),
                       {
                         borderColor: colors.border,
-                        backgroundColor:
-                          isProcessing
-                            ? colors.border
-                            : colors.surface,
+                        backgroundColor: isProcessing
+                          ? colors.border
+                          : colors.surface,
                         opacity: isProcessing ? 0.6 : 1,
                       },
                     ]}
@@ -1156,8 +1262,8 @@ export default function PaymentScreen(props: PaymentModalProps) {
                           isSplitInvalid || isProcessing
                             ? colors.border
                             : colors.success ||
-                            colors.secondary ||
-                            colors.primary,
+                              colors.secondary ||
+                              colors.primary,
                       },
                     ]}
                   >

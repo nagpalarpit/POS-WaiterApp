@@ -34,15 +34,15 @@ export default function App() {
       <ThemeProvider>
         <GestureHandlerRootView style={{ flex: 1 }}>
           <SafeAreaProvider>
-            <BottomSheetModalProvider>
-              <ToastProvider>
+              <BottomSheetModalProvider>
+                <ToastProvider>
                 <ConnectionProvider>
                   <AuthProvider>
                     <AppNavigator />
                   </AuthProvider>
                 </ConnectionProvider>
-              </ToastProvider>
-            </BottomSheetModalProvider>
+                </ToastProvider>
+              </BottomSheetModalProvider>
             <StartupSplash visible={showStartupSplash} />
           </SafeAreaProvider>
         </GestureHandlerRootView>

@@ -13,23 +13,18 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeProvider';
 import { useOrderSubmit } from '../hooks/useOrderSubmit';
 import { useCartNotes } from '../hooks/useCartNotes';
-import cartService, { Cart, CartItem, AttributeValue } from '../services/cartService';
+import cartService, { Cart, CartItem } from '../services/cartService';
 import CartNoteModal from '../components/CartNoteModal';
+import ItemNoteModal from '../components/ItemNoteModal';
+import PinModal from '../components/PinModal';
+import { CartItemRow } from '../components/MenuScreen/CartItemRow';
 import { formatCurrency } from '../utils/currency';
 import { emitOrderSync, emitPosKotPrint, unlockOrder, unlockTable } from '../services/orderSyncService';
 import { useToast } from '../components/ToastProvider';
 import {
-  getAttributeValueName,
-  getAttributeValuePrice,
-  getAttributeValueQuantity,
   getCartItemQuantity,
   getCartSubtotal,
   getDiscountAmount,
-  getDiscountLabel,
-  getDiscountTypeLabel,
-  getItemLineTotal,
-  getItemOptionsSummary,
-  getItemUnitTotal,
 } from '../utils/cartCalculations';
 
 interface CheckoutScreenProps {
@@ -66,6 +61,11 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
 
   const [checkoutCart, setCheckoutCart] = useState<Cart>(incomingCart);
   const { showToast } = useToast();
+  const [decreasePinChecked, setDecreasePinChecked] = useState(false);
+  const [pinModalVisible, setPinModalVisible] = useState(false);
+  const pendingDecreaseRef = useRef<
+    { type: 'update' | 'remove'; cartId: string; quantity?: number } | null
+  >(null);
 
   const orderSubmit = useOrderSubmit(
     checkoutCart,
@@ -76,8 +76,16 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
   );
   const cartNotes = useCartNotes(
     checkoutCart,
-    cartService.updateItemNote,
-    cartService.updateDiscount
+    async (cartId: string, note: string) => {
+      const updatedCart = await cartService.updateItemNote(cartId, note);
+      setCheckoutCart(updatedCart);
+      return updatedCart;
+    },
+    async (discount: any) => {
+      const updatedCart = await cartService.updateDiscount(discount);
+      setCheckoutCart(updatedCart);
+      return updatedCart;
+    }
   );
 
   const placeAnim = useRef(new Animated.Value(1)).current;
@@ -97,13 +105,73 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
     };
   }, []);
 
+  const shouldRequireDecreasePin = (cartId: string, nextQty?: number) => {
+    if (!existingOrder) return false;
+    const item = checkoutCart.items.find((entry) => entry.cartId === cartId);
+    if (!item) return false;
+    const isOldItem = item.isOld === true || item.oldQuantity != null;
+    if (!isOldItem) return false;
+    if (nextQty == null) return true;
+    const currentQty = getCartItemQuantity(item);
+    return nextQty < currentQty;
+  };
+
+  const handleUpdateQuantity = async (cartId: string, quantity: number) => {
+    try {
+      if (!decreasePinChecked && shouldRequireDecreasePin(cartId, quantity)) {
+        pendingDecreaseRef.current = { type: 'update', cartId, quantity };
+        setPinModalVisible(true);
+        return;
+      }
+
+      if (quantity <= 0) {
+        const updatedCart = await cartService.removeFromCart(cartId);
+        setCheckoutCart(updatedCart);
+        return;
+      }
+
+      const updatedCart = await cartService.updateQuantity(cartId, quantity);
+      setCheckoutCart(updatedCart);
+    } catch (error) {
+      showToast('error', 'Failed to update item quantity');
+    }
+  };
+
+  const handleRemoveItem = async (cartId: string) => {
+    try {
+      if (!decreasePinChecked && shouldRequireDecreasePin(cartId)) {
+        pendingDecreaseRef.current = { type: 'remove', cartId };
+        setPinModalVisible(true);
+        return;
+      }
+
+      const updatedCart = await cartService.removeFromCart(cartId);
+      setCheckoutCart(updatedCart);
+    } catch (error) {
+      showToast('error', 'Failed to remove item');
+    }
+  };
+
+  const handlePinVerified = async () => {
+    setPinModalVisible(false);
+    setDecreasePinChecked(true);
+    const pending = pendingDecreaseRef.current;
+    pendingDecreaseRef.current = null;
+    if (!pending) return;
+
+    if (pending.type === 'update' && typeof pending.quantity === 'number') {
+      await handleUpdateQuantity(pending.cartId, pending.quantity);
+      return;
+    }
+
+    if (pending.type === 'remove') {
+      await handleRemoveItem(pending.cartId);
+    }
+  };
+
   const subtotal = getCartSubtotal(checkoutCart);
   const discountAmount = getDiscountAmount(subtotal, checkoutCart.discount || null);
   const total = subtotal - discountAmount;
-  const totalItems = checkoutCart.items.reduce(
-    (sum, item) => sum + getCartItemQuantity(item),
-    0
-  );
   const groupedItems = useMemo(() => {
     const groups = checkoutCart.items.reduce(
       (acc: Record<number, CartItem[]>, item) => {
@@ -146,7 +214,7 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
       headerTitleStyle: { fontWeight: '700' },
       headerRight: () => null,
     });
-  }, [navigation, colors.background, colors.text]);
+  }, [navigation, colors.background, colors.text, deliveryType, tableNo]);
 
   const handleSaveCartNote = async (note: string, discount: any) => {
     try {
@@ -324,11 +392,6 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
   };
 
   const renderOrderItem = (item: CartItem, index: number) => {
-    const quantity = getCartItemQuantity(item);
-    const itemUnitTotal = getItemUnitTotal(item);
-    const itemLineTotal = getItemLineTotal(item);
-    const optionsSummary = getItemOptionsSummary(item);
-
     return (
       <View
         key={item.cartId || `${item.itemId}-${index}`}
@@ -337,83 +400,22 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
           {
             backgroundColor: colors.surface,
             borderColor: colors.border,
+            overflow: 'hidden',
           },
         ]}
       >
-        <View style={styles.itemHeaderRow}>
-          <View style={{ flex: 1, paddingRight: 12 }}>
-            <Text style={[styles.itemName, { color: colors.text }]}>
-              {item.customId ? `${item.customId}. ` : ''}
-              {item.itemName}
-            </Text>
-            {!!optionsSummary && (
-              <Text style={[styles.optionText, { color: colors.textSecondary }]}>
-                {optionsSummary}
-              </Text>
-            )}
-          </View>
-
-          <View
-            style={[
-              styles.qtyChip,
-              {
-                backgroundColor: colors.primary + '14',
-                borderColor: colors.primary + '2a',
-              },
-            ]}
-          >
-            <Text style={{ color: colors.primary, fontWeight: '700', fontSize: 11 }}>
-              x{quantity}
-            </Text>
-          </View>
-        </View>
-
-        {item.attributeValues && item.attributeValues.length > 0 && (
-          <View style={{ marginTop: 8 }}>
-            {item.attributeValues.map((attributeValue: AttributeValue, valueIndex: number) => {
-              const name = getAttributeValueName(attributeValue);
-              const valueQuantity = getAttributeValueQuantity(attributeValue);
-              const valuePrice = getAttributeValuePrice(attributeValue);
-              if (!name) return null;
-
-              return (
-                <Text
-                  key={`${item.cartId}-value-${valueIndex}`}
-                  style={{ color: colors.textSecondary, fontSize: 12, marginTop: 2 }}
-                >
-                  • {valueQuantity} x {name}
-                  {valuePrice > 0 ? ` (+${formatCurrency(valuePrice)})` : ''}
-                </Text>
-              );
-            })}
-          </View>
-        )}
-
-        {item.orderItemNote ? (
-          <View
-            style={[
-              styles.noteWrap,
-              {
-                borderColor: colors.border,
-                backgroundColor: colors.surfaceHover || colors.background,
-              },
-            ]}
-          >
-            <MaterialCommunityIcons name="note-text-outline" size={14} color={colors.textSecondary} />
-            <Text style={{ color: colors.textSecondary, marginLeft: 6, flex: 1, fontSize: 12 }}>
-              {item.orderItemNote}
-            </Text>
-          </View>
-        ) : null}
-
-        <View style={[styles.itemTotalRow, { borderTopColor: colors.border }]}>
-          <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
-            {formatCurrency(itemUnitTotal)} × {quantity}
-          </Text>
-          <Text style={{ color: colors.text, fontSize: 15, fontWeight: '800' }}>
-            {formatCurrency(itemLineTotal)}
-          </Text>
-        </View>
+        <CartItemRow
+          item={item}
+          onOpenNoteModal={(noteItem) =>
+            cartNotes.openItemNoteModal(
+              noteItem.cartId || '',
+              noteItem.orderItemNote || '',
+            )
+          }
+          onUpdateQuantity={handleUpdateQuantity}
+          onRemoveItem={handleRemoveItem}
+          colors={colors}
+        />
       </View>
     );
   };
@@ -462,11 +464,7 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
                     />
                   ) : null}
                 </TouchableOpacity>
-                {isExpanded
-                  ? group.items.map((item: CartItem, index: number) =>
-                      renderOrderItem(item, index)
-                    )
-                  : null}
+                {isExpanded ? group.items.map((item, index) => renderOrderItem(item, index)) : null}
               </View>
             );
           })
@@ -584,84 +582,31 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
         onClose={() => cartNotes.setShowCartNoteModal(false)}
         onSave={handleSaveCartNote}
       />
+
+      <ItemNoteModal
+        visible={cartNotes.showItemNoteModal}
+        initialNote={cartNotes.itemNoteDraft}
+        onClose={() => cartNotes.setShowItemNoteModal(false)}
+        onSave={cartNotes.saveItemNoteModal}
+      />
+
+      <PinModal
+        visible={pinModalVisible}
+        onClose={() => {
+          setPinModalVisible(false);
+          pendingDecreaseRef.current = null;
+        }}
+        onVerified={handlePinVerified}
+      />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  contextCard: {
-    borderWidth: 1,
-    borderRadius: 14,
-    padding: 12,
-    marginBottom: 12,
-  },
-  contextIconWrap: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 10,
-  },
-  contextActionBtn: {
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  discountBanner: {
-    marginTop: 10,
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-  },
   itemCard: {
     borderWidth: 1,
     borderRadius: 14,
-    padding: 12,
     marginBottom: 10,
-  },
-  itemHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-  },
-  itemName: {
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  optionText: {
-    fontSize: 12,
-    marginTop: 5,
-  },
-  qtyChip: {
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    minWidth: 34,
-    alignItems: 'center',
-  },
-  noteWrap: {
-    marginTop: 8,
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 7,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  itemTotalRow: {
-    marginTop: 10,
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(0,0,0,0.08)',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
   },
   emptyState: {
     borderWidth: 1,

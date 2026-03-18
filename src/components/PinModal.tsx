@@ -30,11 +30,13 @@ export default function PinModal({ visible, onClose, onVerified }: Props) {
   const { showToast } = useToast();
   const [pin, setPin] = useState('');
   const [checking, setChecking] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
 
   useEffect(() => {
     if (visible) {
       setPin('');
       setChecking(false);
+      setErrorMessage('');
     }
   }, [visible]);
 
@@ -43,6 +45,7 @@ export default function PinModal({ visible, onClose, onVerified }: Props) {
     const trimmed = pin.trim();
     if (!trimmed) return;
 
+    setErrorMessage('');
     setChecking(true);
     try {
       const userDataStr = await AsyncStorage.getItem(STORAGE_KEYS.authUser);
@@ -55,6 +58,7 @@ export default function PinModal({ visible, onClose, onVerified }: Props) {
 
       const res = await localDatabase.select('settings', { where });
       if (!Array.isArray(res) || res.length === 0) {
+        setErrorMessage('Wrong PIN');
         showToast('error', 'Wrong PIN');
         return;
       }
@@ -63,6 +67,7 @@ export default function PinModal({ visible, onClose, onVerified }: Props) {
       onClose();
     } catch (error) {
       console.error('PinModal: Failed to verify pin', error);
+      setErrorMessage('Unable to verify PIN');
       showToast('error', 'Unable to verify PIN');
     } finally {
       setChecking(false);
@@ -117,7 +122,12 @@ export default function PinModal({ visible, onClose, onVerified }: Props) {
         <Text style={[styles.label, { color: colors.textSecondary || colors.text }]}>PIN</Text>
         <AppBottomSheetTextInput
           value={pin}
-          onChangeText={setPin}
+          onChangeText={(value) => {
+            setPin(value);
+            if (errorMessage) {
+              setErrorMessage('');
+            }
+          }}
           placeholder="Enter PIN"
           placeholderTextColor={colors.textSecondary || colors.text}
           keyboardType="number-pad"
@@ -131,6 +141,11 @@ export default function PinModal({ visible, onClose, onVerified }: Props) {
             },
           ]}
         />
+        {errorMessage ? (
+          <Text style={[styles.errorText, { color: colors.error }]}>
+            {errorMessage}
+          </Text>
+        ) : null}
       </View>
     </AppBottomSheet>
   );
@@ -154,6 +169,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     textAlign: 'center',
     letterSpacing: 8,
+  },
+  errorText: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 8,
+    textAlign: 'center',
   },
   footerActions: {
     flexDirection: 'row',

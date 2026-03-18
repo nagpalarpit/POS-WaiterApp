@@ -1372,6 +1372,22 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
           });
 
           setWorkingOrderDetails(remainingOrderDetails);
+          const refreshedSplitItems = remainingOrderItems.map(
+            (item: any, index: number) => {
+              const normalizedItem = normalizeOrderItem(item, index);
+              return {
+                key: `${normalizedItem.cartId || normalizedItem.menuItemId || index}-${index}`,
+                name: `${normalizedItem.customId ? `${normalizedItem.customId}. ` : ""}${normalizedItem.itemName || "Item"}`,
+                quantity: Math.max(getCartItemQuantity(normalizedItem), 0),
+                unitTotal: round2(getItemUnitTotal(normalizedItem)),
+              };
+            },
+          );
+          const refreshedSplitUnits = refreshedSplitItems.reduce(
+            (sum: number, item: any) =>
+              sum + Math.max(toNumber(item?.quantity, 0), 0),
+            0,
+          );
           const paidItemQty = selectedOrderItems.reduce(
             (sum: number, item: any) => sum + toNumber(item?.quantity, 0),
             0,
@@ -1381,7 +1397,19 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
             `Split payment saved (${paidItemQty} item${paidItemQty === 1 ? "" : "s"} paid)`,
           );
           setMarking(false);
-          return { keepModalOpen: true };
+          return {
+            keepModalOpen: true,
+            resetPayment: {
+              orderTotal: remainingTotal,
+              splitItems: refreshedSplitItems,
+              allowSplitOption:
+                refreshedSplitUnits > 1 &&
+                !(
+                  Array.isArray(remainingOrderDetails?.giftCardLogs) &&
+                  remainingOrderDetails.giftCardLogs.length > 0
+                ),
+            },
+          };
         }
 
         const splitOrdersFromDb = await localDatabase.select("order", {
@@ -1738,8 +1766,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
         showToast("success", "Split payment completed");
         await unlockOrder(order);
         setMarking(false);
-        navigation.goBack();
-        return { keepModalOpen: false };
+        return { keepModalOpen: false, resetToDashboard: true };
       }
 
       const orderInfo: any = {
@@ -1881,8 +1908,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
         });
         await unlockOrder(order);
         setMarking(false);
-        navigation.goBack();
-        return { keepModalOpen: false };
+        return { keepModalOpen: false, resetToDashboard: true };
       }
       const normalized = settleRes?.normalized;
       console.log(normalized);
@@ -1947,8 +1973,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
       });
       await unlockOrder(order);
       setMarking(false);
-      navigation.goBack();
-      return { keepModalOpen: false };
+      return { keepModalOpen: false, resetToDashboard: true };
     } catch (err) {
       setMarking(false);
       console.error("Error settling order after payment selection:", JSON.stringify(err));
@@ -1972,12 +1997,18 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
     if (isSplitSelection && settleResult?.keepModalOpen) {
       setPendingSettle(true);
       pendingSettleRef.current = true;
-      return { keepOpen: true };
+      return {
+        keepOpen: true,
+        resetPayment: settleResult?.resetPayment,
+      };
     }
 
     setPendingSettle(false);
     pendingSettleRef.current = false;
-    return { keepOpen: false };
+    return {
+      keepOpen: false,
+      resetToDashboard: settleResult?.resetToDashboard === true,
+    };
   };
 
   const openPaymentScreen = (mode: "settle" | "method") => {
@@ -2041,6 +2072,21 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
       showToast("error", "Unable to generate print preview");
     }
   };
+
+  useEffect(() => {
+    if (!pendingSettle) {
+      return;
+    }
+
+    setPaymentFlowHandlers({
+      onSelect: handlePaymentSelect,
+      onPrintPreview: handlePrintPreview,
+      onClose: () => {
+        setPendingSettle(false);
+        pendingSettleRef.current = false;
+      },
+    });
+  }, [pendingSettle, handlePaymentSelect, handlePrintPreview]);
 
   const footerHeight = 212;
 

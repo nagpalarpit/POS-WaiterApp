@@ -1,4 +1,16 @@
-﻿export type PaymentFlowResult = { keepOpen?: boolean } | void;
+export type PaymentFlowReset = {
+  orderTotal?: number;
+  splitItems?: any[];
+  allowSplitOption?: boolean;
+};
+
+export type PaymentFlowResult =
+  | {
+      keepOpen?: boolean;
+      resetPayment?: PaymentFlowReset;
+      resetToDashboard?: boolean;
+    }
+  | void;
 
 export type PaymentFlowHandlers = {
   onSelect?: (option: any) => Promise<PaymentFlowResult> | PaymentFlowResult;

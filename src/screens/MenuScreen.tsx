@@ -557,14 +557,7 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
         <CartFAB
           cartQuantity={cartData.cartQuantity}
           totalAmount={cartTotal}
-          onPress={() =>
-            navigation.navigate('Cart', {
-              tableNo,
-              deliveryType,
-              tableArea,
-              existingOrder,
-            })
-          }
+          onPress={proceedToCheckout}
           scaleAnim={feedback.cartFabScaleAnim}
           badgeScaleAnim={feedback.cartBadgeScaleAnim}
           colors={colors}
