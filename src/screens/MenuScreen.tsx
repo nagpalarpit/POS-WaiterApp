@@ -27,6 +27,7 @@ import {
   CartFAB,
 } from '../components/MenuScreen';
 import ItemDetailsModal from '../components/ItemDetailsModal';
+import VoucherOptionsModal from '../components/VoucherOptionsModal';
 import ItemNoteModal from '../components/ItemNoteModal';
 import CartNoteModal from '../components/CartNoteModal';
 import GroupModal from '../components/GroupModal';
@@ -63,13 +64,15 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
   // Local state
   const [showItemDetail, setShowItemDetail] = useState(false);
   const [selectedMenuItem, setSelectedMenuItem] = useState<any>(null);
+  const [selectedMenuCategory, setSelectedMenuCategory] = useState<any>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [showGroupModal, setShowGroupModal] = useState(false);
   const [groupModalMode, setGroupModalMode] = useState<'addGroup' | 'selectForItem' | null>(null);
   const [pendingGroupItem, setPendingGroupItem] = useState<{
+    category: any;
     rawItem: any;
     normalizedItem: any;
-    hasVariants: boolean;
+    opensOptionsModal: boolean;
   } | null>(null);
   const [showAddExtraModal, setShowAddExtraModal] = useState(false);
 
@@ -279,9 +282,10 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
   // ===== Cart Operation Handlers =====
 
   const ensureGroupSelection = (payload: {
+    category: any;
     rawItem: any;
     normalizedItem: any;
-    hasVariants: boolean;
+    opensOptionsModal: boolean;
   }) => {
     if (!groupLabelEnabled) return true;
 
@@ -306,30 +310,36 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
   };
 
   const addToCart = (item: any) => {
+    const category = menuData.categories[menuData.activeCategory];
     const normalizedItem = normalizeMenuItemForOptions(item);
     const hasVariants =
       Array.isArray(normalizedItem.menuItemVariants) &&
       normalizedItem.menuItemVariants.length > 0;
+    const opensOptionsModal =
+      category?.categoryType === 'voucher' || hasVariants;
 
     if (
       !ensureGroupSelection({
+        category,
         rawItem: item,
         normalizedItem,
-        hasVariants,
+        opensOptionsModal,
       })
     ) {
       return;
     }
 
-    if (hasVariants) {
+    if (opensOptionsModal) {
+      setSelectedMenuCategory(category);
       setSelectedMenuItem(normalizedItem);
       setShowItemDetail(true);
     } else {
-      handleAddToCartDirect(item, null, null, undefined);
+      handleAddToCartDirect(category, item, null, null, undefined);
     }
   };
 
   const handleAddToCartDirect = async (
+    category: any,
     item: any,
     variant: any,
     attribute: any,
@@ -339,7 +349,6 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
       if (groupLabelEnabled) {
         cartService.useTempGroupIfAvailable();
       }
-      const category = menuData.categories[menuData.activeCategory];
       await cartData.addToCartDirect(
         category,
         item,
@@ -357,8 +366,9 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
     attribute: any,
     attributeValues: any[]
   ) => {
-    if (selectedMenuItem) {
+    if (selectedMenuItem && selectedMenuCategory) {
       await handleAddToCartDirect(
+        selectedMenuCategory,
         selectedMenuItem,
         variant,
         attribute,
@@ -366,6 +376,7 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
       );
       setShowItemDetail(false);
       setSelectedMenuItem(null);
+      setSelectedMenuCategory(null);
     }
   };
 
@@ -385,13 +396,15 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
       setShowGroupModal(false);
       setGroupModalMode(null);
 
-      if (pending.hasVariants) {
+      if (pending.opensOptionsModal) {
+        setSelectedMenuCategory(pending.category);
         setSelectedMenuItem(pending.normalizedItem);
         setShowItemDetail(true);
         return;
       }
 
       await handleAddToCartDirect(
+        pending.category,
         pending.rawItem,
         null,
         null,
@@ -565,18 +578,33 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
       </View>
 
       {/* Item Details Modal */}
-      {selectedMenuItem && (
+      {selectedMenuItem && selectedMenuCategory?.categoryType !== 'voucher' ? (
         <ItemDetailsModal
           visible={showItemDetail}
           item={selectedMenuItem}
-          category={menuData.categories[menuData.activeCategory]}
+          category={selectedMenuCategory}
           onClose={() => {
             setShowItemDetail(false);
             setSelectedMenuItem(null);
+            setSelectedMenuCategory(null);
           }}
           onConfirm={handleModalConfirm}
         />
-      )}
+      ) : null}
+
+      {selectedMenuItem && selectedMenuCategory?.categoryType === 'voucher' ? (
+        <VoucherOptionsModal
+          visible={showItemDetail}
+          item={selectedMenuItem}
+          category={selectedMenuCategory}
+          onClose={() => {
+            setShowItemDetail(false);
+            setSelectedMenuItem(null);
+            setSelectedMenuCategory(null);
+          }}
+          onConfirm={handleModalConfirm}
+        />
+      ) : null}
 
       {/* Item Note Modal */}
       <ItemNoteModal

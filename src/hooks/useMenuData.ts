@@ -185,7 +185,7 @@ export const useMenuData = () => {
 
         const normalizedCategories = Array.from(categoryMap.values());
         const menuDisplayCategories = normalizedCategories.filter(
-          (cat: any) => cat.categoryType !== 'cart' && cat.categoryType !== 'voucher'
+          (cat: any) => cat.categoryType !== 'cart'
         );
         const cartExtraCategories = normalizedCategories.filter(
           (cat: any) => cat.categoryType === 'cart'
