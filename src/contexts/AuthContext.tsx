@@ -11,6 +11,7 @@ import {
     getTokenLicenseError,
     subscribeAuthSessionCleared,
 } from '../services/tokenService';
+import { getOnboardingSeenKey, getOnboardingUserId } from '../utils/onboarding';
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
@@ -124,11 +125,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             if (result.success && result.response) {
                 const { token, user } = result.response;
                 const loginType = result.loginType;
+                const onboardingSeenKey = getOnboardingSeenKey(user);
+                const onboardingSeen = await AsyncStorage.getItem(onboardingSeenKey);
 
                 // Store securely
                 await SecureStore.setItemAsync(SECURE_STORAGE_KEYS.authToken, token);
                 await AsyncStorage.setItem(STORAGE_KEYS.authUser, JSON.stringify(user));
                 await AsyncStorage.setItem(STORAGE_KEYS.authLoginType, loginType || 'cloud');
+
+                if (!onboardingSeen) {
+                    await AsyncStorage.multiSet([
+                        [onboardingSeenKey, 'true'],
+                        [STORAGE_KEYS.pendingOnboardingUser, getOnboardingUserId(user)],
+                    ]);
+                }
 
                 setState(prev => ({
                     ...prev,

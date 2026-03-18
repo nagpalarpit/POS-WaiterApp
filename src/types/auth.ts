@@ -47,6 +47,7 @@ export interface ServerConnectionStatus {
 
 // Navigation types
 export type RootStackParamList = {
+  Onboarding: undefined;
   IPEntry: undefined;
   Login: undefined;
   Dashboard: undefined;

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Platform, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import {
   DefaultTheme,
   DrawerActions,
@@ -16,6 +16,7 @@ import IPEntryScreen from '../screens/IPEntryScreen';
 import LoginScreen from '../screens/LoginScreen';
 import ComingSoonScreen from '../screens/ComingSoonScreen';
 import SettingsScreen from '../screens/SettingsScreen';
+import OnboardingScreen from '../screens/OnboardingScreen';
 import DashboardScreen from '../screens/DashboardScreen';
 import MenuScreen from '../screens/MenuScreen';
 import CheckoutScreen from '../screens/CheckoutScreen';
@@ -32,8 +33,10 @@ import { useAuth } from '../contexts/AuthContext';
 import { STORAGE_KEYS } from '../constants/storageKeys';
 import StatusBarIndicator from '../components/StatusBarIndicator';
 import LocalServerLockOverlay from '../components/LocalServerLockOverlay';
+import { getOnboardingUserId } from '../utils/onboarding';
 
 export type RootStackParamList = {
+  Onboarding: undefined;
   IPEntry: undefined;
   Login: undefined;
   Dashboard: undefined;
@@ -106,20 +109,31 @@ function HeaderMenuButton({ color, onPress }: HeaderMenuButtonProps) {
   );
 }
 
-function MainStack() {
+type MainStackProps = {
+  initialRouteName: keyof RootStackParamList;
+};
+
+function MainStack({ initialRouteName }: MainStackProps) {
   const { colors } = useTheme();
 
   return (
     <Stack.Navigator
+      key={initialRouteName}
       screenOptions={{
         headerShown: true,
         headerStyle: { backgroundColor: colors.background },
         headerTintColor: colors.text,
         headerShadowVisible: false,
         contentStyle: { backgroundColor: colors.background },
+        statusBarTranslucent: Platform.OS === 'android' ? false : undefined,
       }}
-      initialRouteName="Dashboard"
+      initialRouteName={initialRouteName}
     >
+      <Stack.Screen
+        name="Onboarding"
+        component={OnboardingScreen}
+        options={{ headerShown: false }}
+      />
       <Stack.Screen
         name="Dashboard"
         component={DashboardScreen}
@@ -410,10 +424,12 @@ function CustomDrawerContent(props: DrawerContentComponentProps) {
 export default function AppNavigator() {
   const { colors } = useTheme();
   const { showToast } = useToast();
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, user } = useAuth();
   const { isLocalServerReachable } = useConnection();
   const [currentRouteName, setCurrentRouteName] = useState<string | undefined>();
   const [isConnectionModalVisible, setIsConnectionModalVisible] = useState(false);
+  const [shouldShowOnboarding, setShouldShowOnboarding] = useState(false);
+  const [isCheckingOnboarding, setIsCheckingOnboarding] = useState(true);
 
   useEffect(() => {
     const unsubscribe = onOrderSync((payload) => {
@@ -436,6 +452,30 @@ export default function AppNavigator() {
     return unsubscribe;
   }, [showToast]);
 
+  useEffect(() => {
+    const resolveOnboarding = async () => {
+      if (!isAuthenticated || !user) {
+        setShouldShowOnboarding(false);
+        setIsCheckingOnboarding(false);
+        return;
+      }
+
+      setIsCheckingOnboarding(true);
+
+      try {
+        const pendingUserId = await AsyncStorage.getItem(STORAGE_KEYS.pendingOnboardingUser);
+        setShouldShowOnboarding(pendingUserId === getOnboardingUserId(user));
+      } catch (error) {
+        console.error('Error loading onboarding state:', error);
+        setShouldShowOnboarding(false);
+      } finally {
+        setIsCheckingOnboarding(false);
+      }
+    };
+
+    void resolveOnboarding();
+  }, [currentRouteName, isAuthenticated, user]);
+
   const navigationTheme = useMemo(
     () => ({
       ...DefaultTheme,
@@ -452,7 +492,7 @@ export default function AppNavigator() {
     [colors]
   );
 
-  if (isLoading) {
+  if (isLoading || isCheckingOnboarding) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' }}>
         <ActivityIndicator size="large" color={colors.primary} />
@@ -465,7 +505,7 @@ export default function AppNavigator() {
     : isLocalServerReachable
       ? 'Login'
       : 'IPEntry';
-  const navigatorKey = `${isAuthenticated ? 'authenticated' : 'guest'}-${initialRouteName}`;
+  const navigatorKey = `${isAuthenticated ? 'authenticated' : 'guest'}-${initialRouteName}-${shouldShowOnboarding ? 'onboarding' : 'ready'}`;
   const shouldLockMainApp =
     isAuthenticated && !isLocalServerReachable && !isConnectionModalVisible;
   const hideStatusBarIndicator = !currentRouteName || currentRouteName === 'IPEntry';
@@ -495,11 +535,12 @@ export default function AppNavigator() {
           <Drawer.Navigator
             key={navigatorKey}
             initialRouteName={initialRouteName}
-            drawerContent={(props) => (isAuthenticated ? <CustomDrawerContent {...props} /> : null)}
+            drawerContent={(props) => (isAuthenticated && !shouldShowOnboarding ? <CustomDrawerContent {...props} /> : null)}
             screenOptions={{
               headerShown: false,
+              headerStatusBarHeight: Platform.OS === 'android' ? 0 : undefined,
               drawerType: 'front',
-              swipeEnabled: isAuthenticated,
+              swipeEnabled: isAuthenticated && !shouldShowOnboarding,
               overlayColor: colors.overlay || 'rgba(0, 0, 0, 0.35)',
               sceneStyle: {
                 backgroundColor: colors.background,
@@ -516,7 +557,9 @@ export default function AppNavigator() {
             <Drawer.Screen name="Login" component={LoginScreen} />
             {isAuthenticated ? (
               <>
-                <Drawer.Screen name="Main" component={MainStack} />
+                <Drawer.Screen name="Main">
+                  {() => <MainStack initialRouteName={shouldShowOnboarding ? 'Onboarding' : 'Dashboard'} />}
+                </Drawer.Screen>
                 <Drawer.Screen
                   name="Account"
                   component={AccountScreen}

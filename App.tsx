@@ -11,11 +11,22 @@ import { ConnectionProvider } from './src/contexts/ConnectionProvider';
 import { AuthProvider } from './src/contexts/AuthContext';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
+import StartupSplash from './src/components/StartupSplash';
 export default function App() {
+  const [showStartupSplash, setShowStartupSplash] = React.useState(true);
+
   useEffect(() => {
     // Load server and local base URLs from storage so services can use them
     setServerBaseUrlFromStorage();
     setLocalBaseUrlFromStorage();
+
+    const timer = setTimeout(() => {
+      setShowStartupSplash(false);
+    }, 1700);
+
+    return () => {
+      clearTimeout(timer);
+    };
   }, []);
 
   return (
@@ -32,6 +43,7 @@ export default function App() {
                 </ConnectionProvider>
               </ToastProvider>
             </BottomSheetModalProvider>
+            <StartupSplash visible={showStartupSplash} />
           </SafeAreaProvider>
         </GestureHandlerRootView>
       </ThemeProvider>

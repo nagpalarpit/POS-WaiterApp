@@ -9,6 +9,8 @@ export const STORAGE_KEYS = {
   authLoginType: 'login_type',
   posId: 'POS_ID',
   localServerConnected: 'LOCAL_SERVER_CONNECTED',
+  onboardingSeenPrefix: 'ONBOARDING_SEEN',
+  pendingOnboardingUser: 'PENDING_ONBOARDING_USER',
 } as const;
 
 export const SECURE_STORAGE_KEYS = {
