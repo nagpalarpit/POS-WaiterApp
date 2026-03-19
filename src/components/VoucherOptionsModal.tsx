@@ -3,6 +3,7 @@ import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import AppBottomSheet from './AppBottomSheet';
 import { useTheme } from '../theme/ThemeProvider';
 import { formatCurrency } from '../utils/currency';
+import { normalizeMenuItemVariants } from '../hooks/useMenuData';
 
 type VoucherOptionsModalProps = {
   visible: boolean;
@@ -38,16 +39,7 @@ export default function VoucherOptionsModal({
   const [selectedAttributeValues, setSelectedAttributeValues] = useState<any[]>([]);
 
   const normalizedVariants = useMemo(() => {
-    const rawVariants = Array.isArray(item?.menuItemVariants)
-      ? item.menuItemVariants
-      : Array.isArray(item?.variants)
-        ? item.variants
-        : item?.menuItemVariant
-          ? [item.menuItemVariant]
-          : [];
-
-    return rawVariants
-      .filter(Boolean)
+    return normalizeMenuItemVariants(item)
       .map((variant: any, variantIndex: number) => {
         const rawAttributes = Array.isArray(variant?.menuItemVariantAttributes)
           ? variant.menuItemVariantAttributes
@@ -101,7 +93,10 @@ export default function VoucherOptionsModal({
                     0,
                   ),
                   quantity: Number(value?.quantity ?? 0),
-                })),
+                }))
+                .sort((a: any, b: any) =>
+                  String(a.name || '').localeCompare(String(b.name || '')),
+                ),
             }))
             .sort((a: any, b: any) => String(a.name || '').localeCompare(String(b.name || ''))),
         };

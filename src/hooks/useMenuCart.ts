@@ -2,12 +2,18 @@ import { useState, useEffect, useMemo } from 'react';
 import cartService, { Cart, CartItem, AttributeValue } from '../services/cartService';
 import { getCartItemQuantity } from '../utils/cartCalculations';
 import { MenuCategory, MenuItem } from './useMenuData';
+import { Customer } from '../types/customer';
 
 /**
  * Hook for managing cart operations
  */
 export const useMenuCart = () => {
-  const [cart, setCart] = useState<Cart>({ items: [], orderNote: '', discount: null });
+  const [cart, setCart] = useState<Cart>({
+    items: [],
+    orderNote: '',
+    discount: null,
+    currentUser: null,
+  });
 
   /**
    * Load cart from AsyncStorage using CartService
@@ -133,6 +139,19 @@ export const useMenuCart = () => {
     }
   };
 
+  /**
+   * Update selected customer
+   */
+  const updateCurrentUser = async (customer: Customer | null) => {
+    try {
+      const updatedCart = await cartService.updateCurrentUser(customer);
+      setCart(updatedCart);
+    } catch (error) {
+      console.error('useMenuCart: Error updating selected customer:', error);
+      throw error;
+    }
+  };
+
   return {
     cart,
     setCart,
@@ -144,5 +163,6 @@ export const useMenuCart = () => {
     updateItemNote,
     updateOrderNote,
     updateDiscount,
+    updateCurrentUser,
   };
 };

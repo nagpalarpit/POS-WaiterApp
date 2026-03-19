@@ -1,3 +1,5 @@
+import { OrderServiceTiming } from './orderFlow';
+
 // Auth related types
 export interface User {
   id: string;
@@ -56,6 +58,7 @@ export type RootStackParamList = {
     deliveryType: number;
     existingOrder?: any;
     tableArea?: any;
+    serviceTiming?: OrderServiceTiming | null;
   };
   Checkout: {
     cart: any;
@@ -63,6 +66,7 @@ export type RootStackParamList = {
     deliveryType: number;
     tableArea?: any;
     existingOrder?: any;
+    serviceTiming?: OrderServiceTiming | null;
   };
   OrderDetails: {
     order: any;

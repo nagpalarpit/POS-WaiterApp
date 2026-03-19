@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useLayoutEffect, useMemo } from 'react';
 import {
+  Alert,
   View,
   Text,
   TouchableOpacity,
@@ -17,6 +18,7 @@ import cartService, { Cart, CartItem } from '../services/cartService';
 import CartNoteModal from '../components/CartNoteModal';
 import ItemNoteModal from '../components/ItemNoteModal';
 import PinModal from '../components/PinModal';
+import OrderTimeModal from '../components/OrderTimeModal';
 import { CartItemRow } from '../components/MenuScreen/CartItemRow';
 import { formatCurrency } from '../utils/currency';
 import { emitOrderSync, emitPosKotPrint, unlockOrder, unlockTable } from '../services/orderSyncService';
@@ -26,6 +28,13 @@ import {
   getCartSubtotal,
   getDiscountAmount,
 } from '../utils/cartCalculations';
+import { OrderServiceTiming } from '../types/orderFlow';
+import { formatOrderServiceTime } from '../utils/orderServiceDisplay';
+import {
+  formatCustomerAddress,
+  getCustomerDisplayName,
+  getSelectedCustomerAddress,
+} from '../utils/customerData';
 
 interface CheckoutScreenProps {
   navigation: any;
@@ -58,8 +67,19 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
   const deliveryType = route.params?.deliveryType ?? 0;
   const tableArea = route.params?.tableArea ?? null;
   const existingOrder = route.params?.existingOrder ?? null;
+  const serviceTiming = (route.params?.serviceTiming ?? null) as OrderServiceTiming | null;
 
   const [checkoutCart, setCheckoutCart] = useState<Cart>(incomingCart);
+  const [currentServiceTiming, setCurrentServiceTiming] = useState<OrderServiceTiming | null>(
+    serviceTiming ??
+      (deliveryType !== 0
+        ? {
+            pickupDateTime: existingOrder?.orderDetails?.pickupDateTime ?? null,
+            familyName: existingOrder?.orderDetails?.familyName ?? '',
+          }
+        : null),
+  );
+  const [showServiceTimeModal, setShowServiceTimeModal] = useState(false);
   const { showToast } = useToast();
   const [decreasePinChecked, setDecreasePinChecked] = useState(false);
   const [pinModalVisible, setPinModalVisible] = useState(false);
@@ -72,7 +92,8 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
     tableNo,
     deliveryType,
     tableArea,
-    existingOrder
+    existingOrder,
+    currentServiceTiming
   );
   const cartNotes = useCartNotes(
     checkoutCart,
@@ -94,6 +115,21 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
   useEffect(() => {
     setCheckoutCart((route.params?.cart || { items: [], orderNote: '', discount: null }) as Cart);
   }, [route.params?.cart]);
+
+  useEffect(() => {
+    if (deliveryType === 0) {
+      setCurrentServiceTiming(null);
+      return;
+    }
+
+    setCurrentServiceTiming(
+      serviceTiming ??
+        {
+          pickupDateTime: existingOrder?.orderDetails?.pickupDateTime ?? null,
+          familyName: existingOrder?.orderDetails?.familyName ?? '',
+        },
+    );
+  }, [deliveryType, existingOrder?.orderDetails?.familyName, existingOrder?.orderDetails?.pickupDateTime, serviceTiming]);
 
   useEffect(() => {
     cartService.loadCart().then(setCheckoutCart).catch(() => {});
@@ -172,6 +208,15 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
   const subtotal = getCartSubtotal(checkoutCart);
   const discountAmount = getDiscountAmount(subtotal, checkoutCart.discount || null);
   const total = subtotal - discountAmount;
+  const serviceTimeLabel = formatOrderServiceTime(currentServiceTiming?.pickupDateTime);
+  const familyName = currentServiceTiming?.familyName?.trim() || '';
+  const selectedCustomer = checkoutCart.currentUser || null;
+  const selectedCustomerAddress = getSelectedCustomerAddress(selectedCustomer);
+  const selectedCustomerName =
+    getCustomerDisplayName(selectedCustomer) ||
+    selectedCustomer?.mobileNo ||
+    '';
+  const selectedCustomerAddressText = formatCustomerAddress(selectedCustomerAddress);
   const groupedItems = useMemo(() => {
     const groups = checkoutCart.items.reduce(
       (acc: Record<number, CartItem[]>, item) => {
@@ -233,6 +278,46 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
     }
   };
 
+  const handleServiceTimingSave = (value: OrderServiceTiming) => {
+    setCurrentServiceTiming(value);
+    navigation.setParams?.({
+      serviceTiming: value,
+    });
+  };
+
+  const confirmDeliveryMinimumOrder = async () => {
+    if (deliveryType !== 1 || !selectedCustomerAddress) {
+      return true;
+    }
+
+    const minimumOrderValue = toNumber(selectedCustomerAddress.minimumOrderValue, 0);
+    if (minimumOrderValue <= 0 || total >= minimumOrderValue) {
+      return true;
+    }
+
+    return await new Promise<boolean>((resolve) => {
+      Alert.alert(
+        'Minimum order not reached',
+        `This address requires a minimum order of ${formatCurrency(minimumOrderValue)}. Do you still want to continue?`,
+        [
+          {
+            text: 'Cancel',
+            style: 'cancel',
+            onPress: () => resolve(false),
+          },
+          {
+            text: 'Continue',
+            onPress: () => resolve(true),
+          },
+        ],
+        {
+          cancelable: true,
+          onDismiss: () => resolve(false),
+        },
+      );
+    });
+  };
+
   const handlePlaceOrder = async () => {
     try {
       if (!checkoutCart.items?.length) {
@@ -242,6 +327,11 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
 
       if (deliveryType === 0 && !tableNo) {
         showToast('error', 'Please select table');
+        return;
+      }
+
+      const canContinue = await confirmDeliveryMinimumOrder();
+      if (!canContinue) {
         return;
       }
 
@@ -354,7 +444,7 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
             ? {
                 items: canceledItems,
                 isOrderDetails: true,
-                currentUser: orderDetails?.user ?? submittedOrder?.user ?? null,
+                currentUser: checkoutCart.currentUser || null,
                 orderInfo: {
                   ...orderInfoForPrint,
                   orderNumber: `${orderInfoForPrint.orderNumber}-C`,
@@ -366,7 +456,7 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
             items: printItems,
             canceledObj: canceledPrintObj,
             isOrderDetails: true,
-            currentUser: orderDetails?.user ?? submittedOrder?.user ?? null,
+            currentUser: checkoutCart.currentUser || null,
             orderInfo: orderInfoForPrint,
           });
         }
@@ -431,6 +521,156 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
         }}
         showsVerticalScrollIndicator={false}
       >
+        {deliveryType !== 0 ? (
+          <View
+            style={[
+              styles.serviceCard,
+              {
+                borderColor: colors.border,
+                backgroundColor: colors.surface,
+              },
+            ]}
+          >
+            <View style={styles.serviceHeaderRow}>
+              <View style={styles.serviceHeaderContent}>
+                <MaterialCommunityIcons
+                  name={deliveryType === 1 ? 'truck-delivery-outline' : 'storefront-outline'}
+                  size={18}
+                  color={deliveryType === 1 ? colors.primary : colors.accent || colors.primary}
+                />
+                <View style={{ marginLeft: 10, flex: 1 }}>
+                  <Text style={{ color: colors.textSecondary, fontSize: 11 }}>
+                    {deliveryType === 1 ? 'Delivery' : 'Pickup'}
+                  </Text>
+                  <Text style={{ color: colors.text, fontWeight: '700', fontSize: 15, marginTop: 2 }}>
+                    {getServiceTypeLabel(deliveryType, tableNo)}
+                  </Text>
+                </View>
+              </View>
+
+              <TouchableOpacity
+                onPress={() => setShowServiceTimeModal(true)}
+                style={[
+                  styles.serviceEditButton,
+                  {
+                    borderColor: colors.border,
+                    backgroundColor: colors.surfaceHover || colors.background,
+                  },
+                ]}
+              >
+                <MaterialCommunityIcons name="pencil-outline" size={15} color={colors.text} />
+                <Text style={{ color: colors.text, fontWeight: '700', fontSize: 12, marginLeft: 4 }}>
+                  Edit
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {serviceTimeLabel ? (
+              <View style={styles.serviceMetaRow}>
+                <MaterialCommunityIcons
+                  name="clock-outline"
+                  size={16}
+                  color={colors.textSecondary}
+                />
+                <Text style={{ color: colors.textSecondary, fontSize: 12, marginLeft: 8 }}>
+                  {deliveryType === 1 ? 'Delivery Time' : 'Pickup Time'}:{' '}
+                  <Text style={{ color: colors.text, fontWeight: '700' }}>
+                    {serviceTimeLabel}
+                  </Text>
+                </Text>
+              </View>
+            ) : null}
+
+            {deliveryType === 2 && familyName ? (
+              <View style={styles.serviceMetaRow}>
+                <MaterialCommunityIcons
+                  name="account-group-outline"
+                  size={16}
+                  color={colors.textSecondary}
+                />
+                <Text style={{ color: colors.textSecondary, fontSize: 12, marginLeft: 8 }}>
+                  Family Name:{' '}
+                  <Text style={{ color: colors.text, fontWeight: '700' }}>
+                    {familyName}
+                  </Text>
+                </Text>
+              </View>
+            ) : null}
+          </View>
+        ) : null}
+
+        {selectedCustomer ? (
+          <View
+            style={[
+              styles.serviceCard,
+              {
+                borderColor: colors.border,
+                backgroundColor: colors.surface,
+              },
+            ]}
+          >
+            <View style={styles.serviceHeaderRow}>
+              <View style={styles.serviceHeaderContent}>
+                <MaterialCommunityIcons
+                  name="account-outline"
+                  size={18}
+                  color={colors.secondary || colors.primary}
+                />
+                <View style={{ marginLeft: 10, flex: 1 }}>
+                  <Text style={{ color: colors.textSecondary, fontSize: 11 }}>
+                    Customer
+                  </Text>
+                  <Text style={{ color: colors.text, fontWeight: '700', fontSize: 15, marginTop: 2 }}>
+                    {selectedCustomerName}
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+            {selectedCustomer.mobileNo ? (
+              <View style={styles.serviceMetaRow}>
+                <MaterialCommunityIcons
+                  name="phone-outline"
+                  size={16}
+                  color={colors.textSecondary}
+                />
+                <Text style={{ color: colors.textSecondary, fontSize: 12, marginLeft: 8 }}>
+                  {selectedCustomer.mobileNo}
+                </Text>
+              </View>
+            ) : null}
+
+            {deliveryType === 1 && selectedCustomerAddressText ? (
+              <View style={styles.serviceMetaRow}>
+                <MaterialCommunityIcons
+                  name="map-marker-outline"
+                  size={16}
+                  color={colors.textSecondary}
+                />
+                <Text style={{ color: colors.textSecondary, fontSize: 12, marginLeft: 8, flex: 1 }}>
+                  {selectedCustomerAddressText}
+                </Text>
+              </View>
+            ) : null}
+
+            {deliveryType === 1 && selectedCustomerAddress?.minimumOrderValue ? (
+              <View style={styles.serviceMetaRow}>
+                <MaterialCommunityIcons
+                  name="cash-fast"
+                  size={16}
+                  color={colors.textSecondary}
+                />
+                <Text style={{ color: colors.textSecondary, fontSize: 12, marginLeft: 8 }}>
+                  Minimum Order:{' '}
+                  <Text style={{ color: colors.text, fontWeight: '700' }}>
+                    {formatCurrency(selectedCustomerAddress.minimumOrderValue)}
+                  </Text>
+                </Text>
+              </View>
+            ) : null}
+          </View>
+        ) : null}
+
         {checkoutCart.items.length > 0 ? (
           groupedItems.map((group) => {
             const isExpanded = groupCount <= 1 || expandedGroupType === group.groupType;
@@ -598,6 +838,14 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
         }}
         onVerified={handlePinVerified}
       />
+
+      <OrderTimeModal
+        visible={showServiceTimeModal}
+        deliveryType={deliveryType}
+        initialValue={currentServiceTiming}
+        onClose={() => setShowServiceTimeModal(false)}
+        onSave={handleServiceTimingSave}
+      />
     </SafeAreaView>
   );
 }
@@ -613,6 +861,36 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     padding: 20,
     alignItems: 'center',
+  },
+  serviceCard: {
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 12,
+  },
+  serviceHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  serviceHeaderContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    paddingRight: 10,
+  },
+  serviceEditButton: {
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  serviceMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 10,
   },
   footer: {
     position: 'absolute',

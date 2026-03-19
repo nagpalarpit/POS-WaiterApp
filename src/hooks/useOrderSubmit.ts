@@ -13,6 +13,8 @@ import {
   getCartSubtotal,
   getDiscountAmount,
 } from '../utils/cartCalculations';
+import { OrderServiceTiming } from '../types/orderFlow';
+import { Customer } from '../types/customer';
 
 const ORDER_STATUS_PENDING = 1;
 const TSC_OFFLINE_MESSAGE = 'Active TSS not found for the given POS and company.';
@@ -47,6 +49,20 @@ const getPosV2DiscountType = (discountType?: string): number => {
   return discountType === 'PERCENTAGE' || discountType === 'CUSTOM' ? 1 : 0;
 };
 
+const getCustomerOrderFields = (customer?: Customer | null) => ({
+  customerId: customer?.id ?? null,
+  userEmail: customer?.email || '',
+  userFirstName: customer?.firstName || '',
+  userLastName: customer?.lastName || '',
+  userMobile: customer?.mobileNo || null,
+  addresses: customer?.addresses || [],
+  isCallerId: customer?.isCallerId === true,
+  customerCompanyName: customer?.customerCompanyName || '',
+  steuerId: customer?.steuerId || '',
+  isDebitor: customer?.isDebitor === true,
+  customerAddressId: customer?.customerAddressId ?? null,
+});
+
 /**
  * Hook for managing order submission and calculations
  */
@@ -55,7 +71,8 @@ export const useOrderSubmit = (
   tableNo: number | null,
   deliveryType: number,
   tableArea?: any,
-  existingOrder?: any
+  existingOrder?: any,
+  serviceTiming?: OrderServiceTiming | null
 ) => {
   const [loading, setLoading] = useState(false);
 
@@ -183,6 +200,8 @@ export const useOrderSubmit = (
             discountType: getPosV2DiscountType(appliedDiscount.discountType),
           }
         : undefined;
+      const selectedCustomer = cart.currentUser ?? null;
+      const customerFields = getCustomerOrderFields(selectedCustomer);
       const now = new Date().toISOString();
       const orderItems = prepareOrderItems(companyId);
       const total = subtotal - discount;
@@ -212,30 +231,17 @@ export const useOrderSubmit = (
         const orderDetails: any = {
           ...existingDetails,
           companyId,
-          customerId: existingDetails?.customerId ?? userData?.customerId ?? null,
-          userEmail: existingDetails?.userEmail ?? userData?.email ?? '',
-          userFirstName:
-            existingDetails?.userFirstName ??
-            userData?.firstName ??
-            userData?.username ??
-            '',
-          userLastName: existingDetails?.userLastName ?? userData?.lastName ?? '',
-          userMobile:
-            existingDetails?.userMobile ??
-            userData?.mobileNo ??
-            userData?.mobile ??
-            null,
-          addresses: existingDetails?.addresses ?? userData?.addresses ?? [],
-          customerCompanyName:
-            existingDetails?.customerCompanyName ?? userData?.customerCompanyName,
-          steuerId: existingDetails?.steuerId ?? userData?.steuerId,
-          isDebitor:
-            existingDetails?.isDebitor ??
-            (!!userData?.isDebitor || false),
+          ...customerFields,
           currency: existingDetails?.currency ?? userData?.currency ?? 'EUR',
           isPickup: deliveryType === 2,
-          pickupDateTime: existingDetails?.pickupDateTime ?? null,
-          familyName: existingDetails?.familyName ?? '',
+          pickupDateTime:
+            serviceTiming !== undefined && serviceTiming !== null
+              ? serviceTiming.pickupDateTime ?? null
+              : existingDetails?.pickupDateTime ?? null,
+          familyName:
+            serviceTiming !== undefined && serviceTiming !== null
+              ? serviceTiming.familyName ?? ''
+              : existingDetails?.familyName ?? '',
           orderType: getOrderType(deliveryType),
           isSandbox: existingDetails?.isSandbox ?? false,
           isPriceIncludingTax: existingDetails?.isPriceIncludingTax ?? false,
@@ -243,8 +249,6 @@ export const useOrderSubmit = (
           orderPromoCodeDiscountTotal:
             existingDetails?.orderPromoCodeDiscountTotal ?? 0,
           countryCode: existingDetails?.countryCode ?? userData?.countryCode ?? 'IN',
-          customerAddressId:
-            existingDetails?.customerAddressId ?? userData?.customerAddressId ?? null,
           orderNotes: orderNote,
           orderDiscountTotal: discount,
           orderItem: orderItems,
@@ -362,27 +366,17 @@ export const useOrderSubmit = (
 
       const orderDetails: any = {
         companyId,
-        customerId: userData?.customerId || null,
-        userEmail: userData?.email || '',
-        userFirstName: userData?.firstName || userData?.username || '',
-        userLastName: userData?.lastName || '',
-        userMobile: userData?.mobileNo || userData?.mobile || null,
-        addresses: userData?.addresses || [],
-        isCallerId: false,
-        customerCompanyName: userData?.customerCompanyName,
-        steuerId: userData?.steuerId,
-        isDebitor: !!userData?.isDebitor,
+        ...customerFields,
         currency: userData?.currency || 'EUR',
         isPickup: deliveryType === 2,
-        pickupDateTime: null,
-        familyName: '',
+        pickupDateTime: serviceTiming?.pickupDateTime ?? null,
+        familyName: serviceTiming?.familyName ?? '',
         orderType: getOrderType(deliveryType),
         isSandbox: false,
         isPriceIncludingTax: false,
         orderDeliveryTypeId: deliveryType, // 0=dine-in, 1=delivery, 2=pickup
         orderPromoCodeDiscountTotal: 0,
         countryCode: 'IN',
-        customerAddressId: userData?.customerAddressId || null,
         orderNotes: orderNote,
         orderDiscountTotal: discount,
         orderItem: orderItems,

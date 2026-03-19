@@ -9,14 +9,17 @@ import { useTheme } from '../theme/ThemeProvider';
 import { SERVER_BASE_URL } from '../config/urls';
 import { getOrderStatusLabel } from '../utils/orderUtils';
 import { formatCurrency } from '../utils/currency';
+import { formatOrderServiceTime } from '../utils/orderServiceDisplay';
 import { isOrderLocked, isTableLocked, lockOrder, lockTable } from '../services/orderSyncService';
 import { useToast } from '../components/ToastProvider';
 import cartService from '../services/cartService';
+import OrderTimeModal from '../components/OrderTimeModal';
 
 // Hooks
 import { useOrdersData, DELIVERY_TYPE, Order } from '../hooks/useOrdersData';
 import { useSettings } from '../hooks/useSettings';
 import { useTableStatistics } from '../hooks/useTableStatistics';
+import { OrderServiceTiming } from '../types/orderFlow';
 
 interface DashboardScreenProps {
   navigation: any;
@@ -47,6 +50,8 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
   const [logoUri, setLogoUri] = useState<string | null>(null);
   const [logoLoadFailed, setLogoLoadFailed] = useState(false);
   const [selectedTableArea, setSelectedTableArea] = useState<any | null>(null);
+  const [serviceTimeModalVisible, setServiceTimeModalVisible] = useState(false);
+  const [pendingServiceType, setPendingServiceType] = useState<number | null>(null);
 
   const companyDisplayName = useMemo(() => {
     const rawName =
@@ -207,6 +212,35 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
     return null;
   };
 
+  const handleServiceFlowStart = () => {
+    if (
+      activeTab !== DELIVERY_TYPE.DELIVERY &&
+      activeTab !== DELIVERY_TYPE.PICKUP
+    ) {
+      return;
+    }
+
+    setPendingServiceType(activeTab);
+    setServiceTimeModalVisible(true);
+  };
+
+  const handleServiceFlowClose = () => {
+    setServiceTimeModalVisible(false);
+    setPendingServiceType(null);
+  };
+
+  const handleServiceFlowSave = (serviceTiming: OrderServiceTiming) => {
+    const nextDeliveryType = pendingServiceType ?? activeTab;
+
+    navigation.navigate('Menu', {
+      tableNo: null,
+      deliveryType: nextDeliveryType,
+      serviceTiming,
+    });
+
+    handleServiceFlowClose();
+  };
+
   /**
    * Memoize header left component to prevent re-renders on tab change
    */
@@ -295,12 +329,7 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
 
         {activeTab !== DELIVERY_TYPE.DINE_IN && (
           <TouchableOpacity
-            onPress={() =>
-              navigation.navigate('Menu', {
-                tableNo: null,
-                deliveryType: activeTab,
-              })
-            }
+            onPress={handleServiceFlowStart}
             style={{ padding: 8 }}
           >
             <MaterialIcons name="add-circle-outline" size={22} color={colors.primary} />
@@ -308,7 +337,7 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
         )}
       </View>
     ),
-    [colors, activeTab, navigation]
+    [colors, activeTab, handleServiceFlowStart]
   );
 
   /**
@@ -629,51 +658,78 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
   };
 
   const renderOrderItem = ({ item: order }: { item: Order }) => (
-    <TouchableOpacity
-      onPress={() => {
-        if (isOrderLocked(order)) {
-          const label = getOrderDisplayLabel(order);
-          showToast('error', `${label} is being handled on another device. Please try later.`);
-          return;
-        }
-        lockOrder(order);
-        navigation.navigate('OrderDetails', { order });
-      }}
-      className="rounded-lg p-4 mb-3 border"
-      style={{ backgroundColor: colors.surface, borderColor: colors.border }}
-    >
-      <View className="flex-row justify-between items-start">
-        <View className="flex-1">
-          <Text className="font-semibold text-base" style={{ color: colors.text }}>
-            {order.customOrderId || order.id || order._id}
-          </Text>
-          <Text className="text-xs mt-1" style={{ color: colors.textSecondary }}>
-            {new Date(order.createdAt || '').toLocaleTimeString()}
-          </Text>
-        </View>
-        <View
-          className="px-2 py-1 rounded-full"
-          style={{ backgroundColor: colors.surfaceHover }}
+    (() => {
+      const orderDetails = (order as any)?.orderDetails || {};
+      const serviceTimeLabel = formatOrderServiceTime(orderDetails?.pickupDateTime);
+      const familyName = String(orderDetails?.familyName || '').trim();
+
+      return (
+        <TouchableOpacity
+          onPress={() => {
+            if (isOrderLocked(order)) {
+              const label = getOrderDisplayLabel(order);
+              showToast('error', `${label} is being handled on another device. Please try later.`);
+              return;
+            }
+            lockOrder(order);
+            navigation.navigate('OrderDetails', { order });
+          }}
+          className="rounded-lg p-4 mb-3 border"
+          style={{ backgroundColor: colors.surface, borderColor: colors.border }}
         >
-          <Text
-            className="text-xs font-semibold"
-            style={{ color: colors.textSecondary }}
-          >
-            {getOrderStatusLabel(order)}
-          </Text>
-        </View>
-      </View>
-      <View className="mt-3 flex-row justify-between items-center">
-        <Text className="text-sm" style={{ color: colors.textSecondary }}>
-          Total Amount
-        </Text>
-        <Text
-          style={{ color: colors.success, fontSize: 18, fontWeight: '700' }}
-        >
-          {formatCurrency(Number(order.orderDetails?.orderTotal ?? 0))}
-        </Text>
-      </View>
-    </TouchableOpacity>
+          <View className="flex-row justify-between items-start">
+            <View className="flex-1">
+              <Text className="font-semibold text-base" style={{ color: colors.text }}>
+                {order.customOrderId || order.id || order._id}
+              </Text>
+              <Text className="text-xs mt-1" style={{ color: colors.textSecondary }}>
+                {new Date(order.createdAt || '').toLocaleTimeString()}
+              </Text>
+            </View>
+            <View
+              className="px-2 py-1 rounded-full"
+              style={{ backgroundColor: colors.surfaceHover }}
+            >
+              <Text
+                className="text-xs font-semibold"
+                style={{ color: colors.textSecondary }}
+              >
+                {getOrderStatusLabel(order)}
+              </Text>
+            </View>
+          </View>
+
+          {serviceTimeLabel ? (
+            <Text className="text-xs mt-3" style={{ color: colors.textSecondary }}>
+              {orderDetails?.orderDeliveryTypeId === DELIVERY_TYPE.DELIVERY ? 'Delivery Time' : 'Pickup Time'}: {' '}
+              <Text style={{ color: colors.text, fontWeight: '700' }}>
+                {serviceTimeLabel}
+              </Text>
+            </Text>
+          ) : null}
+
+          {orderDetails?.orderDeliveryTypeId === DELIVERY_TYPE.PICKUP && familyName ? (
+            <Text className="text-xs mt-1" style={{ color: colors.textSecondary }}>
+              Family Name:{' '}
+              <Text style={{ color: colors.text, fontWeight: '700' }}>
+                {familyName}
+              </Text>
+            </Text>
+          ) : null}
+
+          <View className="mt-3 flex-row justify-between items-center">
+            <Text className="text-sm" style={{ color: colors.textSecondary }}>
+              Total Amount
+            </Text>
+            <Text
+              style={{ color: colors.success, fontSize: 18, fontWeight: '700' }}
+            >
+              {formatCurrency(Number(order.orderDetails?.orderTotal ?? 0))}
+            </Text>
+          </View>
+        </TouchableOpacity>
+      );
+    })()
   );
 
   const renderTabContent = () => {
@@ -720,62 +776,19 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
   }
 
   return (
-    <ScrollView
-      style={{ flex: 1, backgroundColor: colors.background }}
-      contentInsetAdjustmentBehavior="automatic"
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-      }
-    >
-      <View className="flex-1 px-4 py-4">
-        {/* Tab Navigation */}
-        <View style={{ flexDirection: 'row', gap: 8 }}>
-          <TouchableOpacity
-            onPress={() => setActiveTab(DELIVERY_TYPE.DINE_IN)}
-            style={{
-              flex: 1,
-              paddingVertical: 10,
-              borderRadius: 12,
-              alignItems: 'center',
-              borderWidth: 1,
-              borderColor:
-                activeTab === DELIVERY_TYPE.DINE_IN
-                  ? colors.primary
-                  : colors.border,
-              backgroundColor:
-                activeTab === DELIVERY_TYPE.DINE_IN
-                  ? colors.primary
-                  : colors.surface,
-            }}
-          >
-            <Text
-              style={{
-                color:
-                  activeTab === DELIVERY_TYPE.DINE_IN
-                    ? colors.textInverse
-                    : colors.text,
-                fontWeight: '700',
-              }}
-            >
-              Tables
-            </Text>
-            <Text
-              style={{
-                color:
-                  activeTab === DELIVERY_TYPE.DINE_IN
-                    ? colors.textInverse
-                    : colors.textSecondary,
-                fontSize: 12,
-                marginTop: 4,
-              }}
-            >
-              {tableStats.availableTablesCount}
-            </Text>
-          </TouchableOpacity>
-
-          {settingsData.settings?.enableDelivery && (
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <ScrollView
+        style={{ flex: 1, backgroundColor: colors.background }}
+        contentInsetAdjustmentBehavior="automatic"
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+      >
+        <View className="flex-1 px-4 py-4">
+          {/* Tab Navigation */}
+          <View style={{ flexDirection: 'row', gap: 8 }}>
             <TouchableOpacity
-              onPress={() => setActiveTab(DELIVERY_TYPE.DELIVERY)}
+              onPress={() => setActiveTab(DELIVERY_TYPE.DINE_IN)}
               style={{
                 flex: 1,
                 paddingVertical: 10,
@@ -783,119 +796,172 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
                 alignItems: 'center',
                 borderWidth: 1,
                 borderColor:
-                  activeTab === DELIVERY_TYPE.DELIVERY
+                  activeTab === DELIVERY_TYPE.DINE_IN
                     ? colors.primary
                     : colors.border,
                 backgroundColor:
-                  activeTab === DELIVERY_TYPE.DELIVERY
+                  activeTab === DELIVERY_TYPE.DINE_IN
                     ? colors.primary
                     : colors.surface,
               }}
             >
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <MaterialCommunityIcons
-                  name="truck-delivery"
-                  size={16}
-                  color={
-                    activeTab === DELIVERY_TYPE.DELIVERY
+              <Text
+                style={{
+                  color:
+                    activeTab === DELIVERY_TYPE.DINE_IN
                       ? colors.textInverse
-                      : colors.text
-                  }
-                />
+                      : colors.text,
+                  fontWeight: '700',
+                }}
+              >
+                Tables
+              </Text>
+              <Text
+                style={{
+                  color:
+                    activeTab === DELIVERY_TYPE.DINE_IN
+                      ? colors.textInverse
+                      : colors.textSecondary,
+                  fontSize: 12,
+                  marginTop: 4,
+                }}
+              >
+                {tableStats.availableTablesCount}
+              </Text>
+            </TouchableOpacity>
+
+            {settingsData.settings?.enableDelivery && (
+              <TouchableOpacity
+                onPress={() => setActiveTab(DELIVERY_TYPE.DELIVERY)}
+                style={{
+                  flex: 1,
+                  paddingVertical: 10,
+                  borderRadius: 12,
+                  alignItems: 'center',
+                  borderWidth: 1,
+                  borderColor:
+                    activeTab === DELIVERY_TYPE.DELIVERY
+                      ? colors.primary
+                      : colors.border,
+                  backgroundColor:
+                    activeTab === DELIVERY_TYPE.DELIVERY
+                      ? colors.primary
+                      : colors.surface,
+                }}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <MaterialCommunityIcons
+                    name="truck-delivery"
+                    size={16}
+                    color={
+                      activeTab === DELIVERY_TYPE.DELIVERY
+                        ? colors.textInverse
+                        : colors.text
+                    }
+                  />
+                  <Text
+                    style={{
+                      color:
+                        activeTab === DELIVERY_TYPE.DELIVERY
+                          ? colors.textInverse
+                          : colors.text,
+                      fontWeight: '700',
+                    }}
+                  >
+                    Delivery
+                  </Text>
+                </View>
                 <Text
                   style={{
                     color:
                       activeTab === DELIVERY_TYPE.DELIVERY
                         ? colors.textInverse
-                        : colors.text,
-                    fontWeight: '700',
+                        : colors.textSecondary,
+                    fontSize: 12,
+                    marginTop: 4,
                   }}
                 >
-                  Delivery
+                  {ordersData.deliveryOrders.length}
                 </Text>
-              </View>
-              <Text
+              </TouchableOpacity>
+            )}
+
+            {settingsData.settings?.enablePickup && (
+              <TouchableOpacity
+                onPress={() => setActiveTab(DELIVERY_TYPE.PICKUP)}
                 style={{
-                  color:
-                    activeTab === DELIVERY_TYPE.DELIVERY
-                      ? colors.textInverse
-                      : colors.textSecondary,
-                  fontSize: 12,
-                  marginTop: 4,
+                  flex: 1,
+                  paddingVertical: 10,
+                  borderRadius: 12,
+                  alignItems: 'center',
+                  borderWidth: 1,
+                  borderColor:
+                    activeTab === DELIVERY_TYPE.PICKUP
+                      ? colors.primary
+                      : colors.border,
+                  backgroundColor:
+                    activeTab === DELIVERY_TYPE.PICKUP
+                      ? colors.primary
+                      : colors.surface,
                 }}
               >
-                {ordersData.deliveryOrders.length}
-              </Text>
-            </TouchableOpacity>
-          )}
-
-          {settingsData.settings?.enablePickup && (
-            <TouchableOpacity
-              onPress={() => setActiveTab(DELIVERY_TYPE.PICKUP)}
-              style={{
-                flex: 1,
-                paddingVertical: 10,
-                borderRadius: 12,
-                alignItems: 'center',
-                borderWidth: 1,
-                borderColor:
-                  activeTab === DELIVERY_TYPE.PICKUP
-                    ? colors.primary
-                    : colors.border,
-                backgroundColor:
-                  activeTab === DELIVERY_TYPE.PICKUP
-                    ? colors.primary
-                    : colors.surface,
-              }}
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <MaterialIcons
-                  name="storefront"
-                  size={16}
-                  color={
-                    activeTab === DELIVERY_TYPE.PICKUP
-                      ? colors.textInverse
-                      : colors.text
-                  }
-                />
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <MaterialIcons
+                    name="storefront"
+                    size={16}
+                    color={
+                      activeTab === DELIVERY_TYPE.PICKUP
+                        ? colors.textInverse
+                        : colors.text
+                    }
+                  />
+                  <Text
+                    style={{
+                      color:
+                        activeTab === DELIVERY_TYPE.PICKUP
+                          ? colors.textInverse
+                          : colors.text,
+                      fontWeight: '700',
+                    }}
+                  >
+                    Pickup
+                  </Text>
+                </View>
                 <Text
                   style={{
                     color:
                       activeTab === DELIVERY_TYPE.PICKUP
                         ? colors.textInverse
-                        : colors.text,
-                    fontWeight: '700',
+                        : colors.textSecondary,
+                    fontSize: 12,
+                    marginTop: 4,
                   }}
                 >
-                  Pickup
+                  {ordersData.pickupOrders.length}
                 </Text>
-              </View>
-              <Text
-                style={{
-                  color:
-                    activeTab === DELIVERY_TYPE.PICKUP
-                      ? colors.textInverse
-                      : colors.textSecondary,
-                  fontSize: 12,
-                  marginTop: 4,
-                }}
-              >
-                {ordersData.pickupOrders.length}
-              </Text>
-            </TouchableOpacity>
-          )}
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {/* Status badges for dine-in */}
+          {/* {renderTableStatusBadge()} */}
+
+          {/* Table area filters for dine-in */}
+          {renderTableAreas()}
+
+          {/* Tab content */}
+          {renderTabContent()}
         </View>
+      </ScrollView>
 
-        {/* Status badges for dine-in */}
-        {/* {renderTableStatusBadge()} */}
-
-        {/* Table area filters for dine-in */}
-        {renderTableAreas()}
-
-        {/* Tab content */}
-        {renderTabContent()}
-      </View>
-    </ScrollView>
+      <OrderTimeModal
+        visible={serviceTimeModalVisible}
+        deliveryType={pendingServiceType ?? activeTab}
+        initialValue={null}
+        onClose={handleServiceFlowClose}
+        onSave={handleServiceFlowSave}
+      />
+    </View>
   );
 }
 

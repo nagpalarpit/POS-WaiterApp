@@ -1,4 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Customer } from '../types/customer';
+import { buildCustomerFromOrderDetails } from '../utils/customerData';
 
 export interface AttributeValue {
   id?: number;
@@ -64,6 +66,7 @@ export interface Cart {
   removedItems?: CartItem[];
   orderNote?: string;
   discount?: CartDiscount | null;
+  currentUser?: Customer | null;
 }
 
 const CART_STORAGE_KEY = 'cart';
@@ -129,16 +132,29 @@ class CartService {
           removedItems: Array.isArray(parsed?.removedItems) ? parsed.removedItems : [],
           orderNote: parsed?.orderNote || '',
           discount: parsed?.discount || null,
+          currentUser: parsed?.currentUser || null,
         };
         this.syncGroupStateFromCart(cart);
         return cart;
       }
-      const emptyCart = { items: [], removedItems: [], orderNote: '', discount: null };
+      const emptyCart = {
+        items: [],
+        removedItems: [],
+        orderNote: '',
+        discount: null,
+        currentUser: null,
+      };
       this.syncGroupStateFromCart(emptyCart);
       return emptyCart;
     } catch (error) {
       console.error('Error loading cart:', error);
-      const emptyCart = { items: [], removedItems: [], orderNote: '', discount: null };
+      const emptyCart = {
+        items: [],
+        removedItems: [],
+        orderNote: '',
+        discount: null,
+        currentUser: null,
+      };
       this.syncGroupStateFromCart(emptyCart);
       return emptyCart;
     }
@@ -376,7 +392,13 @@ class CartService {
    */
   async clearCart(): Promise<Cart> {
     try {
-      const emptyCart: Cart = { items: [], removedItems: [], orderNote: '', discount: null };
+      const emptyCart: Cart = {
+        items: [],
+        removedItems: [],
+        orderNote: '',
+        discount: null,
+        currentUser: null,
+      };
       this.syncGroupStateFromCart(emptyCart);
       await this.saveCart(emptyCart);
       return emptyCart;
@@ -470,6 +492,28 @@ class CartService {
       console.error('Error updating cart discount:', error);
       throw error;
     }
+  }
+
+  /**
+   * Update selected customer in cart
+   */
+  async updateCurrentUser(currentUser: Customer | null): Promise<Cart> {
+    try {
+      const cart = await this.loadCart();
+      cart.currentUser = currentUser;
+      await this.saveCart(cart);
+      return cart;
+    } catch (error) {
+      console.error('Error updating selected customer:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Clear selected customer without touching cart items
+   */
+  async clearCurrentUser(): Promise<Cart> {
+    return this.updateCurrentUser(null);
   }
 
   /**
@@ -601,6 +645,7 @@ class CartService {
         removedItems: [],
         orderNote: orderDetails?.orderNotes || '',
         discount: normalizeDiscountFromOrder(orderDetails?.discount),
+        currentUser: buildCustomerFromOrderDetails(orderDetails),
       };
 
       this.syncGroupStateFromCart(cart);

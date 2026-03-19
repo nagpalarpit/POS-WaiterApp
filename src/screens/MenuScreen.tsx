@@ -32,6 +32,7 @@ import ItemNoteModal from '../components/ItemNoteModal';
 import CartNoteModal from '../components/CartNoteModal';
 import GroupModal from '../components/GroupModal';
 import AddExtraModal from '../components/AddExtraModal';
+import CustomerDrawer from '../components/CustomerDrawer';
 import {
   getCartSubtotal,
   getDiscountAmount,
@@ -39,6 +40,11 @@ import {
 import cartService from '../services/cartService';
 import { lockOrder, lockTable, unlockOrder, unlockTable } from '../services/orderSyncService';
 import { useToast } from '../components/ToastProvider';
+import { OrderServiceTiming } from '../types/orderFlow';
+import {
+  formatCustomerAddress,
+  getCustomerDisplayName,
+} from '../utils/customerData';
 
 
 interface MenuScreenProps {
@@ -52,7 +58,19 @@ interface MenuScreenProps {
  */
 export default function MenuScreen({ navigation, route }: MenuScreenProps) {
   const { colors } = useTheme();
-  const { tableNo = null, deliveryType = 0, tableArea = null, existingOrder = null } = route.params || {};
+  const {
+    tableNo = null,
+    deliveryType = 0,
+    tableArea = null,
+    existingOrder = null,
+    serviceTiming = null,
+  }: {
+    tableNo?: number | null;
+    deliveryType?: number;
+    tableArea?: any;
+    existingOrder?: any;
+    serviceTiming?: OrderServiceTiming | null;
+  } = route.params || {};
   // Use custom hooks for complex logic
   const menuData = useMenuData();
   const cartData = useMenuCart();
@@ -75,6 +93,7 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
     opensOptionsModal: boolean;
   } | null>(null);
   const [showAddExtraModal, setShowAddExtraModal] = useState(false);
+  const [showCustomerDrawer, setShowCustomerDrawer] = useState(false);
 
   // Cart notes management
   const cartNotes = useCartNotes(cartData.cart, cartData.updateItemNote, cartData.updateDiscount);
@@ -82,6 +101,17 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
   const subtotal = getCartSubtotal(cartData.cart);
   const discount = getDiscountAmount(subtotal, cartData.cart.discount);
   const cartTotal = Math.max(subtotal - discount, 0);
+  const selectedCustomerName = getCustomerDisplayName(cartData.cart.currentUser);
+  const selectedCustomerAddress = formatCustomerAddress(
+    cartData.cart.currentUser?.addresses.find(
+      (address) => address.id === cartData.cart.currentUser?.customerAddressId,
+    ) || cartData.cart.currentUser?.addresses?.[0],
+  );
+
+  const isVoucherCategory = (category: any) =>
+    String(category?.categoryType || '')
+      .trim()
+      .toLowerCase() === 'voucher';
 
 
   const getExtrasCategoryPercent = (category: any): number | null => {
@@ -255,6 +285,16 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
             </TouchableOpacity>
           ) : null}
           <TouchableOpacity
+            onPress={() => setShowCustomerDrawer(true)}
+            style={{ padding: 8 }}
+          >
+            <MaterialCommunityIcons
+              name={cartData.cart.currentUser ? 'account-check-outline' : 'account-outline'}
+              size={20}
+              color={cartData.cart.currentUser ? colors.primary : colors.text}
+            />
+          </TouchableOpacity>
+          <TouchableOpacity
             onPress={() => setShowAddExtraModal(true)}
             style={{ padding: 8 }}
           >
@@ -275,6 +315,7 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
     tableNo,
     deliveryType,
     cartNotes,
+    cartData.cart.currentUser,
     groupLabelEnabled,
     handleAddGroup,
   ]);
@@ -316,7 +357,7 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
       Array.isArray(normalizedItem.menuItemVariants) &&
       normalizedItem.menuItemVariants.length > 0;
     const opensOptionsModal =
-      category?.categoryType === 'voucher' || hasVariants;
+      isVoucherCategory(category) || hasVariants;
 
     if (
       !ensureGroupSelection({
@@ -470,6 +511,7 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
       deliveryType,
       tableArea,
       existingOrder,
+      serviceTiming,
     });
   };
 
@@ -545,6 +587,59 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
         </View>
       </View>
 
+      {cartData.cart.currentUser ? (
+        <View
+          style={{
+            paddingHorizontal: 14,
+            paddingBottom: 10,
+            borderBottomWidth: 1,
+            borderBottomColor: colors.border,
+            backgroundColor: colors.background,
+          }}
+        >
+          <TouchableOpacity
+            onPress={() => setShowCustomerDrawer(true)}
+            style={{
+              borderWidth: 1,
+              borderColor: colors.border,
+              borderRadius: 14,
+              backgroundColor: colors.surface,
+              paddingHorizontal: 12,
+              paddingVertical: 12,
+            }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
+              <MaterialCommunityIcons
+                name="account-outline"
+                size={18}
+                color={colors.textSecondary}
+                style={{ marginTop: 1 }}
+              />
+              <View style={{ flex: 1, marginLeft: 10, paddingRight: 8 }}>
+                <Text style={{ color: colors.text, fontWeight: '800', fontSize: 14 }}>
+                  {selectedCustomerName || cartData.cart.currentUser.mobileNo || 'Selected Customer'}
+                </Text>
+                {cartData.cart.currentUser.mobileNo ? (
+                  <Text style={{ color: colors.textSecondary, marginTop: 3, fontSize: 12 }}>
+                    {cartData.cart.currentUser.mobileNo}
+                  </Text>
+                ) : null}
+                {deliveryType === 1 && selectedCustomerAddress ? (
+                  <Text style={{ color: colors.textSecondary, marginTop: 4, fontSize: 12, lineHeight: 18 }}>
+                    {selectedCustomerAddress}
+                  </Text>
+                ) : null}
+              </View>
+              <MaterialCommunityIcons
+                name="chevron-right"
+                size={18}
+                color={colors.textSecondary}
+              />
+            </View>
+          </TouchableOpacity>
+        </View>
+      ) : null}
+
       <View style={{ flexDirection: 'row', flex: 1 }}>
         {/* Menu Section */}
         <View style={{ flex: 1 }}>
@@ -578,7 +673,7 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
       </View>
 
       {/* Item Details Modal */}
-      {selectedMenuItem && selectedMenuCategory?.categoryType !== 'voucher' ? (
+      {selectedMenuItem && !isVoucherCategory(selectedMenuCategory) ? (
         <ItemDetailsModal
           visible={showItemDetail}
           item={selectedMenuItem}
@@ -592,7 +687,7 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
         />
       ) : null}
 
-      {selectedMenuItem && selectedMenuCategory?.categoryType === 'voucher' ? (
+      {selectedMenuItem && isVoucherCategory(selectedMenuCategory) ? (
         <VoucherOptionsModal
           visible={showItemDetail}
           item={selectedMenuItem}
@@ -633,6 +728,15 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
         visible={showGroupModal}
         existingLabels={cartService.getUniqueGroupLabels(cartData.cart)}
         onSelect={handleGroupModalSelect}
+      />
+
+      <CustomerDrawer
+        visible={showCustomerDrawer}
+        selectedCustomer={cartData.cart.currentUser || null}
+        onClose={() => setShowCustomerDrawer(false)}
+        onSelect={async (customer) => {
+          await cartData.updateCurrentUser(customer);
+        }}
       />
     </View>
   );

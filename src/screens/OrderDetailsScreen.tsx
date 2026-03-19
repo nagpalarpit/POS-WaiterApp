@@ -51,6 +51,13 @@ import {
 import { useToast } from "../components/ToastProvider";
 import { setPaymentFlowHandlers } from "../services/paymentFlowStore";
 import serverConnection from "../services/serverConnection";
+import { formatOrderServiceTime } from "../utils/orderServiceDisplay";
+import {
+  buildCustomerFromOrderDetails,
+  formatCustomerAddress,
+  getCustomerDisplayName,
+  getSelectedCustomerAddress,
+} from "../utils/customerData";
 
 const TSC_OFFLINE_MESSAGE =
   "Active TSS not found for the given POS and company.";
@@ -594,6 +601,15 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
 
   const paymentLabel =
     PAYMENT_METHOD_LABELS[selectedPaymentId ?? paymentProcessorId] || "Not set";
+  const serviceTypeId = displayedOrderDetails?.orderDeliveryTypeId ?? 0;
+  const serviceTimeLabel = formatOrderServiceTime(
+    displayedOrderDetails?.pickupDateTime,
+  );
+  const familyName = String(displayedOrderDetails?.familyName || "").trim();
+  const selectedCustomer = buildCustomerFromOrderDetails(displayedOrderDetails);
+  const selectedCustomerName = getCustomerDisplayName(selectedCustomer);
+  const selectedCustomerAddress = getSelectedCustomerAddress(selectedCustomer);
+  const selectedCustomerAddressText = formatCustomerAddress(selectedCustomerAddress);
   const orderStatusLabel = getOrderStatusLabel(order);
   const statusTone = getStatusTone(orderStatusLabel, colors);
   const isPaid = displayedOrderDetails?.isPaid === 1;
@@ -2011,34 +2027,6 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
     };
   };
 
-  const openPaymentScreen = (mode: "settle" | "method") => {
-    const shouldSettle = mode === "settle";
-    setPendingSettle(shouldSettle);
-    pendingSettleRef.current = shouldSettle;
-
-    setPaymentFlowHandlers({
-      onSelect: handlePaymentSelect,
-      onPrintPreview: handlePrintPreview,
-      onClose: () => {
-        setPendingSettle(false);
-        pendingSettleRef.current = false;
-      },
-    });
-
-    navigation.push("Payment", {
-      title: shouldSettle ? "Settle Payment" : "Change Payment Method",
-      orderTotal: totals.total,
-      companyId: resolvedCompanyId,
-      splitItems: splitPaymentItems,
-      allowSplitOption,
-      hidePrintPreview: hideDeleteForSplit,
-    });
-  };
-
-  const handleOpenPaymentModal = () => {
-    openPaymentScreen("method");
-  };
-
   const handlePrintPreview = async (option: any) => {
     try {
       const orderDetails = displayedOrderDetails || {};
@@ -2073,10 +2061,9 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
     }
   };
 
-  useEffect(() => {
-    if (!pendingSettle) {
-      return;
-    }
+  const registerPaymentHandlers = useCallback((shouldSettle: boolean) => {
+    setPendingSettle(shouldSettle);
+    pendingSettleRef.current = shouldSettle;
 
     setPaymentFlowHandlers({
       onSelect: handlePaymentSelect,
@@ -2086,7 +2073,47 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
         pendingSettleRef.current = false;
       },
     });
-  }, [pendingSettle, handlePaymentSelect, handlePrintPreview]);
+  }, [handlePaymentSelect, handlePrintPreview]);
+
+  const openPaymentScreen = useCallback((mode: "settle" | "method") => {
+    const shouldSettle = mode === "settle";
+    registerPaymentHandlers(shouldSettle);
+
+    navigation.push("Payment", {
+        title: shouldSettle ? "Settle Payment" : "Change Payment Method",
+        orderTotal: totals.total,
+        companyId: resolvedCompanyId,
+        splitItems: splitPaymentItems,
+        allowSplitOption,
+        hidePrintPreview: hideDeleteForSplit,
+      });
+  }, [
+    allowSplitOption,
+    hideDeleteForSplit,
+    navigation,
+    registerPaymentHandlers,
+    resolvedCompanyId,
+    splitPaymentItems,
+    totals.total,
+  ]);
+
+  const handleOpenPaymentModal = useCallback(() => {
+    openPaymentScreen("method");
+  }, [openPaymentScreen]);
+
+  const handleMarkAsPaid = useCallback(() => {
+    if (isPaid) return;
+    lockPayment(order);
+    openPaymentScreen("settle");
+  }, [isPaid, marking, openPaymentScreen, order]);
+
+  useEffect(() => {
+    if (!pendingSettle) {
+      return;
+    }
+
+    registerPaymentHandlers(true);
+  }, [pendingSettle, registerPaymentHandlers]);
 
   const footerHeight = 212;
 
@@ -2321,6 +2348,102 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
               </Text>
             </View>
           </View>
+
+          {serviceTypeId !== 0 && (serviceTimeLabel || (serviceTypeId === 2 && familyName)) ? (
+            <View
+              style={[
+                styles.serviceInfoCard,
+                {
+                  borderColor: colors.border,
+                  backgroundColor: colors.surfaceHover || colors.background,
+                },
+              ]}
+            >
+              {serviceTimeLabel ? (
+                <View style={styles.serviceInfoRow}>
+                  <MaterialCommunityIcons
+                    name="clock-outline"
+                    size={15}
+                    color={colors.textSecondary}
+                  />
+                  <Text style={{ color: colors.textSecondary, fontSize: 12, marginLeft: 6 }}>
+                    {serviceTypeId === 1 ? "Delivery Time" : "Pickup Time"}:{" "}
+                    <Text style={{ color: colors.text, fontWeight: "700" }}>
+                      {serviceTimeLabel}
+                    </Text>
+                  </Text>
+                </View>
+              ) : null}
+
+              {serviceTypeId === 2 && familyName ? (
+                <View style={styles.serviceInfoRow}>
+                  <MaterialCommunityIcons
+                    name="account-group-outline"
+                    size={15}
+                    color={colors.textSecondary}
+                  />
+                  <Text style={{ color: colors.textSecondary, fontSize: 12, marginLeft: 6 }}>
+                    Family Name:{" "}
+                    <Text style={{ color: colors.text, fontWeight: "700" }}>
+                      {familyName}
+                    </Text>
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+          ) : null}
+
+          {selectedCustomer ? (
+            <View
+              style={[
+                styles.serviceInfoCard,
+                {
+                  borderColor: colors.border,
+                  backgroundColor: colors.surfaceHover || colors.background,
+                },
+              ]}
+            >
+              <View style={styles.serviceInfoRow}>
+                <MaterialCommunityIcons
+                  name="account-outline"
+                  size={15}
+                  color={colors.textSecondary}
+                />
+                <Text style={{ color: colors.textSecondary, fontSize: 12, marginLeft: 6 }}>
+                  Customer:{" "}
+                  <Text style={{ color: colors.text, fontWeight: "700" }}>
+                    {selectedCustomerName || selectedCustomer.mobileNo || "Selected Customer"}
+                  </Text>
+                </Text>
+              </View>
+
+              {selectedCustomer.mobileNo ? (
+                <View style={styles.serviceInfoRow}>
+                  <MaterialCommunityIcons
+                    name="phone-outline"
+                    size={15}
+                    color={colors.textSecondary}
+                  />
+                  <Text style={{ color: colors.textSecondary, fontSize: 12, marginLeft: 6 }}>
+                    {selectedCustomer.mobileNo}
+                  </Text>
+                </View>
+              ) : null}
+
+              {serviceTypeId === 1 && selectedCustomerAddressText ? (
+                <View style={styles.serviceInfoRow}>
+                  <MaterialCommunityIcons
+                    name="map-marker-outline"
+                    size={15}
+                    color={colors.textSecondary}
+                  />
+                  <Text style={{ color: colors.textSecondary, fontSize: 12, marginLeft: 6, flex: 1 }}>
+                    {selectedCustomerAddressText}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+          ) : null}
 
           <View
             style={{
@@ -2666,11 +2789,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
           </TouchableOpacity>
 
           <TouchableOpacity
-            onPress={() => {
-              if (isPaid) return;
-              lockPayment(order);
-              openPaymentScreen("settle");
-            }}
+            onPress={handleMarkAsPaid}
             disabled={marking || isPaid}
             style={[
               styles.footerBtnPrimary,
@@ -2715,6 +2834,18 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     maxWidth: "100%",
+  },
+  serviceInfoCard: {
+    marginTop: 10,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    gap: 8,
+  },
+  serviceInfoRow: {
+    flexDirection: "row",
+    alignItems: "center",
   },
   sectionTab: {
     flex: 1,

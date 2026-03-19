@@ -34,6 +34,7 @@ import { STORAGE_KEYS } from '../constants/storageKeys';
 import StatusBarIndicator from '../components/StatusBarIndicator';
 import LocalServerLockOverlay from '../components/LocalServerLockOverlay';
 import { getOnboardingUserId } from '../utils/onboarding';
+import { OrderServiceTiming } from '../types/orderFlow';
 
 export type RootStackParamList = {
   Onboarding: undefined;
@@ -48,6 +49,7 @@ export type RootStackParamList = {
     deliveryType: number;
     existingOrder?: any;
     tableArea?: any;
+    serviceTiming?: OrderServiceTiming | null;
   };
   Cart: {
     tableNo?: number;
@@ -69,6 +71,7 @@ export type RootStackParamList = {
     deliveryType: number;
     tableArea?: any;
     existingOrder?: any;
+    serviceTiming?: OrderServiceTiming | null;
   };
   OrderDetails: {
     order: any;
@@ -275,9 +278,7 @@ function CustomDrawerContent(
     ];
 
   const navigateTo = (screenName: DrawerItemScreen) => {
-    props.navigation.dispatch(
-      DrawerActions.jumpTo('Main', { screen: screenName }),
-    );
+    props.navigation.navigate('Main', { screen: screenName });
     props.navigation.closeDrawer();
   };
 
@@ -516,7 +517,7 @@ export default function AppNavigator() {
     };
 
     void resolveOnboarding();
-  }, [isAuthenticated, user]);
+  }, [isAuthenticated, user, currentRouteName]);
 
   const navigationTheme = useMemo(
     () => ({
@@ -551,6 +552,8 @@ export default function AppNavigator() {
   const shouldLockMainApp =
     isAuthenticated && !isLocalServerReachable && !isConnectionModalVisible;
   const hideStatusBarIndicator = !currentRouteName || currentRouteName === 'IPEntry';
+  const isOnboardingRoute = currentRouteName === 'Onboarding';
+  const canShowDrawerContent = isAuthenticated && !isOnboardingRoute;
   const syncCurrentRoute = () => {
     if (!navigationRef.isReady()) {
       return;
@@ -578,7 +581,7 @@ export default function AppNavigator() {
             key={navigatorKey}
             initialRouteName={initialRouteName}
             drawerContent={(props) =>
-              isAuthenticated && !shouldShowOnboarding ? (
+              canShowDrawerContent ? (
                 <CustomDrawerContent {...props} currentScreenName={currentRouteName} />
               ) : null
             }
@@ -586,7 +589,7 @@ export default function AppNavigator() {
               headerShown: false,
               headerStatusBarHeight: Platform.OS === 'android' ? 0 : undefined,
               drawerType: 'front',
-              swipeEnabled: isAuthenticated && !shouldShowOnboarding,
+              swipeEnabled: canShowDrawerContent,
               overlayColor: colors.overlay || 'rgba(0, 0, 0, 0.35)',
               sceneStyle: {
                 backgroundColor: colors.background,

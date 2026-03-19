@@ -220,7 +220,6 @@ export default function PaymentScreen(props: PaymentModalProps) {
     { id: 99, label: "Other" },
   ];
   const otherMethods = [
-    { id: 4, label: "Gift Card" },
     { id: 5, label: "Debitor" },
     { id: 6, label: "Lieferando" },
     { id: 7, label: "Uber" },
@@ -230,7 +229,7 @@ export default function PaymentScreen(props: PaymentModalProps) {
   ];
   const [activeTab, setActiveTab] = useState(0);
   const [selectedOtherMethod, setSelectedOtherMethod] = useState<number>(
-    otherMethods[0]?.id ?? 4,
+    otherMethods[0]?.id ?? 5,
   );
   const [tipValue, setTipValue] = useState("");
   const [cashProvided, setCashProvided] = useState("");
