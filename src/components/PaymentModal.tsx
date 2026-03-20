@@ -16,11 +16,8 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
-import {
-  SafeAreaView,
-  useSafeAreaInsets,
-} from "react-native-safe-area-context";
-import { useIsFocused } from "@react-navigation/native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { CommonActions } from "@react-navigation/native";
 import { useTheme } from "../theme/ThemeProvider";
 import Card from "./Card";
 import { formatCurrency } from "../utils/currency";
@@ -81,19 +78,9 @@ type PaymentRouteParams = {
   hidePrintPreview?: boolean;
 };
 
-type PaymentModalProps = {
+type PaymentScreenProps = {
   navigation?: any;
   route?: { params?: PaymentRouteParams };
-  visible?: boolean;
-  onClose?: () => void;
-  onSelect?: (option: any) => Promise<any> | any;
-  onPrintPreview?: (option: any) => Promise<any> | any;
-  title?: string;
-  orderTotal?: number;
-  companyId?: number;
-  splitItems?: SplitSelectableItem[];
-  allowSplitOption?: boolean;
-  hidePrintPreview?: boolean;
 };
 
 const toAmount = (value: string): number => {
@@ -184,16 +171,9 @@ const getGiftCardLabel = (giftCard: GiftCard): string => {
   return code;
 };
 
-export default function PaymentScreen(props: PaymentModalProps) {
-  const {
-    navigation,
-    route,
-    visible = true,
-    onClose,
-    onSelect,
-    onPrintPreview,
-  } = props;
-  const params: PaymentRouteParams = route?.params || props;
+export default function PaymentScreen(props: PaymentScreenProps) {
+  const { navigation, route } = props;
+  const params: PaymentRouteParams = route?.params || {};
   const {
     title = "Payment",
     orderTotal = 0,
@@ -204,15 +184,13 @@ export default function PaymentScreen(props: PaymentModalProps) {
   } = params;
   const { colors } = useTheme();
   const { showToast } = useToast();
-  const handlers = getPaymentFlowHandlers();
-  const effectiveOnSelect = onSelect || handlers?.onSelect;
-  const effectiveOnPrintPreview = onPrintPreview || handlers?.onPrintPreview;
-  const effectiveOnClose = onClose || handlers?.onClose;
+  const flowHandlersRef = useRef(getPaymentFlowHandlers());
+  const effectiveOnSelect = flowHandlersRef.current?.onSelect;
+  const effectiveOnPrintPreview = flowHandlersRef.current?.onPrintPreview;
+  const effectiveOnClose = flowHandlersRef.current?.onClose;
   const scrollRef = useRef<ScrollView>(null);
-  const isFocused = useIsFocused();
   const insets = useSafeAreaInsets();
   const closeHandledRef = useRef(false);
-  const latestOnCloseRef = useRef<typeof effectiveOnClose>(effectiveOnClose);
   const primaryTabs = [
     { id: 0, label: "Cash" },
     { id: 1, label: "Card" },
@@ -253,22 +231,14 @@ export default function PaymentScreen(props: PaymentModalProps) {
     splitItems.map(() => 0),
   );
 
-  const notifyClose = () => {
+  const closeFlow = () => {
     if (closeHandledRef.current) {
       return;
     }
     closeHandledRef.current = true;
-    latestOnCloseRef.current?.();
+    effectiveOnClose?.();
     clearPaymentFlowHandlers();
   };
-
-  useEffect(() => {
-    closeHandledRef.current = false;
-  }, [visible]);
-
-  useEffect(() => {
-    latestOnCloseRef.current = effectiveOnClose;
-  }, [effectiveOnClose]);
 
   useLayoutEffect(() => {
     if (navigation?.setOptions) {
@@ -281,24 +251,16 @@ export default function PaymentScreen(props: PaymentModalProps) {
       showToast("error", "Payment session expired. Please try again.");
       if (navigation?.goBack) {
         navigation.goBack();
-      } else {
-        onClose?.();
       }
       return;
     }
-  }, [effectiveOnSelect, navigation, onClose, showToast]);
+  }, [effectiveOnSelect, navigation, showToast]);
 
   useEffect(() => {
     return () => {
-      notifyClose();
+      closeFlow();
     };
   }, []);
-
-  useEffect(() => {
-    if (!isFocused) {
-      setIsProcessing(false);
-    }
-  }, [isFocused]);
 
   useEffect(() => {
     setCurrentOrderTotal(round2(toNumber(orderTotal, 0)));
@@ -476,18 +438,34 @@ export default function PaymentScreen(props: PaymentModalProps) {
   };
 
   const closeWithReset = () => {
-    notifyClose();
+    closeFlow();
     if (navigation?.goBack) {
       navigation.goBack();
     }
   };
 
   const resetToDashboard = () => {
-    notifyClose();
-    if (navigation?.popToTop) {
-      navigation.popToTop();
+    closeFlow();
+    const parentNavigation = navigation?.getParent?.();
+
+    if (parentNavigation?.dispatch) {
+      parentNavigation.dispatch(
+        CommonActions.reset({
+          index: 0,
+          routes: [
+            {
+              name: "Main",
+              state: {
+                index: 0,
+                routes: [{ name: "Dashboard" }],
+              },
+            },
+          ],
+        }),
+      );
       return;
     }
+
     if (navigation?.reset) {
       navigation.reset({
         index: 0,
@@ -613,353 +591,223 @@ export default function PaymentScreen(props: PaymentModalProps) {
     setGiftCard(null);
   };
 
-  if (!visible) {
-    return null;
-  }
-
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 64 : 0}
-      >
-        <View style={{ flex: 1 }}>
-          <ScrollView
-            ref={scrollRef}
-            style={{ flex: 1, paddingHorizontal: 12 }}
-            contentContainerStyle={{
-              paddingTop: sectionGap,
-              paddingBottom: insets.bottom + footerHeight + 120,
-              flexGrow: 1,
+      <View style={{ flex: 1 }}>
+        <ScrollView
+          ref={scrollRef}
+          style={{ flex: 1, paddingHorizontal: 12 }}
+          contentContainerStyle={{
+            paddingTop: sectionGap,
+            paddingBottom: insets.bottom + footerHeight + 120,
+            flexGrow: 1,
+          }}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          showsVerticalScrollIndicator={isSplitMode}
+          scrollIndicatorInsets={{ bottom: insets.bottom + footerHeight }}
+        >
+          <Card
+            rounded={14}
+            style={{
+              padding: 12,
+              borderColor: colors.border,
+              backgroundColor: colors.surface,
+              marginBottom: sectionGap,
             }}
-            keyboardShouldPersistTaps="handled"
-            keyboardDismissMode="on-drag"
-            showsVerticalScrollIndicator={isSplitMode}
-            scrollIndicatorInsets={{ bottom: insets.bottom + footerHeight }}
           >
-            <Card
-              rounded={14}
-              style={{
-                padding: 12,
-                borderColor: colors.border,
-                backgroundColor: colors.surface,
-                marginBottom: sectionGap,
-              }}
-            >
-              {showOtherMethods ? (
-                <View>
-                  <View style={styles.sectionHeaderRow}>
-                    <Text style={{ color: colors.textSecondary }}>
-                      Other Payments
-                    </Text>
-                    <TouchableOpacity
-                      onPress={handleOtherBack}
-                      style={styles.linkBtn}
-                    >
-                      <Text style={{ color: colors.textSecondary }}>Back</Text>
-                    </TouchableOpacity>
-                  </View>
-                  <View style={styles.methodWrap}>
-                    {otherMethods.map((method) => {
-                      const selected = selectedOtherMethod === method.id;
-                      return (
-                        <TouchableOpacity
-                          key={method.id}
-                          onPress={() => setSelectedOtherMethod(method.id)}
-                          style={[
-                            styles.pill,
-                            {
-                              borderColor: selected
-                                ? colors.primary
-                                : colors.border,
-                              backgroundColor: selected
-                                ? colors.primary + "15"
-                                : "transparent",
-                            },
-                          ]}
-                        >
-                          <Text
-                            style={{
-                              color: selected ? colors.primary : colors.text,
-                            }}
-                          >
-                            {method.label}
-                          </Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-                </View>
-              ) : isSplitMode ? (
-                <View>
-                  <View style={styles.sectionHeaderRow}>
-                    <Text style={{ color: colors.textSecondary }}>
-                      Split items (pay selected quantity only)
-                    </Text>
-                  </View>
-                  <View style={styles.splitHeaderRow}>
-                    {[
-                      { id: 0, label: "Cash" },
-                      { id: 1, label: "Card" },
-                    ].map((method) => {
-                      const selected = splitPaymentMethod === method.id;
-                      return (
-                        <TouchableOpacity
-                          key={method.id}
-                          onPress={() => setSplitPaymentMethod(method.id)}
-                          style={[
-                            styles.splitMethodBtn,
-                            {
-                              borderColor: selected
-                                ? colors.primary
-                                : colors.border,
-                              backgroundColor: selected
-                                ? colors.primary
-                                : "transparent",
-                            },
-                          ]}
-                        >
-                          <Text
-                            style={{
-                              color: selected
-                                ? colors.textInverse
-                                : colors.text,
-                            }}
-                          >
-                            {method.label}
-                          </Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-                </View>
-              ) : (
-                <View>
-                  <Text
-                    style={{ color: colors.textSecondary, marginBottom: 8 }}
-                  >
-                    Payment Methods
+            {showOtherMethods ? (
+              <View>
+                <View style={styles.sectionHeaderRow}>
+                  <Text style={{ color: colors.textSecondary }}>
+                    Other Payments
                   </Text>
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.tabRow}
+                  <TouchableOpacity
+                    onPress={handleOtherBack}
+                    style={styles.linkBtn}
                   >
-                    {visiblePrimaryTabs.map((tab) => (
+                    <Text style={{ color: colors.textSecondary }}>Back</Text>
+                  </TouchableOpacity>
+                </View>
+                <View style={styles.methodWrap}>
+                  {otherMethods.map((method) => {
+                    const selected = selectedOtherMethod === method.id;
+                    return (
                       <TouchableOpacity
-                        key={tab.id}
-                        onPress={() => handlePrimaryTabPress(tab.id)}
+                        key={method.id}
+                        onPress={() => setSelectedOtherMethod(method.id)}
                         style={[
-                          styles.tab,
+                          styles.pill,
                           {
-                            backgroundColor:
-                              activeTab === tab.id
-                                ? colors.primary
-                                : "transparent",
-                            borderColor: colors.border,
+                            borderColor: selected
+                              ? colors.primary
+                              : colors.border,
+                            backgroundColor: selected
+                              ? colors.primary + "15"
+                              : "transparent",
                           },
                         ]}
                       >
                         <Text
                           style={{
-                            color:
-                              activeTab === tab.id
-                                ? colors.textInverse
-                                : colors.text,
-                            fontWeight: "700",
-                            fontSize: 12,
+                            color: selected ? colors.primary : colors.text,
                           }}
                         >
-                          {tab.label}
+                          {method.label}
                         </Text>
                       </TouchableOpacity>
-                    ))}
-                  </ScrollView>
+                    );
+                  })}
                 </View>
-              )}
-            </Card>
-
-            <View>
-              <Card style={{ padding: 12, borderColor: colors.border }}>
-                {!isSplitMode && !showOtherMethods && activeTab === 0 && (
-                  <View>
-                    <Text style={{ color: colors.textSecondary }}>
-                      Cash provided
-                    </Text>
-                    <TextInput
-                      keyboardType="numeric"
-                      placeholder="Enter cash amount"
-                      placeholderTextColor={colors.textSecondary}
-                      value={cashProvided}
-                      onChangeText={setCashProvided}
-                      style={[
-                        styles.input,
-                        { borderColor: colors.border, color: colors.text },
-                      ]}
-                    />
-
-                    <Text style={{ color: colors.textSecondary, marginTop: 8 }}>
-                      Cash to return
-                    </Text>
-                    <View style={[styles.input, { justifyContent: "center" }]}>
-                      <Text style={{ color: colors.text }}>
-                        {formatCurrency(
-                          Math.max(0, toAmount(cashProvided) - due),
-                        )}
-                      </Text>
-                    </View>
-                  </View>
-                )}
-
-                {!isSplitMode && !showOtherMethods && activeTab === 1 && (
-                  <View>
-                    <Text style={{ color: colors.textSecondary }}>
-                      Card payment selected
-                    </Text>
-                  </View>
-                )}
-
-                {isSplitMode ? (
-                  <View>
-                    {currentSplitItems.length == 0 ? (
-                      <Text
-                        style={{ color: colors.textSecondary, marginTop: 8 }}
+              </View>
+            ) : isSplitMode ? (
+              <View>
+                <View style={styles.sectionHeaderRow}>
+                  <Text style={{ color: colors.textSecondary }}>
+                    Split items (pay selected quantity only)
+                  </Text>
+                </View>
+                <View style={styles.splitHeaderRow}>
+                  {[
+                    { id: 0, label: "Cash" },
+                    { id: 1, label: "Card" },
+                  ].map((method) => {
+                    const selected = splitPaymentMethod === method.id;
+                    return (
+                      <TouchableOpacity
+                        key={method.id}
+                        onPress={() => setSplitPaymentMethod(method.id)}
+                        style={[
+                          styles.splitMethodBtn,
+                          {
+                            borderColor: selected
+                              ? colors.primary
+                              : colors.border,
+                            backgroundColor: selected
+                              ? colors.primary
+                              : "transparent",
+                          },
+                        ]}
                       >
-                        No items available for split.
-                      </Text>
-                    ) : (
-                      currentSplitItems.map((item, index) => {
-                        const selectedQty = Math.max(
-                          0,
-                          Math.floor(splitSelections[index] || 0),
-                        );
-                        return (
-                          <View
-                            key={item.key || `${index}`}
-                            style={[
-                              styles.splitItemCard,
-                              {
-                                borderColor: colors.border,
-                                backgroundColor:
-                                  colors.surfaceHover || colors.surface,
-                              },
-                            ]}
-                          >
-                            <View style={{ flex: 1, paddingRight: 8 }}>
-                              <Text
-                                style={{
-                                  color: colors.text,
-                                  fontWeight: "700",
-                                }}
-                              >
-                                {item.name}
-                              </Text>
-                              <Text
-                                style={{
-                                  color: colors.textSecondary,
-                                  marginTop: 2,
-                                }}
-                              >
-                                Qty: {item.quantity} x{" "}
-                                {formatCurrency(item.unitTotal)}
-                              </Text>
-                            </View>
-
-                            <View style={styles.splitCounterWrap}>
-                              <TouchableOpacity
-                                onPress={() => updateSplitSelection(index, -1)}
-                                style={[
-                                  styles.splitCounterBtn,
-                                  { borderColor: colors.border },
-                                ]}
-                              >
-                                <Text
-                                  style={{
-                                    color: colors.text,
-                                    fontSize: 18,
-                                    fontWeight: "700",
-                                  }}
-                                >
-                                  -
-                                </Text>
-                              </TouchableOpacity>
-                              <Text
-                                style={{
-                                  color: colors.text,
-                                  width: 28,
-                                  textAlign: "center",
-                                  fontWeight: "700",
-                                }}
-                              >
-                                {selectedQty}
-                              </Text>
-                              <TouchableOpacity
-                                onPress={() => updateSplitSelection(index, 1)}
-                                style={[
-                                  styles.splitCounterBtn,
-                                  { borderColor: colors.border },
-                                ]}
-                              >
-                                <Text
-                                  style={{
-                                    color: colors.text,
-                                    fontSize: 18,
-                                    fontWeight: "700",
-                                  }}
-                                >
-                                  +
-                                </Text>
-                              </TouchableOpacity>
-                            </View>
-                          </View>
-                        );
-                      })
-                    )}
-
-                    <View
+                        <Text
+                          style={{
+                            color: selected
+                              ? colors.textInverse
+                              : colors.text,
+                          }}
+                        >
+                          {method.label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+            ) : (
+              <View>
+                <Text
+                  style={{ color: colors.textSecondary, marginBottom: 8 }}
+                >
+                  Payment Methods
+                </Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.tabRow}
+                >
+                  {visiblePrimaryTabs.map((tab) => (
+                    <TouchableOpacity
+                      key={tab.id}
+                      onPress={() => handlePrimaryTabPress(tab.id)}
                       style={[
-                        styles.splitSummary,
-                        { borderColor: colors.border },
+                        styles.tab,
+                        {
+                          backgroundColor:
+                            activeTab === tab.id
+                              ? colors.primary
+                              : "transparent",
+                          borderColor: colors.border,
+                        },
                       ]}
                     >
-                      <Text style={{ color: colors.textSecondary }}>
-                        Selected: {formatCurrency(splitItemTotal)}
+                      <Text
+                        style={{
+                          color:
+                            activeTab === tab.id
+                              ? colors.textInverse
+                              : colors.text,
+                          fontWeight: "700",
+                          fontSize: 12,
+                        }}
+                      >
+                        {tab.label}
                       </Text>
-                      <Text style={{ color: colors.text, fontWeight: "700" }}>
-                        Remaining: {formatCurrency(splitRemainingAmount)}
-                      </Text>
-                    </View>
-                  </View>
-                ) : null}
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
+          </Card>
 
-                <View style={{ marginTop: 12 }}>
+          <View>
+            <Card style={{ padding: 12, borderColor: colors.border }}>
+              {!isSplitMode && !showOtherMethods && activeTab === 0 && (
+                <View>
                   <Text style={{ color: colors.textSecondary }}>
-                    Add Tip (optional)
+                    Cash provided
                   </Text>
                   <TextInput
                     keyboardType="numeric"
-                    placeholder="Enter tip amount"
+                    placeholder="Enter cash amount"
                     placeholderTextColor={colors.textSecondary}
-                    value={tipValue}
-                    onChangeText={setTipValue}
+                    value={cashProvided}
+                    onChangeText={setCashProvided}
                     style={[
                       styles.input,
                       { borderColor: colors.border, color: colors.text },
                     ]}
                   />
-                </View>
 
-                {showGiftCardSection ? (
-                  <View style={{ marginTop: 12 }}>
-                    <Text style={{ color: colors.textSecondary }}>
-                      Gift Card
+                  <Text style={{ color: colors.textSecondary, marginTop: 8 }}>
+                    Cash to return
+                  </Text>
+                  <View style={[styles.input, { justifyContent: "center" }]}>
+                    <Text style={{ color: colors.text }}>
+                      {formatCurrency(
+                        Math.max(0, toAmount(cashProvided) - due),
+                      )}
                     </Text>
-                    {activeGiftCard ? (
-                      <View style={styles.giftCardRow}>
+                  </View>
+                </View>
+              )}
+
+              {!isSplitMode && !showOtherMethods && activeTab === 1 && (
+                <View>
+                  <Text style={{ color: colors.textSecondary }}>
+                    Card payment selected
+                  </Text>
+                </View>
+              )}
+
+              {isSplitMode ? (
+                <View>
+                  {currentSplitItems.length == 0 ? (
+                    <Text
+                      style={{ color: colors.textSecondary, marginTop: 8 }}
+                    >
+                      No items available for split.
+                    </Text>
+                  ) : (
+                    currentSplitItems.map((item, index) => {
+                      const selectedQty = Math.max(
+                        0,
+                        Math.floor(splitSelections[index] || 0),
+                      );
+                      return (
                         <View
+                          key={item.key || `${index}`}
                           style={[
-                            styles.giftCardBadge,
+                            styles.splitItemCard,
                             {
                               borderColor: colors.border,
                               backgroundColor:
@@ -967,263 +815,411 @@ export default function PaymentScreen(props: PaymentModalProps) {
                             },
                           ]}
                         >
-                          <Text
-                            style={{ color: colors.text, fontWeight: "700" }}
-                          >
-                            {getGiftCardLabel(activeGiftCard)}
-                          </Text>
-                          <Text
-                            style={{
-                              color: colors.textSecondary,
-                              marginTop: 2,
-                            }}
-                          >
-                            Applied: {formatCurrency(giftCardTotal)}
-                          </Text>
+                          <View style={{ flex: 1, paddingRight: 8 }}>
+                            <Text
+                              style={{
+                                color: colors.text,
+                                fontWeight: "700",
+                              }}
+                            >
+                              {item.name}
+                            </Text>
+                            <Text
+                              style={{
+                                color: colors.textSecondary,
+                                marginTop: 2,
+                              }}
+                            >
+                              Qty: {item.quantity} x{" "}
+                              {formatCurrency(item.unitTotal)}
+                            </Text>
+                          </View>
+
+                          <View style={styles.splitCounterWrap}>
+                            <TouchableOpacity
+                              onPress={() => updateSplitSelection(index, -1)}
+                              style={[
+                                styles.splitCounterBtn,
+                                { borderColor: colors.border },
+                              ]}
+                            >
+                              <Text
+                                style={{
+                                  color: colors.text,
+                                  fontSize: 18,
+                                  fontWeight: "700",
+                                }}
+                              >
+                                -
+                              </Text>
+                            </TouchableOpacity>
+                            <Text
+                              style={{
+                                color: colors.text,
+                                width: 28,
+                                textAlign: "center",
+                                fontWeight: "700",
+                              }}
+                            >
+                              {selectedQty}
+                            </Text>
+                            <TouchableOpacity
+                              onPress={() => updateSplitSelection(index, 1)}
+                              style={[
+                                styles.splitCounterBtn,
+                                { borderColor: colors.border },
+                              ]}
+                            >
+                              <Text
+                                style={{
+                                  color: colors.text,
+                                  fontSize: 18,
+                                  fontWeight: "700",
+                                }}
+                              >
+                                +
+                              </Text>
+                            </TouchableOpacity>
+                          </View>
                         </View>
-                        <TouchableOpacity
-                          onPress={() => removeGiftCard(isSplitMode)}
-                          style={[
-                            styles.ghostBtn,
-                            { borderColor: colors.border },
-                          ]}
+                      );
+                    })
+                  )}
+
+                  <View
+                    style={[
+                      styles.splitSummary,
+                      { borderColor: colors.border },
+                    ]}
+                  >
+                    <Text style={{ color: colors.textSecondary }}>
+                      Selected: {formatCurrency(splitItemTotal)}
+                    </Text>
+                    <Text style={{ color: colors.text, fontWeight: "700" }}>
+                      Remaining: {formatCurrency(splitRemainingAmount)}
+                    </Text>
+                  </View>
+                </View>
+              ) : null}
+
+              <View style={{ marginTop: 12 }}>
+                <Text style={{ color: colors.textSecondary }}>
+                  Add Tip (optional)
+                </Text>
+                <TextInput
+                  keyboardType="numeric"
+                  placeholder="Enter tip amount"
+                  placeholderTextColor={colors.textSecondary}
+                  value={tipValue}
+                  onChangeText={setTipValue}
+                  style={[
+                    styles.input,
+                    { borderColor: colors.border, color: colors.text },
+                  ]}
+                />
+              </View>
+
+              {showGiftCardSection ? (
+                <View style={{ marginTop: 12 }}>
+                  <Text style={{ color: colors.textSecondary }}>
+                    Gift Card
+                  </Text>
+                  {activeGiftCard ? (
+                    <View style={styles.giftCardRow}>
+                      <View
+                        style={[
+                          styles.giftCardBadge,
+                          {
+                            borderColor: colors.border,
+                            backgroundColor:
+                              colors.surfaceHover || colors.surface,
+                          },
+                        ]}
+                      >
+                        <Text
+                          style={{ color: colors.text, fontWeight: "700" }}
                         >
-                          <Text style={{ color: colors.textSecondary }}>
-                            Remove
-                          </Text>
-                        </TouchableOpacity>
+                          {getGiftCardLabel(activeGiftCard)}
+                        </Text>
+                        <Text
+                          style={{
+                            color: colors.textSecondary,
+                            marginTop: 2,
+                          }}
+                        >
+                          Applied: {formatCurrency(giftCardTotal)}
+                        </Text>
                       </View>
-                    ) : (
-                      <View style={styles.giftCardInputRow}>
-                        <TextInput
-                          placeholder="Gift card code"
-                          placeholderTextColor={colors.textSecondary}
-                          value={isSplitMode ? splitGiftCode : giftCode}
-                          onChangeText={
-                            isSplitMode ? setSplitGiftCode : setGiftCode
-                          }
-                          onFocus={() =>
-                            scrollRef.current?.scrollToEnd({ animated: true })
-                          }
-                          style={[
-                            styles.input,
-                            styles.giftCardInput,
-                            {
-                              borderColor: colors.border,
-                              color: colors.text,
-                              marginTop: 0,
-                            },
-                          ]}
-                        />
-                        <TouchableOpacity
-                          onPress={() => addGiftCard(isSplitMode)}
-                          disabled={
-                            isApplyingGiftCard ||
-                            !(isSplitMode
-                              ? splitGiftCode.trim()
-                              : giftCode.trim())
-                          }
-                          style={[
-                            styles.giftCardAddBtn,
-                            {
-                              backgroundColor:
-                                isApplyingGiftCard ||
+                      <TouchableOpacity
+                        onPress={() => removeGiftCard(isSplitMode)}
+                        style={[
+                          styles.ghostBtn,
+                          { borderColor: colors.border },
+                        ]}
+                      >
+                        <Text style={{ color: colors.textSecondary }}>
+                          Remove
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  ) : (
+                    <View style={styles.giftCardInputRow}>
+                      <TextInput
+                        placeholder="Gift card code"
+                        placeholderTextColor={colors.textSecondary}
+                        value={isSplitMode ? splitGiftCode : giftCode}
+                        onChangeText={
+                          isSplitMode ? setSplitGiftCode : setGiftCode
+                        }
+                        onFocus={() =>
+                          scrollRef.current?.scrollToEnd({ animated: true })
+                        }
+                        style={[
+                          styles.input,
+                          styles.giftCardInput,
+                          {
+                            borderColor: colors.border,
+                            color: colors.text,
+                            marginTop: 0,
+                          },
+                        ]}
+                      />
+                      <TouchableOpacity
+                        onPress={() => addGiftCard(isSplitMode)}
+                        disabled={
+                          isApplyingGiftCard ||
+                          !(isSplitMode
+                            ? splitGiftCode.trim()
+                            : giftCode.trim())
+                        }
+                        style={[
+                          styles.giftCardAddBtn,
+                          {
+                            backgroundColor:
+                              isApplyingGiftCard ||
                                 !(isSplitMode
                                   ? splitGiftCode.trim()
                                   : giftCode.trim())
-                                  ? colors.border
-                                  : colors.primary,
-                            },
-                          ]}
-                        >
-                          {isApplyingGiftCard ? (
-                            <ActivityIndicator color={colors.textInverse} />
-                          ) : (
-                            <Text style={{ color: colors.textInverse }}>
-                              Add
-                            </Text>
-                          )}
-                        </TouchableOpacity>
-                      </View>
-                    )}
-                  </View>
-                ) : null}
-              </Card>
+                                ? colors.border
+                                : colors.primary,
+                          },
+                        ]}
+                      >
+                        {isApplyingGiftCard ? (
+                          <ActivityIndicator color={colors.textInverse} />
+                        ) : (
+                          <Text style={{ color: colors.textInverse }}>
+                            Add
+                          </Text>
+                        )}
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </View>
+              ) : null}
+            </Card>
 
-              <Card
-                rounded={12}
+            <Card
+              rounded={12}
+              style={[
+                styles.footerSummaryCard,
+                {
+                  borderColor: colors.border,
+                  backgroundColor: colors.surface,
+                  marginTop: sectionGap,
+                },
+              ]}
+            >
+              <View style={styles.summaryRow}>
+                <Text style={{ color: colors.textSecondary }}>Subtotal</Text>
+                <Text style={{ color: colors.text, fontWeight: "700" }}>
+                  {formatCurrency(baseTotal)}
+                </Text>
+              </View>
+              {tipNum > 0 ? (
+                <View style={styles.summaryRow}>
+                  <Text style={{ color: colors.textSecondary }}>Tip</Text>
+                  <Text style={{ color: colors.text, fontWeight: "700" }}>
+                    {formatCurrency(tipNum)}
+                  </Text>
+                </View>
+              ) : null}
+              {giftCardTotal > 0 ? (
+                <View style={styles.summaryRow}>
+                  <Text style={{ color: colors.textSecondary }}>
+                    Gift Card
+                  </Text>
+                  <Text style={{ color: colors.error, fontWeight: "700" }}>
+                    -{formatCurrency(giftCardTotal)}
+                  </Text>
+                </View>
+              ) : null}
+              <View
                 style={[
-                  styles.footerSummaryCard,
+                  styles.summaryRow,
                   {
-                    borderColor: colors.border,
-                    backgroundColor: colors.surface,
-                    marginTop: sectionGap,
+                    borderTopWidth: 1,
+                    borderTopColor: colors.border,
+                    paddingTop: 8,
                   },
                 ]}
               >
-                <View style={styles.summaryRow}>
-                  <Text style={{ color: colors.textSecondary }}>Subtotal</Text>
-                  <Text style={{ color: colors.text, fontWeight: "700" }}>
-                    {formatCurrency(baseTotal)}
-                  </Text>
-                </View>
-                {tipNum > 0 ? (
-                  <View style={styles.summaryRow}>
-                    <Text style={{ color: colors.textSecondary }}>Tip</Text>
-                    <Text style={{ color: colors.text, fontWeight: "700" }}>
-                      {formatCurrency(tipNum)}
-                    </Text>
-                  </View>
-                ) : null}
-                {giftCardTotal > 0 ? (
-                  <View style={styles.summaryRow}>
-                    <Text style={{ color: colors.textSecondary }}>
-                      Gift Card
-                    </Text>
-                    <Text style={{ color: colors.error, fontWeight: "700" }}>
-                      -{formatCurrency(giftCardTotal)}
-                    </Text>
-                  </View>
-                ) : null}
-                <View
+                <Text style={{ color: colors.text, fontWeight: "800" }}>
+                  Order Total
+                </Text>
+                <Text
+                  style={{
+                    color: colors.primary,
+                    fontWeight: "800",
+                    fontSize: 17,
+                  }}
+                >
+                  {formatCurrency(due)}
+                </Text>
+              </View>
+            </Card>
+          </View>
+        </ScrollView>
+
+        <View
+          style={[
+            styles.footer,
+            {
+              borderTopColor: colors.border,
+              backgroundColor: colors.background,
+              paddingBottom: insets.bottom,
+            },
+          ]}
+        >
+          <View style={styles.footerActions}>
+            <View style={styles.footerRow}>
+              {isSplitMode ? (
+                <TouchableOpacity
+                  onPress={handleSplitBack}
+                  disabled={isProcessing}
                   style={[
-                    styles.summaryRow,
+                    styles.footerBtn,
+                    getRowBtnStyle(row1Count),
                     {
-                      borderTopWidth: 1,
-                      borderTopColor: colors.border,
-                      paddingTop: 8,
+                      borderColor: colors.border,
+                      backgroundColor: colors.surface,
+                      opacity: isProcessing ? 0.6 : 1,
                     },
                   ]}
                 >
-                  <Text style={{ color: colors.text, fontWeight: "800" }}>
-                    Order Total
-                  </Text>
                   <Text
-                    style={{
-                      color: colors.primary,
-                      fontWeight: "800",
-                      fontSize: 17,
-                    }}
+                    style={{ color: colors.textSecondary, fontWeight: "700" }}
                   >
-                    {formatCurrency(due)}
+                    Back
                   </Text>
-                </View>
-              </Card>
-            </View>
-          </ScrollView>
-
-          <View
-            style={[
-              styles.footer,
-              {
-                borderTopColor: colors.border,
-                backgroundColor: colors.background,
-                paddingBottom: insets.bottom,
-              },
-            ]}
-          >
-            <View style={styles.footerActions}>
-              <View style={styles.footerRow}>
-                {isSplitMode ? (
-                  <TouchableOpacity
-                    onPress={handleSplitBack}
-                    disabled={isProcessing}
-                    style={[
-                      styles.footerBtn,
-                      getRowBtnStyle(row1Count),
-                      {
-                        borderColor: colors.border,
-                        backgroundColor: colors.surface,
-                        opacity: isProcessing ? 0.6 : 1,
-                      },
-                    ]}
-                  >
-                    <Text
-                      style={{ color: colors.textSecondary, fontWeight: "700" }}
-                    >
-                      Back
-                    </Text>
-                  </TouchableOpacity>
-                ) : (
-                  <TouchableOpacity
-                    onPress={closeWithReset}
-                    disabled={isProcessing}
-                    style={[
-                      styles.footerBtn,
-                      getRowBtnStyle(row1Count),
-                      {
-                        borderColor: colors.border,
-                        backgroundColor: colors.surface,
-                        opacity: isProcessing ? 0.6 : 1,
-                      },
-                    ]}
-                  >
-                    <Text
-                      style={{ color: colors.textSecondary, fontWeight: "700" }}
-                    >
-                      Cancel
-                    </Text>
-                  </TouchableOpacity>
-                )}
-                {showPrintPreview ? (
-                  <TouchableOpacity
-                    onPress={handlePrintPreview}
-                    disabled={isProcessing}
-                    style={[
-                      styles.footerBtn,
-                      getRowBtnStyle(row1Count),
-                      {
-                        borderColor: colors.border,
-                        backgroundColor: isProcessing
-                          ? colors.border
-                          : colors.surface,
-                        opacity: isProcessing ? 0.6 : 1,
-                      },
-                    ]}
-                  >
-                    {isProcessing ? (
-                      <ActivityIndicator color={colors.textInverse} />
-                    ) : (
-                      <Text style={{ color: colors.text, fontWeight: "700" }}>
-                        Print Preview
-                      </Text>
-                    )}
-                  </TouchableOpacity>
-                ) : null}
+                </TouchableOpacity>
+              ) : (
                 <TouchableOpacity
-                  onPress={() => {
-                    handleConfirm(false);
-                  }}
-                  disabled={isSplitInvalid || isProcessing}
+                  onPress={closeWithReset}
+                  disabled={isProcessing}
                   style={[
-                    styles.footerBtnPrimary,
+                    styles.footerBtn,
                     getRowBtnStyle(row1Count),
                     {
-                      backgroundColor:
-                        isSplitInvalid || isProcessing
-                          ? colors.border
-                          : colors.primary,
+                      borderColor: colors.border,
+                      backgroundColor: colors.surface,
+                      opacity: isProcessing ? 0.6 : 1,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={{ color: colors.textSecondary, fontWeight: "700" }}
+                  >
+                    Cancel
+                  </Text>
+                </TouchableOpacity>
+              )}
+              {showPrintPreview ? (
+                <TouchableOpacity
+                  onPress={handlePrintPreview}
+                  disabled={isProcessing}
+                  style={[
+                    styles.footerBtn,
+                    getRowBtnStyle(row1Count),
+                    {
+                      borderColor: colors.border,
+                      backgroundColor: isProcessing
+                        ? colors.border
+                        : colors.surface,
+                      opacity: isProcessing ? 0.6 : 1,
                     },
                   ]}
                 >
                   {isProcessing ? (
                     <ActivityIndicator color={colors.textInverse} />
                   ) : (
-                    <Text
-                      style={{ color: colors.textInverse, fontWeight: "700" }}
-                    >
-                      Pay
+                    <Text style={{ color: colors.text, fontWeight: "700" }}>
+                      Print Preview
                     </Text>
                   )}
                 </TouchableOpacity>
-              </View>
-              <View
-                style={styles.footerRow}
-                key={showExpenseButton ? "row2-normal" : "row2-split"}
+              ) : null}
+              <TouchableOpacity
+                onPress={() => {
+                  handleConfirm(false);
+                }}
+                disabled={isSplitInvalid || isProcessing}
+                style={[
+                  styles.footerBtnPrimary,
+                  getRowBtnStyle(row1Count),
+                  {
+                    backgroundColor:
+                      isSplitInvalid || isProcessing
+                        ? colors.border
+                        : colors.primary,
+                  },
+                ]}
               >
+                {isProcessing ? (
+                  <ActivityIndicator color={colors.textInverse} />
+                ) : (
+                  <Text
+                    style={{ color: colors.textInverse, fontWeight: "700" }}
+                  >
+                    Pay
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
+            <View
+              style={styles.footerRow}
+              key={showExpenseButton ? "row2-normal" : "row2-split"}
+            >
+              <TouchableOpacity
+                onPress={() => {
+                  handleConfirm(true);
+                }}
+                disabled={isSplitInvalid || isProcessing}
+                style={[
+                  styles.footerBtnPrimary,
+                  getRowBtnStyle(row2Count),
+                  {
+                    backgroundColor:
+                      isSplitInvalid || isProcessing
+                        ? colors.border
+                        : colors.primary,
+                  },
+                ]}
+              >
+                {isProcessing ? (
+                  <ActivityIndicator color={colors.textInverse} />
+                ) : (
+                  <Text
+                    style={{ color: colors.textInverse, fontWeight: "700" }}
+                  >
+                    Pay & Print
+                  </Text>
+                )}
+              </TouchableOpacity>
+              {showExpenseButton ? (
                 <TouchableOpacity
                   onPress={() => {
-                    handleConfirm(true);
+                    handleConfirm(true, true);
                   }}
                   disabled={isSplitInvalid || isProcessing}
                   style={[
@@ -1233,7 +1229,9 @@ export default function PaymentScreen(props: PaymentModalProps) {
                       backgroundColor:
                         isSplitInvalid || isProcessing
                           ? colors.border
-                          : colors.primary,
+                          : colors.success ||
+                          colors.secondary ||
+                          colors.primary,
                     },
                   ]}
                 >
@@ -1241,49 +1239,19 @@ export default function PaymentScreen(props: PaymentModalProps) {
                     <ActivityIndicator color={colors.textInverse} />
                   ) : (
                     <Text
+                      numberOfLines={1}
+                      ellipsizeMode="tail"
                       style={{ color: colors.textInverse, fontWeight: "700" }}
                     >
-                      Pay & Print
+                      Betriebsaufwand
                     </Text>
                   )}
                 </TouchableOpacity>
-                {showExpenseButton ? (
-                  <TouchableOpacity
-                    onPress={() => {
-                      handleConfirm(true, true);
-                    }}
-                    disabled={isSplitInvalid || isProcessing}
-                    style={[
-                      styles.footerBtnPrimary,
-                      getRowBtnStyle(row2Count),
-                      {
-                        backgroundColor:
-                          isSplitInvalid || isProcessing
-                            ? colors.border
-                            : colors.success ||
-                              colors.secondary ||
-                              colors.primary,
-                      },
-                    ]}
-                  >
-                    {isProcessing ? (
-                      <ActivityIndicator color={colors.textInverse} />
-                    ) : (
-                      <Text
-                        numberOfLines={1}
-                        ellipsizeMode="tail"
-                        style={{ color: colors.textInverse, fontWeight: "700" }}
-                      >
-                        Betriebsaufwand
-                      </Text>
-                    )}
-                  </TouchableOpacity>
-                ) : null}
-              </View>
+              ) : null}
             </View>
           </View>
         </View>
-      </KeyboardAvoidingView>
+      </View>
     </View>
   );
 }
