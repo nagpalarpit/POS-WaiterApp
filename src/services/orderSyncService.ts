@@ -1,6 +1,11 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../constants/storageKeys';
 import { getSocket } from './socket';
+import {
+  buildPosPrintCurrentUser,
+  mergeOrderCustomerData,
+  resolveOrderCustomer,
+} from '../utils/customerData';
 
 type OrderSyncEvent = {
   eventType?: string;
@@ -274,8 +279,12 @@ export const emitPosPrint = (orderInfo: any, paymentMethod?: number) => {
   const socket = getSocket();
   if (!socket) return;
   const printRequestId = registerPrintRequest();
+  const normalizedOrderInfo = mergeOrderCustomerData(orderInfo);
+  const currentUser = buildPosPrintCurrentUser(
+    resolveOrderCustomer(normalizedOrderInfo),
+  );
   const orderInfoWithRequest = removeOrderCalculationTaxFields({
-    ...orderInfo,
+    ...normalizedOrderInfo,
     printRequestId,
   });
   const payload = {
@@ -284,6 +293,7 @@ export const emitPosPrint = (orderInfo: any, paymentMethod?: number) => {
     isWaiterApp: true,
     paymentMethod: paymentMethod ?? orderInfo?.orderPaymentSummary?.paymentProcessorId ?? 0,
     isCorporate: orderInfo?.isCorporate ?? false,
+    currentUser: currentUser ?? undefined,
     orderInfo: orderInfoWithRequest,
     printRequestId,
   };
@@ -294,8 +304,12 @@ export const emitPosPrintPreview = (orderInfo: any, paymentMethod?: number) => {
   const socket = getSocket();
   if (!socket) return;
   const printRequestId = registerPrintRequest();
+  const normalizedOrderInfo = mergeOrderCustomerData(orderInfo);
+  const currentUser = buildPosPrintCurrentUser(
+    resolveOrderCustomer(normalizedOrderInfo),
+  );
   const orderInfoWithRequest = removeOrderCalculationTaxFields({
-    ...orderInfo,
+    ...normalizedOrderInfo,
     printRequestId,
   });
   const payload = {
@@ -305,6 +319,7 @@ export const emitPosPrintPreview = (orderInfo: any, paymentMethod?: number) => {
     preview: true,
     paymentMethod: paymentMethod ?? orderInfo?.orderPaymentSummary?.paymentProcessorId ?? 0,
     isCorporate: orderInfo?.isCorporate ?? false,
+    currentUser: currentUser ?? undefined,
     orderInfo: orderInfoWithRequest,
     printRequestId,
   };
@@ -321,11 +336,11 @@ export const emitPosCancelPrint = (order: any) => {
     : Array.isArray(orderDetails?.orderItems)
       ? orderDetails.orderItems
       : [];
-  const normalizedDetails = {
+  const normalizedDetails = mergeOrderCustomerData({
     ...orderDetails,
     orderItem: orderItems,
     printRequestId,
-  };
+  });
   const payload = {
     ...order,
     orderDetails: removeOrderCalculationTaxFields(normalizedDetails),
@@ -341,12 +356,20 @@ export const emitPosKotPrint = (printOrder: any) => {
   const socket = getSocket();
   if (!socket) return;
   const printRequestId = registerPrintRequest();
+  const normalizedOrderInfo = mergeOrderCustomerData(
+    printOrder?.orderInfo || {},
+    printOrder?.currentUser,
+  );
+  const currentUser = buildPosPrintCurrentUser(
+    resolveOrderCustomer(normalizedOrderInfo, printOrder?.currentUser),
+  );
   const orderInfoWithRequest = removeOrderCalculationTaxFields({
-    ...(printOrder?.orderInfo || {}),
+    ...normalizedOrderInfo,
     printRequestId,
   });
   socket.emit('new-order', {
     ...printOrder,
+    currentUser: currentUser ?? undefined,
     isPrint: true,
     isWaiterApp: true,
     printRequestId,

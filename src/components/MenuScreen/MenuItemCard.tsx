@@ -7,7 +7,8 @@ import { formatCurrency } from '../../utils/currency';
 interface MenuItemCardProps {
   item: MenuItem;
   itemIndex: number;
-  onAddToCart: (item: MenuItem) => void;
+  category?: any;
+  onAddToCart: (item: MenuItem, category?: any) => void;
   colors: any;
 }
 
@@ -17,6 +18,7 @@ interface MenuItemCardProps {
 export const MenuItemCard: React.FC<MenuItemCardProps> = ({
   item,
   itemIndex,
+  category,
   onAddToCart,
   colors,
 }) => {
@@ -27,7 +29,7 @@ export const MenuItemCard: React.FC<MenuItemCardProps> = ({
   return (
     <TouchableOpacity
       key={getMenuItemIdentity(item, itemIndex)}
-      onPress={() => onAddToCart(item)}
+      onPress={() => onAddToCart(item, category)}
       activeOpacity={0.92}
       style={{
         backgroundColor: colors.surface,
@@ -99,7 +101,7 @@ export const MenuItemCard: React.FC<MenuItemCardProps> = ({
         ) : null} */}
 
         <TouchableOpacity
-          onPress={() => onAddToCart(item)}
+          onPress={() => onAddToCart(item, category)}
           style={{
             backgroundColor: colors.primary,
             borderRadius: 12,

@@ -83,6 +83,7 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
   const [showItemDetail, setShowItemDetail] = useState(false);
   const [selectedMenuItem, setSelectedMenuItem] = useState<any>(null);
   const [selectedMenuCategory, setSelectedMenuCategory] = useState<any>(null);
+  const [selectedVoucherCategories, setSelectedVoucherCategories] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [showGroupModal, setShowGroupModal] = useState(false);
   const [groupModalMode, setGroupModalMode] = useState<'addGroup' | 'selectForItem' | null>(null);
@@ -112,6 +113,98 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
     String(category?.categoryType || '')
       .trim()
       .toLowerCase() === 'voucher';
+
+  const isVoucherFlowItem = (item: any, category?: any) =>
+    isVoucherCategory(category) || item?.vouchers != null;
+
+  const closeItemDetail = () => {
+    setShowItemDetail(false);
+    setSelectedMenuItem(null);
+    setSelectedMenuCategory(null);
+    setSelectedVoucherCategories([]);
+  };
+
+  const cloneData = <T,>(value: T): T => JSON.parse(JSON.stringify(value));
+
+  const resolveSingleVoucherItem = (categories: any[], voucherCategory: any) => {
+    const categoryId = Number(voucherCategory?.categoryId ?? 0);
+    const itemId = Number(voucherCategory?.items?.[0]?.itemId ?? 0);
+    if (!categoryId || !itemId) return null;
+
+    const matchedCategory = categories.find((menuCategory) => Number(menuCategory?.id) === categoryId);
+    if (!matchedCategory) return null;
+
+    const matchedItem = matchedCategory?.menuItems?.find(
+      (menuItem: any) => Number(menuItem?.id) === itemId,
+    );
+
+    return matchedItem ? cloneData(matchedItem) : null;
+  };
+
+  const prepareVoucherItem = (item: any) => {
+    const nextItem = cloneData(item);
+    nextItem.discountItems = [];
+
+    const voucherBuyCategories = Array.isArray(nextItem?.vouchers?.customerBuys?.categories)
+      ? nextItem.vouchers.customerBuys.categories
+      : [];
+    const voucherGetCategories = Array.isArray(nextItem?.vouchers?.customerGets?.categories)
+      ? nextItem.vouchers.customerGets.categories
+      : [];
+
+    if (voucherBuyCategories.length > 0) {
+      const matchingCategories = menuData.categories.filter((menuCategory: any) =>
+        voucherBuyCategories.some(
+          (voucherCategory: any) => Number(voucherCategory?.categoryId) === Number(menuCategory?.id),
+        ),
+      );
+
+      if (!matchingCategories.length) {
+        return {
+          error: 'Voucher cannot be applied! Selected category is not available',
+        };
+      }
+
+      if (
+        voucherBuyCategories?.[0]?.items?.length === 1 &&
+        nextItem?.vouchers?.customerGets
+      ) {
+        const customerBuyItem = resolveSingleVoucherItem(matchingCategories, voucherBuyCategories[0]);
+        if (!customerBuyItem) {
+          return {
+            error: 'Voucher cannot be applied! item is not available',
+          };
+        }
+        nextItem.discountItems.push({
+          customerBuys: [customerBuyItem],
+        });
+      } else {
+        return {
+          item: nextItem,
+          requiresSelection: true,
+          categories: matchingCategories.map((entry) => cloneData(entry)),
+        };
+      }
+    }
+
+    if (voucherGetCategories.length === 1 && voucherGetCategories[0]?.items?.length === 1) {
+      const customerGetsItem = resolveSingleVoucherItem(menuData.categories, voucherGetCategories[0]);
+      if (!customerGetsItem) {
+        return {
+          error: 'Voucher cannot be applied! item is not available',
+        };
+      }
+      nextItem.discountItems.push({
+        customerGets: [customerGetsItem],
+      });
+    }
+
+    return {
+      item: nextItem,
+      requiresSelection: false,
+      categories: [],
+    };
+  };
 
 
   const getExtrasCategoryPercent = (category: any): number | null => {
@@ -350,14 +443,57 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
     return false;
   };
 
-  const addToCart = (item: any) => {
-    const category = menuData.categories[menuData.activeCategory];
+  const addToCart = (item: any, categoryOverride?: any) => {
+    const category = categoryOverride || menuData.categories[menuData.activeCategory];
     const normalizedItem = normalizeMenuItemForOptions(item);
     const hasVariants =
       Array.isArray(normalizedItem.menuItemVariants) &&
       normalizedItem.menuItemVariants.length > 0;
     const opensOptionsModal =
-      isVoucherCategory(category) || hasVariants;
+      isVoucherFlowItem(normalizedItem, category) || hasVariants;
+
+    if (item?.vouchers != null) {
+      const preparedVoucher = prepareVoucherItem(normalizedItem);
+      if (preparedVoucher?.error) {
+        showToast('error', preparedVoucher.error);
+        return;
+      }
+
+      if (!preparedVoucher?.item) {
+        showToast('error', 'Unable to open voucher');
+        return;
+      }
+
+      const shouldOpenVoucherModal =
+        isVoucherCategory(category) ||
+        preparedVoucher.requiresSelection === true ||
+        hasVariants;
+
+      if (
+        !ensureGroupSelection({
+          category,
+          rawItem: preparedVoucher.item,
+          normalizedItem: preparedVoucher.item,
+          opensOptionsModal: shouldOpenVoucherModal,
+        })
+      ) {
+        if (shouldOpenVoucherModal) {
+          setSelectedVoucherCategories(preparedVoucher.categories || []);
+        }
+        return;
+      }
+
+      if (shouldOpenVoucherModal) {
+        setSelectedMenuCategory(category);
+        setSelectedMenuItem(preparedVoucher.item);
+        setSelectedVoucherCategories(preparedVoucher.categories || []);
+        setShowItemDetail(true);
+        return;
+      }
+
+      void handleAddToCartDirect(category, preparedVoucher.item, null, null, undefined);
+      return;
+    }
 
     if (
       !ensureGroupSelection({
@@ -415,10 +551,28 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
         attribute,
         attributeValues
       );
-      setShowItemDetail(false);
-      setSelectedMenuItem(null);
-      setSelectedMenuCategory(null);
+      closeItemDetail();
     }
+  };
+
+  const handleVoucherModalConfirm = async (payload: {
+    item: any;
+    variant?: any;
+    attribute?: any;
+    attributeValues?: any[];
+  }) => {
+    if (!selectedMenuCategory || !payload?.item) {
+      return;
+    }
+
+    await handleAddToCartDirect(
+      selectedMenuCategory,
+      payload.item,
+      payload.variant ?? null,
+      payload.attribute ?? null,
+      payload.attributeValues ?? [],
+    );
+    closeItemDetail();
   };
 
   const handleGroupModalSelect = async (label: string) => {
@@ -440,6 +594,10 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
       if (pending.opensOptionsModal) {
         setSelectedMenuCategory(pending.category);
         setSelectedMenuItem(pending.normalizedItem);
+        if (pending.normalizedItem?.vouchers != null) {
+          const preparedVoucher = prepareVoucherItem(pending.normalizedItem);
+          setSelectedVoucherCategories(preparedVoucher.categories || []);
+        }
         setShowItemDetail(true);
         return;
       }
@@ -673,31 +831,24 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
       </View>
 
       {/* Item Details Modal */}
-      {selectedMenuItem && !isVoucherCategory(selectedMenuCategory) ? (
+      {selectedMenuItem && !isVoucherFlowItem(selectedMenuItem, selectedMenuCategory) ? (
         <ItemDetailsModal
           visible={showItemDetail}
           item={selectedMenuItem}
           category={selectedMenuCategory}
-          onClose={() => {
-            setShowItemDetail(false);
-            setSelectedMenuItem(null);
-            setSelectedMenuCategory(null);
-          }}
+          onClose={closeItemDetail}
           onConfirm={handleModalConfirm}
         />
       ) : null}
 
-      {selectedMenuItem && isVoucherCategory(selectedMenuCategory) ? (
+      {selectedMenuItem && isVoucherFlowItem(selectedMenuItem, selectedMenuCategory) ? (
         <VoucherOptionsModal
           visible={showItemDetail}
           item={selectedMenuItem}
           category={selectedMenuCategory}
-          onClose={() => {
-            setShowItemDetail(false);
-            setSelectedMenuItem(null);
-            setSelectedMenuCategory(null);
-          }}
-          onConfirm={handleModalConfirm}
+          availableCategories={selectedVoucherCategories}
+          onClose={closeItemDetail}
+          onConfirm={handleVoucherModalConfirm}
         />
       ) : null}
 

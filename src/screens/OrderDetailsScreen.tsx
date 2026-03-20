@@ -53,10 +53,11 @@ import { setPaymentFlowHandlers } from "../services/paymentFlowStore";
 import serverConnection from "../services/serverConnection";
 import { formatOrderServiceTime } from "../utils/orderServiceDisplay";
 import {
-  buildCustomerFromOrderDetails,
+  mergeOrderCustomerData,
   formatCustomerAddress,
   getCustomerDisplayName,
   getSelectedCustomerAddress,
+  resolveOrderCustomer,
 } from "../utils/customerData";
 
 const TSC_OFFLINE_MESSAGE =
@@ -606,7 +607,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
     displayedOrderDetails?.pickupDateTime,
   );
   const familyName = String(displayedOrderDetails?.familyName || "").trim();
-  const selectedCustomer = buildCustomerFromOrderDetails(displayedOrderDetails);
+  const selectedCustomer = resolveOrderCustomer(displayedOrderDetails);
   const selectedCustomerName = getCustomerDisplayName(selectedCustomer);
   const selectedCustomerAddress = getSelectedCustomerAddress(selectedCustomer);
   const selectedCustomerAddressText = formatCustomerAddress(selectedCustomerAddress);
@@ -755,7 +756,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
         baseOrderId;
 
       const customerIdValue = toNumber(orderDetails?.customerId, 0);
-      const placeOrderPayload: any = {
+      const placeOrderPayload: any = mergeOrderCustomerData({
         ...orderDetails,
         companyId,
         orderDeliveryTypeId: deliveryTypeId,
@@ -793,7 +794,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
         canceledObj,
         canceledCount,
         canceledOrderPayment,
-      };
+      }, selectedCustomer);
 
       Object.keys(placeOrderPayload).forEach((key) => {
         if (
@@ -1175,7 +1176,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
             0,
           ) || splitDefaultAmount,
         );
-        const splitOrderInfo: any = {
+        const splitOrderInfo: any = mergeOrderCustomerData({
           companyId,
           currency,
           isPickup: orderDetails?.isPickup ?? orderDeliveryTypeId === 2,
@@ -1228,7 +1229,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
           tip,
           deliveryCharge: splitDeliveryCharge,
           isSplitOrder: true,
-        };
+        }, selectedCustomer);
 
         const splitDiscountPayload = buildDiscountPayload(
           orderDetails,
@@ -1785,7 +1786,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
         return { keepModalOpen: false, resetToDashboard: true };
       }
 
-      const orderInfo: any = {
+      const orderInfo: any = mergeOrderCustomerData({
         companyId,
         currency,
         isPickup: orderDetails?.isPickup ?? orderDeliveryTypeId === 2,
@@ -1834,7 +1835,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
         paymentMethod: selectedPaymentMethod,
         tip,
         deliveryCharge: payableDeliveryCharge,
-      };
+      }, selectedCustomer);
       if (isItemSplit || orderDetails?.isSplitOrder) {
         orderInfo.isSplitOrder = true;
       }
@@ -2036,7 +2037,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
         : Array.isArray(orderDetails?.orderItems)
           ? orderDetails.orderItems
           : [];
-      const previewOrderInfo: any = {
+      const previewOrderInfo: any = mergeOrderCustomerData({
         ...orderDetails,
         orderItem: orderItems,
         invoiceNumber: "printPreview",
@@ -2053,7 +2054,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
         orderPaymentDetails: Array.isArray(option?.orderPaymentDetails)
           ? option.orderPaymentDetails
           : undefined,
-      };
+      }, selectedCustomer);
       emitPosPrintPreview(previewOrderInfo, paymentMethod);
     } catch (error) {
       console.error("Print preview failed:", error);

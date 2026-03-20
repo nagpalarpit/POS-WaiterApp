@@ -13,8 +13,11 @@ import {
   getCartSubtotal,
   getDiscountAmount,
 } from '../utils/cartCalculations';
+import {
+  buildPosOrderCustomer,
+  buildPosOrderCustomerFields,
+} from '../utils/customerData';
 import { OrderServiceTiming } from '../types/orderFlow';
-import { Customer } from '../types/customer';
 
 const ORDER_STATUS_PENDING = 1;
 const TSC_OFFLINE_MESSAGE = 'Active TSS not found for the given POS and company.';
@@ -48,20 +51,6 @@ const getOrderType = (deliveryType: number): string => {
 const getPosV2DiscountType = (discountType?: string): number => {
   return discountType === 'PERCENTAGE' || discountType === 'CUSTOM' ? 1 : 0;
 };
-
-const getCustomerOrderFields = (customer?: Customer | null) => ({
-  customerId: customer?.id ?? null,
-  userEmail: customer?.email || '',
-  userFirstName: customer?.firstName || '',
-  userLastName: customer?.lastName || '',
-  userMobile: customer?.mobileNo || null,
-  addresses: customer?.addresses || [],
-  isCallerId: customer?.isCallerId === true,
-  customerCompanyName: customer?.customerCompanyName || '',
-  steuerId: customer?.steuerId || '',
-  isDebitor: customer?.isDebitor === true,
-  customerAddressId: customer?.customerAddressId ?? null,
-});
 
 /**
  * Hook for managing order submission and calculations
@@ -101,6 +90,7 @@ export const useOrderSubmit = (
         groupLabel: item.groupLabel,
         customId: item.customId,
         tax: item.tax,
+        discountItems: item.discountItems,
         splitPaidQuantity: 0,
       };
       if (item.extraCategory !== undefined && item.extraCategory !== null) {
@@ -201,7 +191,8 @@ export const useOrderSubmit = (
           }
         : undefined;
       const selectedCustomer = cart.currentUser ?? null;
-      const customerFields = getCustomerOrderFields(selectedCustomer);
+      const customerFields = buildPosOrderCustomerFields(selectedCustomer);
+      const orderCustomer = buildPosOrderCustomer(selectedCustomer);
       const now = new Date().toISOString();
       const orderItems = prepareOrderItems(companyId);
       const total = subtotal - discount;
@@ -259,6 +250,7 @@ export const useOrderSubmit = (
           count: nextCount,
           discountId: appliedDiscount?.discountId ?? null,
           discount: normalizedDiscount ?? null,
+          customer: orderCustomer ?? null,
           user: existingDetails?.user ?? userData ?? null,
           addedBy,
           posId,
@@ -387,6 +379,7 @@ export const useOrderSubmit = (
         count: 1,
         discountId: appliedDiscount?.discountId ?? null,
         discount: normalizedDiscount,
+        customer: orderCustomer ?? null,
         user: userData || null,
         addedBy: Number(userData?.id || 0) || null,
         posId: posIdService.getPosId() || '',

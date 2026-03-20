@@ -31,9 +31,12 @@ import {
 import { OrderServiceTiming } from '../types/orderFlow';
 import { formatOrderServiceTime } from '../utils/orderServiceDisplay';
 import {
+  buildPosPrintCurrentUser,
   formatCustomerAddress,
   getCustomerDisplayName,
   getSelectedCustomerAddress,
+  mergeOrderCustomerData,
+  resolveOrderCustomer,
 } from '../utils/customerData';
 
 interface CheckoutScreenProps {
@@ -432,19 +435,22 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
             ? orderSubmit.prepareOrderItems(companyId, removedSourceItems)
             : [];
         const orderInfoForPrint = {
-          ...orderDetails,
+          ...mergeOrderCustomerData(orderDetails, checkoutCart.currentUser || null),
           orderNumber:
             orderDetails?.customOrderId ||
             submittedOrder?.customOrderId ||
             submittedOrder?._id ||
             submittedOrder?.id,
         };
+        const printCurrentUser = buildPosPrintCurrentUser(
+          resolveOrderCustomer(orderInfoForPrint, checkoutCart.currentUser || null),
+        );
         const canceledPrintObj =
           canceledItems.length > 0
             ? {
                 items: canceledItems,
                 isOrderDetails: true,
-                currentUser: checkoutCart.currentUser || null,
+                currentUser: printCurrentUser,
                 orderInfo: {
                   ...orderInfoForPrint,
                   orderNumber: `${orderInfoForPrint.orderNumber}-C`,
@@ -456,7 +462,7 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
             items: printItems,
             canceledObj: canceledPrintObj,
             isOrderDetails: true,
-            currentUser: checkoutCart.currentUser || null,
+            currentUser: printCurrentUser,
             orderInfo: orderInfoForPrint,
           });
         }

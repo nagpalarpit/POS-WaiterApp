@@ -8,7 +8,7 @@ import { getMenuItemIdentity } from '../../hooks/useMenuData';
 interface MenuItemsGridProps {
   categories: MenuCategory[];
   activeCategory: number;
-  onAddToCart: (item: MenuItem) => void;
+  onAddToCart: (item: MenuItem, category?: MenuCategory) => void;
   searchQuery?: string;
   colors: any;
 }
@@ -94,6 +94,7 @@ export const MenuItemsGrid: React.FC<MenuItemsGridProps> = ({
           <MenuItemCard
             item={item}
             itemIndex={index}
+            category={currentCategory}
             onAddToCart={onAddToCart}
             colors={colors}
           />

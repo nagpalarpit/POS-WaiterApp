@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Customer } from '../types/customer';
-import { buildCustomerFromOrderDetails } from '../utils/customerData';
+import { resolveOrderCustomer } from '../utils/customerData';
 
 export interface AttributeValue {
   id?: number;
@@ -52,6 +52,7 @@ export interface CartItem {
   // Quantity & Notes
   quantity: number;
   orderItemNote?: string;
+  discountItems?: any[];
   
   // Group & Order info
   tax?: any;
@@ -200,6 +201,7 @@ class CartService {
         itemName: item.name,
         itemPrice: item.price,
         quantity: 1,
+        discountItems: Array.isArray(item?.discountItems) ? item.discountItems : undefined,
         tax: category.tax,
         groupType: resolvedGroupType,
         groupLabel: resolvedGroupLabel || undefined,
@@ -248,9 +250,10 @@ class CartService {
       cartItem.cartId = this.generateCartId(cartItem);
 
       // Check if item already exists with same cartId
-      const existingIndex = cart.items.findIndex(
-        (i) => i.cartId === cartItem.cartId
-      );
+      const existingIndex =
+        Array.isArray(cartItem.discountItems) && cartItem.discountItems.length > 0
+          ? this.checkDiscountItems(cart, cartItem)
+          : cart.items.findIndex((i) => i.cartId === cartItem.cartId);
 
       if (existingIndex > -1) {
         // Item exists, increase quantity
@@ -287,6 +290,19 @@ class CartService {
       console.error('Error adding to cart:', error);
       throw error;
     }
+  }
+
+  private checkDiscountItems(cart: Cart, cartItem: CartItem): number {
+    let matchedIndex = -1;
+
+    cart?.items?.forEach((item, index) => {
+      if (item.itemId !== cartItem.itemId) return;
+      if (JSON.stringify(item.discountItems || []) === JSON.stringify(cartItem.discountItems || [])) {
+        matchedIndex = index;
+      }
+    });
+
+    return matchedIndex;
   }
 
   /**
@@ -591,6 +607,7 @@ class CartService {
           itemPrice: toNumber(item.itemPrice ?? item.unitPrice ?? item.price, 0),
           quantity: Math.max(toNumber(item.quantity, 1), 1),
           orderItemNote: item.orderItemNote ?? item.note ?? '',
+          discountItems: Array.isArray(item?.discountItems) ? item.discountItems : undefined,
           tax: item.tax ?? item.taxInfo ?? item.taxObj ?? null,
           groupType: item.groupType ?? 0,
           groupLabel: item.groupLabel ?? '',
@@ -645,7 +662,7 @@ class CartService {
         removedItems: [],
         orderNote: orderDetails?.orderNotes || '',
         discount: normalizeDiscountFromOrder(orderDetails?.discount),
-        currentUser: buildCustomerFromOrderDetails(orderDetails),
+        currentUser: resolveOrderCustomer(orderDetails),
       };
 
       this.syncGroupStateFromCart(cart);

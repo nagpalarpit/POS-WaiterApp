@@ -90,6 +90,95 @@ export const buildCustomerFromOrderDetails = (orderDetails: any): Customer | nul
   });
 };
 
+export const buildPosOrderCustomerFields = (customer?: Customer | null) => {
+  const normalized = normalizeCustomer(customer);
+
+  return {
+    customerId: normalized?.id ?? null,
+    userEmail: normalized?.email || '',
+    userFirstName: normalized?.firstName || '',
+    userLastName: normalized?.lastName || '',
+    userMobile: normalized?.mobileNo || null,
+    addresses: normalized?.addresses || [],
+    isCallerId: normalized?.isCallerId === true,
+    customerCompanyName: normalized?.customerCompanyName || '',
+    steuerId: normalized?.steuerId || '',
+    isDebitor: normalized?.isDebitor === true,
+    customerAddressId: normalized?.customerAddressId ?? null,
+  };
+};
+
+export const buildPosOrderCustomer = (customer?: Customer | null) => {
+  const normalized = normalizeCustomer(customer);
+  if (!normalized) return null;
+
+  return {
+    id: normalized.id ?? null,
+    email: normalized.email || '',
+    firstName: normalized.firstName || '',
+    lastName: normalized.lastName || '',
+    mobileNo: normalized.mobileNo || '',
+    addresses: normalized.addresses || [],
+    customerCompanyName: normalized.customerCompanyName || '',
+    steuerId: normalized.steuerId || '',
+    isDebitor: normalized.isDebitor === true,
+    customerAddressId: normalized.customerAddressId ?? null,
+    isCallerId: normalized.isCallerId === true,
+  };
+};
+
+export const buildPosPrintCurrentUser = (customer?: Customer | null) => {
+  const normalized = normalizeCustomer(customer);
+  if (!normalized) return null;
+
+  return {
+    customerId: normalized.id ?? null,
+    email: normalized.email || '',
+    firstName: normalized.firstName || '',
+    lastName: normalized.lastName || '',
+    mobileNo: normalized.mobileNo || '',
+    addresses: normalized.addresses || [],
+    customerCompanyName: normalized.customerCompanyName || '',
+    steuerId: normalized.steuerId || '',
+    isDebitor: normalized.isDebitor === true,
+  };
+};
+
+export const resolveOrderCustomer = (
+  orderInfo?: any,
+  customer?: Customer | null,
+): Customer | null => {
+  const explicitCustomer = normalizeCustomer(customer);
+  if (explicitCustomer) {
+    return explicitCustomer;
+  }
+
+  const orderCustomer = normalizeCustomer(orderInfo?.customer);
+  if (orderCustomer) {
+    return orderCustomer;
+  }
+
+  return buildCustomerFromOrderDetails(orderInfo);
+};
+
+export const mergeOrderCustomerData = (
+  orderInfo: any,
+  customer?: Customer | null,
+): any => {
+  if (!orderInfo) return orderInfo;
+
+  const resolvedCustomer = resolveOrderCustomer(orderInfo, customer);
+  if (!resolvedCustomer) {
+    return orderInfo;
+  }
+
+  return {
+    ...orderInfo,
+    ...buildPosOrderCustomerFields(resolvedCustomer),
+    customer: buildPosOrderCustomer(resolvedCustomer),
+  };
+};
+
 export const getSelectedCustomerAddress = (
   customer?: Customer | null,
 ): CustomerAddress | null => {
