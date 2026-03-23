@@ -776,7 +776,7 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.background }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['bottom']}>
       <ScrollView
         style={{ flex: 1, backgroundColor: colors.background }}
         contentInsetAdjustmentBehavior="automatic"
@@ -961,7 +961,7 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
         onClose={handleServiceFlowClose}
         onSave={handleServiceFlowSave}
       />
-    </View>
+    </SafeAreaView>
   );
 }
 

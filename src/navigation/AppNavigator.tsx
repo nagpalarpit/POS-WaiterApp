@@ -129,7 +129,7 @@ function MainStack({ initialRouteName }: MainStackProps) {
         headerTintColor: colors.text,
         headerShadowVisible: false,
         contentStyle: { backgroundColor: colors.background },
-        statusBarTranslucent: Platform.OS === 'android' ? false : undefined,
+        statusBarTranslucent: true,
       }}
       initialRouteName={initialRouteName}
     >
@@ -587,7 +587,6 @@ export default function AppNavigator() {
             }
             screenOptions={{
               headerShown: false,
-              headerStatusBarHeight: Platform.OS === 'android' ? 0 : undefined,
               drawerType: 'front',
               swipeEnabled: canShowDrawerContent,
               overlayColor: colors.overlay || 'rgba(0, 0, 0, 0.35)',

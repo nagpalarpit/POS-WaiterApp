@@ -700,7 +700,7 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.background }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['bottom']}>
       <View
         style={{
           paddingHorizontal: 14,
@@ -889,6 +889,6 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
           await cartData.updateCurrentUser(customer);
         }}
       />
-    </View>
+    </SafeAreaView>
   );
 }
