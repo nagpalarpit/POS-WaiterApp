@@ -116,6 +116,20 @@ const buildDiscountPayload = (
 
   return existing ?? null;
 };
+
+const resolveDiscountId = (source: any, discountPayload: any) =>
+  discountPayload?.id ??
+  source?.discountId ??
+  source?.discount?.id ??
+  source?.orderInfo?.discountId ??
+  source?.orderInfo?.discount?.id;
+
+const getOrderItemCount = (items: any[]): number =>
+  items.reduce(
+    (sum: number, item: any) => sum + Math.max(getCartItemQuantity(item), 0),
+    0,
+  );
+
 const normalizeTaxKey = (value: unknown): string | null => {
   if (value === undefined || value === null) return null;
   const raw = String(value).trim();
@@ -773,7 +787,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
         orderTotal: toNumber(orderDetails?.orderTotal, 0),
         orderNotes: orderDetails?.orderNotes || "",
         countryCode: orderDetails?.countryCode || "IN",
-        count: toNumber(orderDetails?.count, orderItems.length || 1),
+        count: toNumber(orderDetails?.count, getOrderItemCount(orderItems) || 1),
         customerId: customerIdValue > 0 ? customerIdValue : undefined,
         userEmail: orderDetails?.userEmail || "",
         userFirstName: orderDetails?.userFirstName || "",
@@ -1056,7 +1070,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
       );
       let payableCount = toNumber(
         orderDetails?.count,
-        normalizedOrderItems.length || 1,
+        getOrderItemCount(normalizedOrderItems) || 1,
       );
       let payableDeliveryCharge = deliveryCharge;
 
@@ -1065,12 +1079,18 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
           Math.max(0, Math.floor(toNumber(qty, 0))),
         )
         : [];
+      const isExistingSplitOrder =
+        orderDetails?.isSplitOrder === true ||
+        order?.orderDetails?.isSplitOrder === true ||
+        order?.isSplitOrder === true;
       let isItemSplit =
         option?.isItemSplit === true &&
         splitSelections.some((qty: number) => qty > 0);
 
+      // Match POS PaymentComponent: when the current order is already split,
+      // a regular Pay action should finalize via the split/bulk flow.
       const shouldFinalizeExistingSplit =
-        !isItemSplit && !!orderDetails?.isSplitOrder;
+        !isItemSplit && isExistingSplitOrder;
 
       if (shouldFinalizeExistingSplit) {
         splitSelections = normalizedOrderItems.map((item: any) =>
@@ -1199,7 +1219,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
           orderSubTotal: selectedSubTotal,
           orderTotal: selectedTotal,
           createdAt: orderDetails?.createdAt || order?.createdAt || now,
-          count: selectedOrderItems.length,
+          count: getOrderItemCount(selectedOrderItems),
           user: orderDetails?.user || order?.user || userData || null,
           addedBy: orderDetails?.addedBy ?? paidBy ?? null,
           posId: orderDetails?.posId || order?.posId || "",
@@ -1238,6 +1258,13 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
         );
         if (splitDiscountPayload) {
           splitOrderInfo.discount = splitDiscountPayload;
+          const splitDiscountId = resolveDiscountId(
+            orderDetails,
+            splitDiscountPayload,
+          );
+          if (splitDiscountId != null) {
+            splitOrderInfo.discountId = splitDiscountId;
+          }
           if (
             splitDiscountPayload.discountType === "CUSTOM" &&
             splitOrderInfo.customDiscountValue == null
@@ -1339,7 +1366,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
             orderDiscountTotal: remainingDiscount,
             orderPaymentSummary: { paymentProcessorId: 3 },
             paymentMethod: 3,
-            count: remainingOrderItems.length,
+            count: getOrderItemCount(remainingOrderItems),
             isSplitOrder: true,
             updatedAt: now,
             tip: 0,
@@ -1354,6 +1381,13 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
           );
           if (remainingDiscountPayload) {
             remainingOrderDetails.discount = remainingDiscountPayload;
+            const remainingDiscountId = resolveDiscountId(
+              orderDetails,
+              remainingDiscountPayload,
+            );
+            if (remainingDiscountId != null) {
+              remainingOrderDetails.discountId = remainingDiscountId;
+            }
             if (
               remainingDiscountPayload.discountType === "CUSTOM" &&
               remainingOrderDetails.customDiscountValue == null
@@ -1504,7 +1538,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
           paidAt: now,
           tip: round2(finalOrderTip),
           deliveryCharge: round2(finalOrderDeliveryCharge),
-          count: mergedOrderItems.length || toNumber(orderDetails?.count, 1),
+          count: getOrderItemCount(mergedOrderItems) || toNumber(orderDetails?.count, 1),
           isSplitOrder: true,
           isPaid: 1,
           localOrderId,
@@ -1512,6 +1546,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
           parentLocalOrderId: undefined,
           invoiceNumber: mainOrderInvoiceNumber,
           paidBy: paidBy || undefined,
+          paymentMethod: 3,
           orderPaymentSummary: {
             paymentProcessorId: 3,
           },
@@ -1547,7 +1582,25 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
           };
         });
 
-        const mainSettleObj = {
+        const mainBulkSettleObj = {
+          currency,
+          paymentMethod: 3,
+          amount: round2(mainOrderTotal),
+          moneyBack: 0,
+          tip: round2(finalOrderTip),
+          deliveryCharge: round2(finalOrderDeliveryCharge),
+          orderInfo: {
+            ...finalizedMainOrderInfo,
+            localOrderId,
+            customOrderId: order?.customOrderId || orderDetails?.customOrderId,
+            paymentMethod: 3,
+            orderPaymentSummary: {
+              paymentProcessorId: 3,
+            },
+          },
+        };
+
+        const mainLocalSettleInfo = {
           currency,
           paymentMethod: selectedPaymentMethod,
           amount: round2(mainOrderTotal),
@@ -1572,7 +1625,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
         };
 
         bulkOrdersObj.push({
-          ...mainSettleObj,
+          ...mainBulkSettleObj,
           isOrderPaid: isPaid,
         });
 
@@ -1580,7 +1633,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
           orderStatusId: ORDER_STATUS.DELIVERED,
           orderDetails: finalizedMainOrderInfo,
           settleInfo: {
-            ...mainSettleObj,
+            ...mainLocalSettleInfo,
             splitLog: true,
           },
         });
@@ -1625,7 +1678,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
                   order?.customOrderId || orderDetails?.customOrderId,
                 orderDetails: finalizedMainOrderInfo,
                 settleInfo: {
-                  ...mainSettleObj,
+                  ...mainLocalSettleInfo,
                   splitLog: true,
                 },
               });
@@ -1745,16 +1798,28 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
                     customOrderId:
                       localOrderRecord?.customOrderId ||
                       updatedOrderDetails?.customOrderId,
-                  },
+                    },
+                  };
+
+                const localOrderUpdatePayload: any = {
+                  orderStatusId: ORDER_STATUS.DELIVERED,
+                  isSynced: true,
+                  orderDetails: updatedOrderDetails,
+                  settleInfo: updatedSettleInfo,
                 };
 
+                if (localOrderRecord?.parentLocalOrderId) {
+                  localOrderUpdatePayload.parentLocalOrderId =
+                    localOrderRecord.parentLocalOrderId;
+                }
+
+                if (localOrderRecord?.customOrderId) {
+                  localOrderUpdatePayload.customOrderId =
+                    localOrderRecord.customOrderId;
+                }
+
                 localOrderUpdateTasks.push(
-                  orderService.updateOrder(currentLocalId, {
-                    orderStatusId: ORDER_STATUS.DELIVERED,
-                    isSynced: true,
-                    orderDetails: updatedOrderDetails,
-                    settleInfo: updatedSettleInfo,
-                  }),
+                  orderService.updateOrder(currentLocalId, localOrderUpdatePayload),
                 );
               },
             );
@@ -1836,7 +1901,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
         tip,
         deliveryCharge: payableDeliveryCharge,
       }, selectedCustomer);
-      if (isItemSplit || orderDetails?.isSplitOrder) {
+      if (isItemSplit || isExistingSplitOrder) {
         orderInfo.isSplitOrder = true;
       }
 
@@ -1847,6 +1912,13 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
       );
       if (resolvedDiscountPayload) {
         orderInfo.discount = resolvedDiscountPayload;
+        const resolvedDiscountId = resolveDiscountId(
+          orderDetails,
+          resolvedDiscountPayload,
+        );
+        if (resolvedDiscountId != null) {
+          orderInfo.discountId = resolvedDiscountId;
+        }
         if (
           resolvedDiscountPayload.discountType === "CUSTOM" &&
           orderInfo.customDiscountValue == null
@@ -2061,6 +2133,21 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
       showToast("error", "Unable to generate print preview");
     }
   };
+
+  useEffect(() => {
+    if (!pendingSettle) {
+      return;
+    }
+
+    setPaymentFlowHandlers({
+      onSelect: handlePaymentSelect,
+      onPrintPreview: handlePrintPreview,
+      onClose: () => {
+        setPendingSettle(false);
+        pendingSettleRef.current = false;
+      },
+    });
+  }, [pendingSettle, handlePaymentSelect, handlePrintPreview]);
 
   const registerPaymentHandlers = useCallback((shouldSettle: boolean) => {
     setPendingSettle(shouldSettle);

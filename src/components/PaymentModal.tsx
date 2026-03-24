@@ -184,10 +184,6 @@ export default function PaymentScreen(props: PaymentScreenProps) {
   } = params;
   const { colors } = useTheme();
   const { showToast } = useToast();
-  const flowHandlersRef = useRef(getPaymentFlowHandlers());
-  const effectiveOnSelect = flowHandlersRef.current?.onSelect;
-  const effectiveOnPrintPreview = flowHandlersRef.current?.onPrintPreview;
-  const effectiveOnClose = flowHandlersRef.current?.onClose;
   const scrollRef = useRef<ScrollView>(null);
   const insets = useSafeAreaInsets();
   const closeHandledRef = useRef(false);
@@ -231,12 +227,14 @@ export default function PaymentScreen(props: PaymentScreenProps) {
     splitItems.map(() => 0),
   );
 
+  const getCurrentFlowHandlers = () => getPaymentFlowHandlers();
+
   const closeFlow = () => {
     if (closeHandledRef.current) {
       return;
     }
     closeHandledRef.current = true;
-    effectiveOnClose?.();
+    getCurrentFlowHandlers()?.onClose?.();
     clearPaymentFlowHandlers();
   };
 
@@ -247,14 +245,14 @@ export default function PaymentScreen(props: PaymentScreenProps) {
   }, [navigation, title]);
 
   useEffect(() => {
-    if (!effectiveOnSelect) {
+    if (!getCurrentFlowHandlers()?.onSelect) {
       showToast("error", "Payment session expired. Please try again.");
       if (navigation?.goBack) {
         navigation.goBack();
       }
       return;
     }
-  }, [effectiveOnSelect, navigation, showToast]);
+  }, [navigation, showToast]);
 
   useEffect(() => {
     return () => {
@@ -308,7 +306,7 @@ export default function PaymentScreen(props: PaymentScreenProps) {
     [activeGiftCard, baseTotal, tipNum],
   );
   const due = round2(Math.max(baseTotal + tipNum - giftCardTotal, 0));
-  const showPrintPreview = !!effectiveOnPrintPreview && !hidePrintPreview;
+  const showPrintPreview = !!getCurrentFlowHandlers()?.onPrintPreview && !hidePrintPreview;
   const isSplitInvalid = isSplitMode && splitItemTotal <= 0;
   const row1Count = 2 + (showPrintPreview ? 1 : 0);
   const isOtherPaymentMode = showOtherMethods || activeTab === 99;
@@ -493,7 +491,7 @@ export default function PaymentScreen(props: PaymentScreenProps) {
     setIsProcessing(true);
     try {
       const option = buildPaymentOption(print, isCorporate);
-      const result = await effectiveOnSelect?.(option);
+      const result = await getCurrentFlowHandlers()?.onSelect?.(option);
       if ((result as any)?.keepOpen) {
         if ((result as any)?.resetPayment) {
           resetAfterSplitPayment((result as any)?.resetPayment);
@@ -521,7 +519,7 @@ export default function PaymentScreen(props: PaymentScreenProps) {
     setIsProcessing(true);
     try {
       const option = buildPaymentOption(true);
-      await effectiveOnPrintPreview?.(option);
+      await getCurrentFlowHandlers()?.onPrintPreview?.(option);
     } catch (error) {
       console.error("Print preview failed:", error);
       showToast("error", "Unable to generate print preview");
