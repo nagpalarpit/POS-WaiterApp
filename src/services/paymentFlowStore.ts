@@ -1,5 +1,7 @@
 export type PaymentFlowReset = {
   orderTotal?: number;
+  orderSubTotal?: number;
+  orderDiscountTotal?: number;
   splitItems?: any[];
   allowSplitOption?: boolean;
 };

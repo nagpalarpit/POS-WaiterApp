@@ -72,6 +72,8 @@ type PaymentOption = {
 type PaymentRouteParams = {
   title?: string;
   orderTotal?: number;
+  orderSubTotal?: number;
+  orderDiscountTotal?: number;
   companyId?: number;
   splitItems?: SplitSelectableItem[];
   allowSplitOption?: boolean;
@@ -177,6 +179,8 @@ export default function PaymentScreen(props: PaymentScreenProps) {
   const {
     title = "Payment",
     orderTotal = 0,
+    orderSubTotal = 0,
+    orderDiscountTotal = 0,
     companyId,
     splitItems = [],
     allowSplitOption = true,
@@ -218,6 +222,12 @@ export default function PaymentScreen(props: PaymentScreenProps) {
   const [splitPaymentMethod, setSplitPaymentMethod] = useState(0);
   const [currentOrderTotal, setCurrentOrderTotal] = useState(() =>
     round2(toNumber(orderTotal, 0)),
+  );
+  const [currentOrderSubTotal, setCurrentOrderSubTotal] = useState(() =>
+    round2(toNumber(orderSubTotal, toNumber(orderTotal, 0))),
+  );
+  const [currentOrderDiscountTotal, setCurrentOrderDiscountTotal] = useState(
+    () => round2(Math.max(toNumber(orderDiscountTotal, 0), 0)),
   );
   const [currentSplitItems, setCurrentSplitItems] =
     useState<SplitSelectableItem[]>(splitItems);
@@ -265,6 +275,14 @@ export default function PaymentScreen(props: PaymentScreenProps) {
   }, [orderTotal]);
 
   useEffect(() => {
+    setCurrentOrderSubTotal(round2(toNumber(orderSubTotal, toNumber(orderTotal, 0))));
+  }, [orderSubTotal, orderTotal]);
+
+  useEffect(() => {
+    setCurrentOrderDiscountTotal(round2(Math.max(toNumber(orderDiscountTotal, 0), 0)));
+  }, [orderDiscountTotal]);
+
+  useEffect(() => {
     setCurrentSplitItems(splitItems);
   }, [splitItems]);
 
@@ -280,6 +298,15 @@ export default function PaymentScreen(props: PaymentScreenProps) {
   const sectionGap = 8;
   const activeGiftCard = isSplitMode ? splitGiftCard : giftCard;
   const resolvedOrderTotal = round2(toNumber(currentOrderTotal, 0));
+  const resolvedOrderDiscountTotal = round2(
+    Math.max(toNumber(currentOrderDiscountTotal, 0), 0),
+  );
+  const resolvedOrderSubTotal = round2(
+    Math.max(
+      toNumber(currentOrderSubTotal, 0),
+      resolvedOrderTotal + resolvedOrderDiscountTotal,
+    ),
+  );
 
   const splitItemTotal = useMemo(() => {
     return round2(
@@ -295,11 +322,30 @@ export default function PaymentScreen(props: PaymentScreenProps) {
   }, [currentSplitItems, splitSelections]);
 
   const splitRemainingAmount = useMemo(
-    () => round2(Math.max(resolvedOrderTotal - splitItemTotal, 0)),
-    [resolvedOrderTotal, splitItemTotal],
+    () => round2(Math.max(resolvedOrderSubTotal - splitItemTotal, 0)),
+    [resolvedOrderSubTotal, splitItemTotal],
   );
 
-  const baseTotal = isSplitMode ? splitItemTotal : resolvedOrderTotal;
+  const splitDiscountTotal = useMemo(() => {
+    if (!isSplitMode || resolvedOrderDiscountTotal <= 0 || resolvedOrderSubTotal <= 0) {
+      return 0;
+    }
+    const splitRatio = clamp(splitItemTotal / resolvedOrderSubTotal, 0, 1);
+    return round2(
+      Math.min(resolvedOrderDiscountTotal * splitRatio, splitItemTotal),
+    );
+  }, [
+    isSplitMode,
+    resolvedOrderDiscountTotal,
+    resolvedOrderSubTotal,
+    splitItemTotal,
+  ]);
+
+  const displaySubTotal = isSplitMode ? splitItemTotal : resolvedOrderSubTotal;
+  const displayDiscount = isSplitMode
+    ? splitDiscountTotal
+    : resolvedOrderDiscountTotal;
+  const baseTotal = round2(Math.max(displaySubTotal - displayDiscount, 0));
   const tipNum = round2(clamp(toAmount(tipValue), 0, 999999));
   const giftCardTotal = useMemo(
     () => round2(getGiftCardDiscount(activeGiftCard, baseTotal + tipNum)),
@@ -379,6 +425,8 @@ export default function PaymentScreen(props: PaymentScreenProps) {
 
   const resetAfterSplitPayment = (resetPayment?: {
     orderTotal?: number;
+    orderSubTotal?: number;
+    orderDiscountTotal?: number;
     splitItems?: SplitSelectableItem[];
     allowSplitOption?: boolean;
   }) => {
@@ -393,6 +441,18 @@ export default function PaymentScreen(props: PaymentScreenProps) {
       ) > 1;
 
     setCurrentOrderTotal(toNumber(resetPayment?.orderTotal, currentOrderTotal));
+    setCurrentOrderSubTotal(
+      toNumber(resetPayment?.orderSubTotal, currentOrderSubTotal),
+    );
+    setCurrentOrderDiscountTotal(
+      Math.max(
+        toNumber(
+          resetPayment?.orderDiscountTotal,
+          currentOrderDiscountTotal,
+        ),
+        0,
+      ),
+    );
     setCurrentSplitItems(nextSplitItems);
     setCurrentAllowSplitOption(nextAllowSplitOption);
     setTipValue("");
@@ -1031,9 +1091,17 @@ export default function PaymentScreen(props: PaymentScreenProps) {
               <View style={styles.summaryRow}>
                 <Text style={{ color: colors.textSecondary }}>Subtotal</Text>
                 <Text style={{ color: colors.text, fontWeight: "700" }}>
-                  {formatCurrency(baseTotal)}
+                  {formatCurrency(displaySubTotal)}
                 </Text>
               </View>
+              {displayDiscount > 0 ? (
+                <View style={styles.summaryRow}>
+                  <Text style={{ color: colors.textSecondary }}>Discount</Text>
+                  <Text style={{ color: colors.error, fontWeight: "700" }}>
+                    -{formatCurrency(displayDiscount)}
+                  </Text>
+                </View>
+              ) : null}
               {tipNum > 0 ? (
                 <View style={styles.summaryRow}>
                   <Text style={{ color: colors.textSecondary }}>Tip</Text>

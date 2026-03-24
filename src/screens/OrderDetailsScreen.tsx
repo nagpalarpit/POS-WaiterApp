@@ -1452,6 +1452,8 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
             keepModalOpen: true,
             resetPayment: {
               orderTotal: remainingTotal,
+              orderSubTotal: remainingSubTotal,
+              orderDiscountTotal: remainingDiscount,
               splitItems: refreshedSplitItems,
               allowSplitOption:
                 refreshedSplitUnits > 1 &&
@@ -2170,6 +2172,8 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
     navigation.push("Payment", {
         title: shouldSettle ? "Settle Payment" : "Change Payment Method",
         orderTotal: totals.total,
+        orderSubTotal: totals.subtotal,
+        orderDiscountTotal: totals.discount,
         companyId: resolvedCompanyId,
         splitItems: splitPaymentItems,
         allowSplitOption,
