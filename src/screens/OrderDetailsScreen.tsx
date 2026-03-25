@@ -2207,6 +2207,8 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
         orderDiscountTotal: totals.discount,
         orderDeliveryCharge: resolvedDeliveryCharge,
         orderDeliveryTypeId: serviceTypeId,
+        selectedAddressDeliveryCharge:
+          selectedCustomerAddress?.deliveryCharge ?? null,
         companyId: resolvedCompanyId,
         splitItems: splitPaymentItems,
         allowSplitOption,
@@ -2220,6 +2222,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
     resolvedDeliveryCharge,
     resolvedCompanyId,
     serviceTypeId,
+    selectedCustomerAddress?.deliveryCharge,
     splitPaymentItems,
     totals.total,
     totals.subtotal,

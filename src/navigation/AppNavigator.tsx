@@ -60,7 +60,12 @@ export type RootStackParamList = {
   Payment: {
     title?: string;
     orderTotal?: number;
+    orderSubTotal?: number;
+    orderDiscountTotal?: number;
+    orderDeliveryCharge?: number;
+    orderDeliveryTypeId?: number;
     companyId?: number;
+    selectedAddressDeliveryCharge?: number | null;
     splitItems?: any[];
     allowSplitOption?: boolean;
     hidePrintPreview?: boolean;

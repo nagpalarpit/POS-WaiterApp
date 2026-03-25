@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Keyboard,
   Pressable,
   StyleSheet,
   Switch,
@@ -47,6 +48,10 @@ type CustomerFormState = {
 };
 
 type DeliverySettingOption = DeliverySettingRecord;
+type PincodePickerState = {
+  localKey: string;
+  query: string;
+} | null;
 
 const createLocalKey = () =>
   `customer_address_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -214,11 +219,10 @@ export default function CustomerDrawer({
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [form, setForm] = useState<CustomerFormState>(() => createFormState());
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [focusedPincodeKey, setFocusedPincodeKey] = useState<string | null>(null);
   const [liveDeliverySettings, setLiveDeliverySettings] = useState<
     DeliverySettingOption[]
   >([]);
-
+  const [pincodePicker, setPincodePicker] = useState<PincodePickerState>(null);
   const deliverySettings = useMemo(
     () =>
       liveDeliverySettings.length > 0
@@ -229,12 +233,13 @@ export default function CustomerDrawer({
 
   useEffect(() => {
     if (!visible) {
+      Keyboard.dismiss();
       setMode('list');
       setEditingCustomer(null);
       setErrors({});
       setSearchQuery('');
-      setFocusedPincodeKey(null);
       setLiveDeliverySettings([]);
+      setPincodePicker(null);
       return;
     }
 
@@ -281,6 +286,7 @@ export default function CustomerDrawer({
     const loadDeliverySettings = async () => {
       try {
         setLoadingDeliverySettings(true);
+        setLiveDeliverySettings([]);
         const list = await deliverySettingService.listDeliverySettings();
         if (isActive) {
           setLiveDeliverySettings(list);
@@ -314,6 +320,39 @@ export default function CustomerDrawer({
     [form.addresses],
   );
 
+  const activePincodeAddress = useMemo(() => {
+    if (!pincodePicker) return null;
+    return (
+      activeAddresses.find((address) => address.localKey === pincodePicker.localKey) || null
+    );
+  }, [activeAddresses, pincodePicker]);
+
+  useEffect(() => {
+    if (
+      pincodePicker &&
+      !activeAddresses.some((address) => address.localKey === pincodePicker.localKey)
+    ) {
+      setPincodePicker(null);
+    }
+  }, [activeAddresses, pincodePicker]);
+
+  const filteredPinOptions = useMemo(() => {
+    if (!pincodePicker) return [];
+
+    const query = pincodePicker.query.trim().toLowerCase();
+    if (!query) {
+      return deliverySettings.slice(0, 12);
+    }
+
+    return deliverySettings
+      .filter((item) => {
+        const pin = item.pincode.toLowerCase();
+        const city = item.city.toLowerCase();
+        return pin.includes(query) || city.includes(query);
+      })
+      .slice(0, 20);
+  }, [deliverySettings, pincodePicker]);
+
   const updateForm = (patch: Partial<CustomerFormState>) => {
     setForm((current) => ({ ...current, ...patch }));
   };
@@ -334,6 +373,7 @@ export default function CustomerDrawer({
     setEditingCustomer(null);
     setErrors({});
     setForm(createFormState(null, searchQuery));
+    setPincodePicker(null);
     setMode('form');
   };
 
@@ -341,18 +381,23 @@ export default function CustomerDrawer({
     setEditingCustomer(customer);
     setErrors({});
     setForm(createFormState(customer));
+    setPincodePicker(null);
     setMode('form');
   };
 
   const handleSelectCustomer = async (customer: Customer | null) => {
+    Keyboard.dismiss();
+    setPincodePicker(null);
     await onSelect(customer);
     onClose();
   };
 
   const handleBackToList = () => {
+    Keyboard.dismiss();
     setMode('list');
     setEditingCustomer(null);
     setErrors({});
+    setPincodePicker(null);
   };
 
   const addAddress = () => {
@@ -386,31 +431,11 @@ export default function CustomerDrawer({
     });
   };
 
-  const getDeliverySettingMatches = (address: CustomerFormAddress) => {
-    const pincodeQuery = address.pincode.trim().toLowerCase();
-    const cityQuery = address.city.trim().toLowerCase();
-    if (!pincodeQuery && !cityQuery) {
-      return focusedPincodeKey === address.localKey
-        ? deliverySettings.slice(0, 12)
-        : [];
-    }
-
-    return deliverySettings
-      .filter((item) => {
-        const pin = item.pincode.toLowerCase();
-        const city = item.city.toLowerCase();
-        return (
-          (!!pincodeQuery && pin.includes(pincodeQuery)) ||
-          (!!cityQuery && city.includes(cityQuery))
-        );
-      })
-      .slice(0, 5);
-  };
-
   const applyDeliverySetting = (
     localKey: string,
     deliverySetting: DeliverySettingOption,
   ) => {
+    updateForm({ selectedAddressKey: localKey });
     updateAddress(localKey, {
       pincode: deliverySetting.pincode,
       city: deliverySetting.city,
@@ -418,27 +443,31 @@ export default function CustomerDrawer({
       minimumOrderValue: deliverySetting.minimumOrderValue,
       deliveryCharge: deliverySetting.deliveryCharge,
     });
-    setFocusedPincodeKey(null);
+    setPincodePicker(null);
   };
 
-  const handlePincodeChange = (localKey: string, value: string) => {
-    const normalizedValue = value.trim().toLowerCase();
-    const exactMatch = deliverySettings.find(
-      (item) => item.pincode.trim().toLowerCase() === normalizedValue,
-    );
-
-    if (exactMatch) {
-      applyDeliverySetting(localKey, exactMatch);
-      return;
-    }
-
-    updateAddress(localKey, {
-      pincode: value,
-      city: '',
-      deliverySettingId: null,
-      minimumOrderValue: null,
-      deliveryCharge: null,
+  const openPincodePicker = (address: CustomerFormAddress) => {
+    Keyboard.dismiss();
+    setPincodePicker({
+      localKey: address.localKey,
+      query: address.pincode || address.city || '',
     });
+  };
+
+  const closePincodePicker = () => {
+    Keyboard.dismiss();
+    setPincodePicker(null);
+  };
+
+  const updatePincodeSearch = (value: string) => {
+    setPincodePicker((current) =>
+      current
+        ? {
+            ...current,
+            query: value,
+          }
+        : current,
+    );
   };
 
   const validateForm = () => {
@@ -597,6 +626,76 @@ export default function CustomerDrawer({
     </View>
   );
 
+  const renderPickerField = ({
+    label,
+    value,
+    placeholder,
+    error,
+    onPress,
+    disabled = false,
+  }: {
+    label: string;
+    value: string;
+    placeholder: string;
+    error?: string;
+    onPress: () => void;
+    disabled?: boolean;
+  }) => (
+    <View style={{ marginBottom: 14 }}>
+      <Text style={[styles.fieldLabel, { color: colors.text }]}>{label}</Text>
+      <TouchableOpacity
+        onPress={onPress}
+        disabled={disabled}
+        activeOpacity={0.85}
+        style={{
+          minHeight: 48,
+          borderWidth: 1,
+          borderColor: error ? colors.error || '#f26e73' : colors.border,
+          borderRadius: 14,
+          backgroundColor: colors.surface,
+          paddingHorizontal: 14,
+          paddingVertical: 10,
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          opacity: disabled ? 0.65 : 1,
+        }}
+      >
+        <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, paddingRight: 10 }}>
+          <MaterialCommunityIcons
+            name="map-search-outline"
+            size={18}
+            color={value ? colors.primary : colors.textSecondary}
+          />
+          <Text
+            numberOfLines={1}
+            style={{
+              marginLeft: 10,
+              color: value ? colors.text : colors.textSecondary,
+              flex: 1,
+            }}
+          >
+            {value || placeholder}
+          </Text>
+        </View>
+        {disabled ? (
+          <ActivityIndicator size="small" color={colors.primary} />
+        ) : (
+          <MaterialIcons
+            name="keyboard-arrow-right"
+            size={22}
+            color={colors.textSecondary}
+          />
+        )}
+      </TouchableOpacity>
+      {error ? (
+        <Text style={{ color: colors.error || '#f26e73', fontSize: 11, marginTop: 6 }}>
+          {error}
+        </Text>
+      ) : null}
+    </View>
+  );
+
   const footer =
     mode === 'list' ? (
       <View style={{ flexDirection: 'row', gap: 10 }}>
@@ -676,22 +775,40 @@ export default function CustomerDrawer({
       </View>
     );
 
-  return (
-    <BottomDrawer
-      visible={visible}
-      onClose={onClose}
-      title={mode === 'list' ? 'Customer' : editingCustomer ? 'Edit Customer' : 'Add Customer'}
-      subtitle={
-        mode === 'list'
-          ? 'Search, select, or create a customer for this order.'
-          : 'Use the same customer details and address rules as POS.'
-      }
-      fullHeight
-      maxHeightRatio={0.98}
-      footer={footer}
+  const pincodeFooter = (
+    <TouchableOpacity
+      onPress={closePincodePicker}
+      style={{
+        borderRadius: 14,
+        backgroundColor: colors.primary,
+        minHeight: 48,
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
     >
-      {mode === 'list' ? (
-        <View>
+      <Text style={{ color: colors.textInverse || '#fff', fontWeight: '800' }}>
+        Done
+      </Text>
+    </TouchableOpacity>
+  );
+
+  return (
+    <>
+      <BottomDrawer
+        visible={visible}
+        onClose={onClose}
+        title={mode === 'list' ? 'Customer' : editingCustomer ? 'Edit Customer' : 'Add Customer'}
+        subtitle={
+          mode === 'list'
+            ? 'Search, select, or create a customer for this order.'
+            : 'Use the same customer details and address rules as POS.'
+        }
+        fullHeight
+        maxHeightRatio={0.98}
+        footer={footer}
+      >
+        {mode === 'list' ? (
+          <View>
           <View
             style={{
               flexDirection: 'row',
@@ -1043,21 +1160,24 @@ export default function CustomerDrawer({
 
               <TouchableOpacity
                 onPress={addAddress}
+                accessibilityRole="button"
+                accessibilityLabel="Add address"
                 style={{
-                  borderRadius: 12,
+                  width: 44,
+                  height: 44,
+                  borderRadius: 22,
                   borderWidth: 1,
                   borderColor: colors.border,
                   backgroundColor: colors.surface,
-                  paddingHorizontal: 12,
-                  paddingVertical: 9,
-                  flexDirection: 'row',
                   alignItems: 'center',
+                  justifyContent: 'center',
                 }}
               >
-                <MaterialIcons name="add" size={18} color={colors.text} />
-                <Text style={{ color: colors.text, fontWeight: '700', marginLeft: 4 }}>
-                  Add Address
-                </Text>
+                <MaterialCommunityIcons
+                  name="map-marker-plus-outline"
+                  size={22}
+                  color={colors.text}
+                />
               </TouchableOpacity>
             </View>
 
@@ -1069,7 +1189,6 @@ export default function CustomerDrawer({
 
             {activeAddresses.map((address, index) => {
               const isSelected = form.selectedAddressKey === address.localKey;
-              const matches = getDeliverySettingMatches(address);
               return (
                 <View
                   key={address.localKey}
@@ -1148,14 +1267,13 @@ export default function CustomerDrawer({
                     placeholder: 'Optional landmark',
                   })}
 
-                  {renderField({
+                  {renderPickerField({
                     label: 'Pincode',
                     value: address.pincode,
-                    onChangeText: (value) => handlePincodeChange(address.localKey, value),
-                    placeholder: 'Search or select pincode',
-                    keyboardType: 'number-pad',
+                    onPress: () => openPincodePicker(address),
+                    placeholder: 'Tap to search post code or city',
                     error: errors[`pincode-${address.localKey}`],
-                    onFocus: () => setFocusedPincodeKey(address.localKey),
+                    disabled: loadingDeliverySettings,
                   })}
 
                   {loadingDeliverySettings ? (
@@ -1164,44 +1282,6 @@ export default function CustomerDrawer({
                       <Text style={{ color: colors.textSecondary, fontSize: 11, marginLeft: 8 }}>
                         Loading delivery settings...
                       </Text>
-                    </View>
-                  ) : null}
-
-                  {matches.length > 0 ? (
-                    <View style={{ marginTop: -6, marginBottom: 12 }}>
-                      <Text style={{ color: colors.textSecondary, fontSize: 11, marginBottom: 8 }}>
-                        Select pincode and city
-                      </Text>
-                      {matches.map((match) => (
-                        <TouchableOpacity
-                          key={`${match.id ?? `${match.pincode}-${match.city}`}`}
-                          onPress={() => applyDeliverySetting(address.localKey, match)}
-                          style={{
-                            borderWidth: 1,
-                            borderColor: colors.border,
-                            backgroundColor: colors.surfaceHover || colors.background,
-                            borderRadius: 12,
-                            paddingHorizontal: 12,
-                            paddingVertical: 10,
-                            marginBottom: 8,
-                          }}
-                        >
-                          <Text style={{ color: colors.text, fontWeight: '700' }}>
-                            {match.pincode} {match.city ? `- ${match.city}` : ''}
-                          </Text>
-                          {(match.minimumOrderValue != null || match.deliveryCharge != null) ? (
-                            <Text style={{ color: colors.textSecondary, marginTop: 4, fontSize: 12 }}>
-                              {match.minimumOrderValue != null
-                                ? `Min ${match.minimumOrderValue}`
-                                : 'Min n/a'}
-                              {'  '}
-                              {match.deliveryCharge != null
-                                ? `Charge ${match.deliveryCharge}`
-                                : 'Charge n/a'}
-                            </Text>
-                          ) : null}
-                        </TouchableOpacity>
-                      ))}
                     </View>
                   ) : null}
 
@@ -1246,6 +1326,139 @@ export default function CustomerDrawer({
           ) : null}
         </View>
       )}
-    </BottomDrawer>
+      </BottomDrawer>
+
+      <BottomDrawer
+        visible={visible && !!pincodePicker}
+        onClose={closePincodePicker}
+        title="Select Pincode"
+        subtitle="Search by post code or city, then choose the matching delivery area."
+        fullHeight
+        maxHeightRatio={0.92}
+        footer={pincodeFooter}
+      >
+        <View>
+          <View
+            style={{
+              borderWidth: 1,
+              borderColor: colors.border,
+              borderRadius: 12,
+              backgroundColor: colors.surface,
+              minHeight: 46,
+              flexDirection: 'row',
+              alignItems: 'center',
+              paddingHorizontal: 12,
+              marginBottom: 10,
+            }}
+          >
+            <MaterialIcons name="search" size={18} color={colors.textSecondary} />
+            <TextInput
+              value={pincodePicker?.query || ''}
+              onChangeText={updatePincodeSearch}
+              placeholder="Search by post code or city"
+              placeholderTextColor={colors.textSecondary}
+              style={{
+                flex: 1,
+                marginLeft: 8,
+                color: colors.text,
+                paddingVertical: 10,
+              }}
+            />
+            {pincodePicker?.query ? (
+              <TouchableOpacity onPress={() => updatePincodeSearch('')}>
+                <MaterialIcons name="close" size={18} color={colors.textSecondary} />
+              </TouchableOpacity>
+            ) : null}
+          </View>
+
+          {loadingDeliverySettings ? (
+            <View style={{ paddingVertical: 12, alignItems: 'center' }}>
+              <ActivityIndicator color={colors.primary} />
+              <Text style={{ color: colors.textSecondary, marginTop: 8, fontSize: 12 }}>
+                Loading delivery settings...
+              </Text>
+            </View>
+          ) : filteredPinOptions.length === 0 ? (
+            <View
+              style={{
+                borderWidth: 1,
+                borderColor: colors.border,
+                backgroundColor: colors.surface,
+                borderRadius: 12,
+                padding: 14,
+                alignItems: 'center',
+              }}
+            >
+              <MaterialCommunityIcons
+                name="map-search-outline"
+                size={22}
+                color={colors.textSecondary}
+              />
+              <Text style={{ color: colors.text, fontWeight: '700', marginTop: 8 }}>
+                No delivery areas found
+              </Text>
+              <Text
+                style={{
+                  color: colors.textSecondary,
+                  marginTop: 4,
+                  textAlign: 'center',
+                  lineHeight: 18,
+                  fontSize: 12,
+                }}
+              >
+                Try another post code or city for this address.
+              </Text>
+            </View>
+          ) : (
+            filteredPinOptions.map((pin) => (
+              <TouchableOpacity
+                key={`${pin.id ?? `${pin.pincode}-${pin.city}`}`}
+                onPress={() => {
+                  if (pincodePicker?.localKey) {
+                    applyDeliverySetting(pincodePicker.localKey, pin);
+                  }
+                }}
+                style={{
+                  borderWidth: 1,
+                  borderColor:
+                    activePincodeAddress?.deliverySettingId === pin.id ||
+                    (activePincodeAddress?.pincode === pin.pincode &&
+                      activePincodeAddress?.city === pin.city)
+                      ? colors.primary
+                      : colors.border,
+                  backgroundColor: colors.surface,
+                  borderRadius: 12,
+                  paddingHorizontal: 12,
+                  paddingVertical: 10,
+                  marginBottom: 8,
+                }}
+              >
+                <Text style={{ color: colors.text, fontWeight: '700' }}>
+                  {pin.pincode} / {pin.city}
+                </Text>
+                {(pin.minimumOrderValue != null || pin.deliveryCharge != null) ? (
+                  <Text
+                    style={{
+                      color: colors.textSecondary,
+                      marginTop: 4,
+                      fontSize: 12,
+                      lineHeight: 18,
+                    }}
+                  >
+                    {pin.minimumOrderValue != null
+                      ? `Min ${pin.minimumOrderValue}`
+                      : 'Min n/a'}
+                    {'  '}
+                    {pin.deliveryCharge != null
+                      ? `Charge ${pin.deliveryCharge}`
+                      : 'Charge n/a'}
+                  </Text>
+                ) : null}
+              </TouchableOpacity>
+            ))
+          )}
+        </View>
+      </BottomDrawer>
+    </>
   );
 }

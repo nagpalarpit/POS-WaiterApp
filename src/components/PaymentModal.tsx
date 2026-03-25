@@ -27,6 +27,9 @@ import {
   clearPaymentFlowHandlers,
   getPaymentFlowHandlers,
 } from "../services/paymentFlowStore";
+import PinModal from "./PinModal";
+import AppBottomSheet from "./AppBottomSheet";
+import AppBottomSheetTextInput from "./AppBottomSheetTextInput";
 
 type PaymentDetail = {
   paymentProcessorId: number;
@@ -77,6 +80,7 @@ type PaymentRouteParams = {
   orderDiscountTotal?: number;
   orderDeliveryCharge?: number;
   orderDeliveryTypeId?: number;
+  selectedAddressDeliveryCharge?: number | null;
   companyId?: number;
   splitItems?: SplitSelectableItem[];
   allowSplitOption?: boolean;
@@ -143,6 +147,15 @@ const clamp = (value: number, min: number, max: number): number => {
   return value;
 };
 
+const sanitizeAmountInput = (value: string): string => {
+  const cleaned = value.replace(/[^0-9.]/g, "");
+  const [whole = "", ...rest] = cleaned.split(".");
+  if (rest.length === 0) {
+    return whole;
+  }
+  return `${whole}.${rest.join("")}`;
+};
+
 const PAYMENT_METHOD_LABELS: Record<number, string> = {
   0: "Cash",
   1: "Card",
@@ -186,6 +199,7 @@ export default function PaymentScreen(props: PaymentScreenProps) {
     orderDiscountTotal = 0,
     orderDeliveryCharge = 0,
     orderDeliveryTypeId = 0,
+    selectedAddressDeliveryCharge = null,
     companyId,
     splitItems = [],
     allowSplitOption = true,
@@ -216,6 +230,7 @@ export default function PaymentScreen(props: PaymentScreenProps) {
   );
   const [tipValue, setTipValue] = useState("");
   const [deliveryChargeValue, setDeliveryChargeValue] = useState("");
+  const [deliveryChargeDraft, setDeliveryChargeDraft] = useState("");
   const [cashProvided, setCashProvided] = useState("");
   const [giftCode, setGiftCode] = useState("");
   const [splitGiftCode, setSplitGiftCode] = useState("");
@@ -225,6 +240,12 @@ export default function PaymentScreen(props: PaymentScreenProps) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSplitMode, setIsSplitMode] = useState(false);
   const [showOtherMethods, setShowOtherMethods] = useState(false);
+  const [pinModalVisible, setPinModalVisible] = useState(false);
+  const [deliveryChargeEditorVisible, setDeliveryChargeEditorVisible] =
+    useState(false);
+  const [deliveryChargePinVerified, setDeliveryChargePinVerified] = useState(
+    () => selectedAddressDeliveryCharge == null,
+  );
   const [splitPaymentMethod, setSplitPaymentMethod] = useState(0);
   const [currentOrderTotal, setCurrentOrderTotal] = useState(() =>
     round2(toNumber(orderTotal, 0)),
@@ -241,6 +262,12 @@ export default function PaymentScreen(props: PaymentScreenProps) {
   const [currentOrderDeliveryTypeId, setCurrentOrderDeliveryTypeId] = useState(
     () => Math.max(0, Math.floor(toNumber(orderDeliveryTypeId, 0))),
   );
+  const [currentSelectedAddressDeliveryCharge, setCurrentSelectedAddressDeliveryCharge] =
+    useState<number | null>(() =>
+      selectedAddressDeliveryCharge == null
+        ? null
+        : round2(Math.max(toNumber(selectedAddressDeliveryCharge, 0), 0)),
+    );
   const [currentSplitItems, setCurrentSplitItems] =
     useState<SplitSelectableItem[]>(splitItems);
   const [currentAllowSplitOption, setCurrentAllowSplitOption] =
@@ -303,6 +330,15 @@ export default function PaymentScreen(props: PaymentScreenProps) {
       Math.max(0, Math.floor(toNumber(orderDeliveryTypeId, 0))),
     );
   }, [orderDeliveryTypeId]);
+
+  useEffect(() => {
+    const normalizedSelectedCharge =
+      selectedAddressDeliveryCharge == null
+        ? null
+        : round2(Math.max(toNumber(selectedAddressDeliveryCharge, 0), 0));
+    setCurrentSelectedAddressDeliveryCharge(normalizedSelectedCharge);
+    setDeliveryChargePinVerified(normalizedSelectedCharge == null);
+  }, [selectedAddressDeliveryCharge]);
 
   useEffect(() => {
     setCurrentSplitItems(splitItems);
@@ -372,6 +408,11 @@ export default function PaymentScreen(props: PaymentScreenProps) {
     ? splitDiscountTotal
     : resolvedOrderDiscountTotal;
   const showDeliveryChargeField = currentOrderDeliveryTypeId === 1;
+  const isAddressDeliveryChargeLocked =
+    showDeliveryChargeField &&
+    !isSplitMode &&
+    currentSelectedAddressDeliveryCharge != null &&
+    !deliveryChargePinVerified;
   const displayDeliveryCharge = showDeliveryChargeField
     ? isSplitMode && splitRemainingAmount > 0
       ? 0
@@ -521,10 +562,67 @@ export default function PaymentScreen(props: PaymentScreenProps) {
   };
 
   useEffect(() => {
+    const preferredDeliveryCharge =
+      currentOrderDeliveryTypeId === 1 &&
+      currentSelectedAddressDeliveryCharge != null
+        ? currentSelectedAddressDeliveryCharge
+        : resolvedOrderDeliveryCharge;
     setDeliveryChargeValue(
-      resolvedOrderDeliveryCharge > 0 ? `${resolvedOrderDeliveryCharge}` : "",
+      preferredDeliveryCharge > 0 ? `${preferredDeliveryCharge}` : "",
     );
-  }, [resolvedOrderDeliveryCharge, currentOrderDeliveryTypeId]);
+  }, [
+    resolvedOrderDeliveryCharge,
+    currentOrderDeliveryTypeId,
+    currentSelectedAddressDeliveryCharge,
+  ]);
+
+  const openDeliveryChargeEditor = () => {
+    if (!showDeliveryChargeField || isSplitMode) {
+      return;
+    }
+
+    if (isAddressDeliveryChargeLocked) {
+      setPinModalVisible(true);
+      return;
+    }
+
+    setDeliveryChargeDraft(
+      deliveryChargeValue ||
+        `${Math.max(
+          toNumber(currentSelectedAddressDeliveryCharge, 0),
+          toNumber(currentOrderDeliveryCharge, 0),
+          0,
+        )}`,
+    );
+    setDeliveryChargeEditorVisible(true);
+  };
+
+  const handleDeliveryChargePinVerified = () => {
+    setDeliveryChargePinVerified(true);
+    setPinModalVisible(false);
+    setDeliveryChargeDraft(
+      deliveryChargeValue ||
+        `${Math.max(
+          toNumber(currentSelectedAddressDeliveryCharge, 0),
+          toNumber(currentOrderDeliveryCharge, 0),
+          0,
+        )}`,
+    );
+    requestAnimationFrame(() => {
+      setDeliveryChargeEditorVisible(true);
+    });
+  };
+
+  const handleSaveDeliveryCharge = () => {
+    const nextDeliveryCharge = round2(
+      clamp(toAmount(deliveryChargeDraft), 0, 999999),
+    );
+    setCurrentOrderDeliveryCharge(nextDeliveryCharge);
+    setDeliveryChargeValue(
+      nextDeliveryCharge > 0 ? `${nextDeliveryCharge}` : "",
+    );
+    setDeliveryChargeEditorVisible(false);
+  };
 
   const resolvePaymentMethod = () => {
     if (isSplitMode) return splitPaymentMethod;
@@ -627,7 +725,7 @@ export default function PaymentScreen(props: PaymentScreenProps) {
         return;
       }
     } catch (error) {
-      console.error("Payment failed:", error);
+      console.log("Payment failed:", error);
       showToast("error", "Unable to process payment");
     } finally {
       setIsProcessing(false);
@@ -1039,20 +1137,75 @@ export default function PaymentScreen(props: PaymentScreenProps) {
 
               {showDeliveryChargeField ? (
                 <View style={{ marginTop: 12 }}>
-                  <Text style={{ color: colors.textSecondary }}>
-                    Delivery Charge
-                  </Text>
-                  <TextInput
-                    keyboardType="numeric"
-                    placeholder="Enter delivery charge"
-                    placeholderTextColor={colors.textSecondary}
-                    value={deliveryChargeValue}
-                    onChangeText={setDeliveryChargeValue}
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      marginBottom: 8,
+                      gap: 10,
+                    }}
+                  >
+                    <Text style={{ color: colors.textSecondary }}>
+                      Delivery Charge
+                    </Text>
+                    {!isSplitMode ? (
+                      <TouchableOpacity
+                        onPress={openDeliveryChargeEditor}
+                        style={{
+                          borderRadius: 999,
+                          borderWidth: 1,
+                          borderColor: colors.border,
+                          paddingHorizontal: 12,
+                          paddingVertical: 7,
+                          backgroundColor:
+                            colors.surfaceHover || colors.surface,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            color: colors.primary,
+                            fontWeight: "700",
+                            fontSize: 12,
+                          }}
+                        >
+                          {isAddressDeliveryChargeLocked
+                            ? "PIN to Change"
+                            : "Change"}
+                        </Text>
+                      </TouchableOpacity>
+                    ) : null}
+                  </View>
+                  <View
                     style={[
                       styles.input,
-                      { borderColor: colors.border, color: colors.text },
+                      {
+                        borderColor: colors.border,
+                        justifyContent: "center",
+                        backgroundColor: colors.surfaceHover || colors.surface,
+                      },
                     ]}
-                  />
+                  >
+                    <Text style={{ color: colors.text, fontWeight: "700" }}>
+                      {formatCurrency(deliveryChargeNum)}
+                    </Text>
+                  </View>
+                  <Text
+                    style={{
+                      color: colors.textSecondary,
+                      fontSize: 12,
+                      marginTop: 8,
+                      lineHeight: 18,
+                    }}
+                  >
+                    {isSplitMode && splitRemainingAmount > 0
+                      ? "Delivery charge is applied only when the final split is settled."
+                      : isAddressDeliveryChargeLocked
+                        ? "This charge came from the selected address. Enter PIN to override it."
+                        : currentSelectedAddressDeliveryCharge != null
+                          ? "Address delivery charge unlocked. You can change it if needed."
+                          : "No address-fixed delivery charge found. You can change this amount if needed."}
+                  </Text>
                 </View>
               ) : null}
 
@@ -1407,6 +1560,71 @@ export default function PaymentScreen(props: PaymentScreenProps) {
           </View>
         </View>
       </View>
+      <PinModal
+        visible={pinModalVisible}
+        onClose={() => setPinModalVisible(false)}
+        onVerified={handleDeliveryChargePinVerified}
+      />
+      <AppBottomSheet
+        visible={deliveryChargeEditorVisible}
+        onClose={() => setDeliveryChargeEditorVisible(false)}
+        title="Delivery Charge"
+        subtitle="Update the delivery charge for this payment."
+        snapPoints={["40%"]}
+        scrollable={false}
+        footer={
+          <View style={{ flexDirection: "row", gap: 10 }}>
+            <TouchableOpacity
+              onPress={() => setDeliveryChargeEditorVisible(false)}
+              style={[
+                styles.footerBtn,
+                {
+                  flex: 1,
+                  borderColor: colors.border,
+                  backgroundColor: colors.surface,
+                },
+              ]}
+            >
+              <Text style={{ color: colors.textSecondary, fontWeight: "700" }}>
+                Cancel
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={handleSaveDeliveryCharge}
+              style={[
+                styles.footerBtnPrimary,
+                {
+                  flex: 1,
+                  backgroundColor: colors.primary,
+                },
+              ]}
+            >
+              <Text style={{ color: colors.textInverse, fontWeight: "700" }}>
+                Save
+              </Text>
+            </TouchableOpacity>
+          </View>
+        }
+      >
+        <View>
+          <Text style={{ color: colors.textSecondary, marginBottom: 8 }}>
+            Delivery Charge
+          </Text>
+          <AppBottomSheetTextInput
+            keyboardType="numeric"
+            placeholder="Enter delivery charge"
+            placeholderTextColor={colors.textSecondary}
+            value={deliveryChargeDraft}
+            onChangeText={(value) =>
+              setDeliveryChargeDraft(sanitizeAmountInput(value))
+            }
+            style={[
+              styles.input,
+              { borderColor: colors.border, color: colors.text, marginTop: 0 },
+            ]}
+          />
+        </View>
+      </AppBottomSheet>
     </View>
   );
 }
