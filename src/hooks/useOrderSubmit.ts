@@ -16,6 +16,7 @@ import {
 import {
   buildPosOrderCustomer,
   buildPosOrderCustomerFields,
+  getSelectedCustomerAddress,
 } from '../utils/customerData';
 import { OrderServiceTiming } from '../types/orderFlow';
 
@@ -191,8 +192,16 @@ export const useOrderSubmit = (
           }
         : undefined;
       const selectedCustomer = cart.currentUser ?? null;
+      const selectedCustomerAddress = getSelectedCustomerAddress(selectedCustomer);
       const customerFields = buildPosOrderCustomerFields(selectedCustomer);
       const orderCustomer = buildPosOrderCustomer(selectedCustomer);
+      const deliveryCharge =
+        deliveryType === 1
+          ? toNumber(
+              selectedCustomerAddress?.deliveryCharge,
+              toNumber(existingOrder?.orderDetails?.deliveryCharge, 0),
+            )
+          : 0;
       const now = new Date().toISOString();
       const orderItems = prepareOrderItems(companyId);
       const total = subtotal - discount;
@@ -246,6 +255,7 @@ export const useOrderSubmit = (
           orderStatusId: baseStatusId,
           orderSubTotal: subtotal,
           orderTotal: total,
+          deliveryCharge,
           createdAt: existingDetails?.createdAt ?? existingOrder?.createdAt ?? now,
           count: nextCount,
           discountId: appliedDiscount?.discountId ?? null,
@@ -375,6 +385,7 @@ export const useOrderSubmit = (
         orderStatusId: ORDER_STATUS_PENDING,
         orderSubTotal: subtotal,
         orderTotal: total,
+        deliveryCharge,
         createdAt: now,
         count: 1,
         discountId: appliedDiscount?.discountId ?? null,

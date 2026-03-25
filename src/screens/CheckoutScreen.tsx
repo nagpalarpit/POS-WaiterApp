@@ -215,6 +215,9 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
   const familyName = currentServiceTiming?.familyName?.trim() || '';
   const selectedCustomer = checkoutCart.currentUser || null;
   const selectedCustomerAddress = getSelectedCustomerAddress(selectedCustomer);
+  const deliveryCharge =
+    deliveryType === 1 ? toNumber(selectedCustomerAddress?.deliveryCharge, 0) : 0;
+  const totalPayable = total + deliveryCharge;
   const selectedCustomerName =
     getCustomerDisplayName(selectedCustomer) ||
     selectedCustomer?.mobileNo ||
@@ -674,6 +677,22 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
                 </Text>
               </View>
             ) : null}
+
+            {deliveryType === 1 && deliveryCharge > 0 ? (
+              <View style={styles.serviceMetaRow}>
+                <MaterialCommunityIcons
+                  name="truck-fast-outline"
+                  size={16}
+                  color={colors.textSecondary}
+                />
+                <Text style={{ color: colors.textSecondary, fontSize: 12, marginLeft: 8 }}>
+                  Delivery Charge:{' '}
+                  <Text style={{ color: colors.text, fontWeight: '700' }}>
+                    {formatCurrency(deliveryCharge)}
+                  </Text>
+                </Text>
+              </View>
+            ) : null}
           </View>
         ) : null}
 
@@ -769,10 +788,19 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
             </View>
           ) : null}
 
+          {deliveryCharge > 0 ? (
+            <View style={styles.summaryRow}>
+              <Text style={{ color: colors.textSecondary, fontSize: 12 }}>Delivery Charge</Text>
+              <Text style={{ color: colors.text, fontWeight: '700' }}>
+                {formatCurrency(deliveryCharge)}
+              </Text>
+            </View>
+          ) : null}
+
           <View style={[styles.summaryRow, { borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 8 }]}>
             <Text style={{ color: colors.text, fontWeight: '800' }}>Total Payable</Text>
             <Text style={{ color: colors.primary, fontWeight: '800', fontSize: 18 }}>
-              {formatCurrency(total)}
+              {formatCurrency(totalPayable)}
             </Text>
           </View>
         </View>

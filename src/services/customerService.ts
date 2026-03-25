@@ -36,6 +36,41 @@ const extractResponseData = (response: any) =>
   response?.data ??
   response;
 
+const hydrateCustomerResponse = (
+  response: any,
+  fallback: CustomerUpsertPayload & { id?: number | string | null },
+): Customer | null => {
+  const normalizedResponse = normalizeCustomer(extractResponseData(response));
+  const normalizedFallback = normalizeCustomer(fallback);
+
+  if (!normalizedResponse && !normalizedFallback) {
+    return null;
+  }
+
+  if (!normalizedResponse) {
+    return normalizedFallback;
+  }
+
+  if (!normalizedFallback) {
+    return normalizedResponse;
+  }
+
+  return {
+    ...normalizedFallback,
+    ...normalizedResponse,
+    addresses:
+      normalizedResponse.addresses.length > 0
+        ? normalizedResponse.addresses
+        : normalizedFallback.addresses,
+    customerAddressId:
+      normalizedResponse.customerAddressId ??
+      normalizedFallback.customerAddressId ??
+      normalizedResponse.addresses[0]?.id ??
+      normalizedFallback.addresses[0]?.id ??
+      null,
+  };
+};
+
 class CustomerService {
   private async getCompanyId(): Promise<number | null> {
     const userDataStr = await AsyncStorage.getItem(STORAGE_KEYS.authUser);
@@ -88,9 +123,7 @@ class CustomerService {
       () => api.post(CUSTOMER_ENDPOINTS.CREATE, payload),
     );
 
-    const normalized =
-      normalizeCustomer(extractResponseData(response)) ||
-      normalizeCustomer(payload);
+    const normalized = hydrateCustomerResponse(response, payload);
 
     if (!normalized) {
       throw new Error('Unable to create customer');
@@ -109,9 +142,10 @@ class CustomerService {
       () => api.put(endpoint, payload),
     );
 
-    const normalized =
-      normalizeCustomer(extractResponseData(response)) ||
-      normalizeCustomer({ id: customerId, ...payload });
+    const normalized = hydrateCustomerResponse(response, {
+      id: customerId,
+      ...payload,
+    });
 
     if (!normalized) {
       throw new Error('Unable to update customer');

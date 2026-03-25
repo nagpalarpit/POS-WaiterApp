@@ -625,6 +625,13 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
   const selectedCustomerName = getCustomerDisplayName(selectedCustomer);
   const selectedCustomerAddress = getSelectedCustomerAddress(selectedCustomer);
   const selectedCustomerAddressText = formatCustomerAddress(selectedCustomerAddress);
+  const resolvedDeliveryCharge =
+    serviceTypeId === 1
+      ? toNumber(
+          displayedOrderDetails?.deliveryCharge,
+          toNumber(selectedCustomerAddress?.deliveryCharge, 0),
+        )
+      : 0;
   const orderStatusLabel = getOrderStatusLabel(order);
   const statusTone = getStatusTone(orderStatusLabel, colors);
   const isPaid = displayedOrderDetails?.isPaid === 1;
@@ -975,7 +982,10 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
         option?.giftCardTotal ?? giftCard?.amount,
         0,
       );
-      const deliveryCharge = toNumber(orderDetails?.deliveryCharge, 0);
+      const deliveryCharge = toNumber(
+        option?.deliveryCharge,
+        resolvedDeliveryCharge,
+      );
       const currency = orderDetails?.currency || "EUR";
       const defaultAmount = totals.total + tip + deliveryCharge - giftCardTotal;
       const incomingPaymentDetails = Array.isArray(option?.orderPaymentDetails)
@@ -1026,9 +1036,19 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
         : Array.isArray(orderDetails?.orderItems)
           ? orderDetails.orderItems
           : [];
+      const orderLevelDiscountId =
+        orderDetails?.discountId ??
+        orderDetails?.discount?.discountId ??
+        orderDetails?.discount?.id ??
+        null;
 
       let normalizedOrderItems = rawOrderItems.map((item: any) => ({
         companyId: item.companyId ?? companyId,
+        discountId:
+          item.discountId ??
+          item.discount?.discountId ??
+          item.discount?.id ??
+          orderLevelDiscountId,
         categoryId:
           item.categoryId ?? item.menuCategoryId ?? item.category?.id ?? 0,
         cartId: item.cartId,
@@ -1046,10 +1066,14 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
         groupLabel: item.groupLabel ?? "",
         customId: item.customId ?? item.customID ?? item.customId ?? null,
         tax: item.tax ?? item.taxInfo ?? item.taxObj ?? null,
+        discountItems: item.discountItems ?? [],
         splitPaidQuantity: toNumber(item.splitPaidQuantity, 0),
         atgPinsSale: item.atgPinsSale ?? false,
         atgVatPercent: toNumber(item.atgVatPercent, 0),
         atgOrderPayload: item.atgOrderPayload ?? null,
+        ...(item.extraCategory !== undefined && item.extraCategory !== null
+          ? { extraCategory: item.extraCategory }
+          : {}),
         ...(item.orderItemVariant
           ? { orderItemVariant: item.orderItemVariant }
           : {}),
@@ -1454,6 +1478,10 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
               orderTotal: remainingTotal,
               orderSubTotal: remainingSubTotal,
               orderDiscountTotal: remainingDiscount,
+              orderDeliveryCharge: toNumber(
+                remainingOrderDetails?.deliveryCharge,
+                0,
+              ),
               splitItems: refreshedSplitItems,
               allowSplitOption:
                 refreshedSplitUnits > 1 &&
@@ -2122,7 +2150,10 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
         giftCard: option?.giftCard ?? null,
         appliedGiftCard: option?.giftCard ?? null,
         giftCardTotal: toNumber(option?.giftCardTotal, 0),
-        deliveryCharge: toNumber(orderDetails?.deliveryCharge, 0),
+        deliveryCharge: toNumber(
+          option?.deliveryCharge,
+          resolvedDeliveryCharge,
+        ),
         orderPaymentSummary:
           option?.orderPaymentSummary ?? { paymentProcessorId: paymentMethod },
         orderPaymentDetails: Array.isArray(option?.orderPaymentDetails)
@@ -2174,6 +2205,8 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
         orderTotal: totals.total,
         orderSubTotal: totals.subtotal,
         orderDiscountTotal: totals.discount,
+        orderDeliveryCharge: resolvedDeliveryCharge,
+        orderDeliveryTypeId: serviceTypeId,
         companyId: resolvedCompanyId,
         splitItems: splitPaymentItems,
         allowSplitOption,
@@ -2184,9 +2217,13 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
     hideDeleteForSplit,
     navigation,
     registerPaymentHandlers,
+    resolvedDeliveryCharge,
     resolvedCompanyId,
+    serviceTypeId,
     splitPaymentItems,
     totals.total,
+    totals.subtotal,
+    totals.discount,
   ]);
 
   const handleOpenPaymentModal = useCallback(() => {

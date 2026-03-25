@@ -13,6 +13,9 @@ import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import BottomDrawer from './BottomDrawer';
 import { useTheme } from '../theme/ThemeProvider';
 import customerService from '../services/customerService';
+import deliverySettingService, {
+  DeliverySettingRecord,
+} from '../services/deliverySettingService';
 import { Customer, CustomerAddress, CustomerUpsertPayload } from '../types/customer';
 import {
   formatCustomerAddress,
@@ -43,13 +46,7 @@ type CustomerFormState = {
   selectedAddressKey: string | null;
 };
 
-type DeliverySettingOption = {
-  id: number | string | null;
-  pincode: string;
-  city: string;
-  minimumOrderValue: number | null;
-  deliveryCharge: number | null;
-};
+type DeliverySettingOption = DeliverySettingRecord;
 
 const createLocalKey = () =>
   `customer_address_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -212,14 +209,22 @@ export default function CustomerDrawer({
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [loadingList, setLoadingList] = useState(false);
+  const [loadingDeliverySettings, setLoadingDeliverySettings] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [form, setForm] = useState<CustomerFormState>(() => createFormState());
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [focusedPincodeKey, setFocusedPincodeKey] = useState<string | null>(null);
+  const [liveDeliverySettings, setLiveDeliverySettings] = useState<
+    DeliverySettingOption[]
+  >([]);
 
   const deliverySettings = useMemo(
-    () => normalizeDeliverySettings(settings),
-    [settings],
+    () =>
+      liveDeliverySettings.length > 0
+        ? liveDeliverySettings
+        : normalizeDeliverySettings(settings),
+    [liveDeliverySettings, settings],
   );
 
   useEffect(() => {
@@ -228,6 +233,8 @@ export default function CustomerDrawer({
       setEditingCustomer(null);
       setErrors({});
       setSearchQuery('');
+      setFocusedPincodeKey(null);
+      setLiveDeliverySettings([]);
       return;
     }
 
@@ -263,6 +270,36 @@ export default function CustomerDrawer({
       clearTimeout(timer);
     };
   }, [mode, visible, searchQuery]);
+
+  useEffect(() => {
+    if (!visible || mode !== 'form') {
+      return;
+    }
+
+    let isActive = true;
+
+    const loadDeliverySettings = async () => {
+      try {
+        setLoadingDeliverySettings(true);
+        const list = await deliverySettingService.listDeliverySettings();
+        if (isActive) {
+          setLiveDeliverySettings(list);
+        }
+      } catch (error) {
+        console.error('CustomerDrawer: Failed to load delivery settings', error);
+      } finally {
+        if (isActive) {
+          setLoadingDeliverySettings(false);
+        }
+      }
+    };
+
+    loadDeliverySettings();
+
+    return () => {
+      isActive = false;
+    };
+  }, [mode, visible]);
 
   const selectedCustomerMatches = (customer: Customer) => {
     if (!selectedCustomer) return false;
@@ -352,7 +389,11 @@ export default function CustomerDrawer({
   const getDeliverySettingMatches = (address: CustomerFormAddress) => {
     const pincodeQuery = address.pincode.trim().toLowerCase();
     const cityQuery = address.city.trim().toLowerCase();
-    if (!pincodeQuery && !cityQuery) return [];
+    if (!pincodeQuery && !cityQuery) {
+      return focusedPincodeKey === address.localKey
+        ? deliverySettings.slice(0, 12)
+        : [];
+    }
 
     return deliverySettings
       .filter((item) => {
@@ -376,6 +417,27 @@ export default function CustomerDrawer({
       deliverySettingId: deliverySetting.id,
       minimumOrderValue: deliverySetting.minimumOrderValue,
       deliveryCharge: deliverySetting.deliveryCharge,
+    });
+    setFocusedPincodeKey(null);
+  };
+
+  const handlePincodeChange = (localKey: string, value: string) => {
+    const normalizedValue = value.trim().toLowerCase();
+    const exactMatch = deliverySettings.find(
+      (item) => item.pincode.trim().toLowerCase() === normalizedValue,
+    );
+
+    if (exactMatch) {
+      applyDeliverySetting(localKey, exactMatch);
+      return;
+    }
+
+    updateAddress(localKey, {
+      pincode: value,
+      city: '',
+      deliverySettingId: null,
+      minimumOrderValue: null,
+      deliveryCharge: null,
     });
   };
 
@@ -492,6 +554,7 @@ export default function CustomerDrawer({
     keyboardType,
     editable = true,
     multiline = false,
+    onFocus,
   }: {
     label: string;
     value: string;
@@ -501,6 +564,7 @@ export default function CustomerDrawer({
     keyboardType?: 'default' | 'email-address' | 'number-pad' | 'phone-pad';
     editable?: boolean;
     multiline?: boolean;
+    onFocus?: () => void;
   }) => (
     <View style={{ marginBottom: 14 }}>
       <Text style={[styles.fieldLabel, { color: colors.text }]}>{label}</Text>
@@ -512,6 +576,7 @@ export default function CustomerDrawer({
         keyboardType={keyboardType}
         editable={editable}
         multiline={multiline}
+        onFocus={onFocus}
         style={{
           minHeight: multiline ? 88 : 48,
           borderWidth: 1,
@@ -1086,16 +1151,26 @@ export default function CustomerDrawer({
                   {renderField({
                     label: 'Pincode',
                     value: address.pincode,
-                    onChangeText: (value) => updateAddress(address.localKey, { pincode: value }),
-                    placeholder: 'Enter pincode',
+                    onChangeText: (value) => handlePincodeChange(address.localKey, value),
+                    placeholder: 'Search or select pincode',
                     keyboardType: 'number-pad',
                     error: errors[`pincode-${address.localKey}`],
+                    onFocus: () => setFocusedPincodeKey(address.localKey),
                   })}
+
+                  {loadingDeliverySettings ? (
+                    <View style={{ marginTop: -6, marginBottom: 12, flexDirection: 'row', alignItems: 'center' }}>
+                      <ActivityIndicator size="small" color={colors.primary} />
+                      <Text style={{ color: colors.textSecondary, fontSize: 11, marginLeft: 8 }}>
+                        Loading delivery settings...
+                      </Text>
+                    </View>
+                  ) : null}
 
                   {matches.length > 0 ? (
                     <View style={{ marginTop: -6, marginBottom: 12 }}>
                       <Text style={{ color: colors.textSecondary, fontSize: 11, marginBottom: 8 }}>
-                        Matching delivery settings
+                        Select pincode and city
                       </Text>
                       {matches.map((match) => (
                         <TouchableOpacity
@@ -1133,9 +1208,10 @@ export default function CustomerDrawer({
                   {renderField({
                     label: 'City',
                     value: address.city,
-                    onChangeText: (value) => updateAddress(address.localKey, { city: value }),
-                    placeholder: 'Enter city',
+                    onChangeText: () => undefined,
+                    placeholder: 'Auto-filled from pincode',
                     error: errors[`city-${address.localKey}`],
+                    editable: false,
                   })}
 
                   {(address.minimumOrderValue != null || address.deliveryCharge != null) ? (

@@ -52,6 +52,7 @@ export interface PlaceOrderDetailsPayload {
   orderStatusId: number;
   orderSubTotal: number;
   orderTotal: number;
+  deliveryCharge?: number;
   createdAt: string;
   count: number;
   discountId?: number | string | null;

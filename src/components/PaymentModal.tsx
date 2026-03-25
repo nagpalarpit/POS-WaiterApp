@@ -58,6 +58,7 @@ type PaymentOption = {
   label: string;
   paymentMethod?: number;
   tip?: number;
+  deliveryCharge?: number;
   giftCard?: GiftCard | null;
   giftCardTotal?: number;
   cashProvided?: number;
@@ -74,6 +75,8 @@ type PaymentRouteParams = {
   orderTotal?: number;
   orderSubTotal?: number;
   orderDiscountTotal?: number;
+  orderDeliveryCharge?: number;
+  orderDeliveryTypeId?: number;
   companyId?: number;
   splitItems?: SplitSelectableItem[];
   allowSplitOption?: boolean;
@@ -181,6 +184,8 @@ export default function PaymentScreen(props: PaymentScreenProps) {
     orderTotal = 0,
     orderSubTotal = 0,
     orderDiscountTotal = 0,
+    orderDeliveryCharge = 0,
+    orderDeliveryTypeId = 0,
     companyId,
     splitItems = [],
     allowSplitOption = true,
@@ -210,6 +215,7 @@ export default function PaymentScreen(props: PaymentScreenProps) {
     otherMethods[0]?.id ?? 5,
   );
   const [tipValue, setTipValue] = useState("");
+  const [deliveryChargeValue, setDeliveryChargeValue] = useState("");
   const [cashProvided, setCashProvided] = useState("");
   const [giftCode, setGiftCode] = useState("");
   const [splitGiftCode, setSplitGiftCode] = useState("");
@@ -228,6 +234,12 @@ export default function PaymentScreen(props: PaymentScreenProps) {
   );
   const [currentOrderDiscountTotal, setCurrentOrderDiscountTotal] = useState(
     () => round2(Math.max(toNumber(orderDiscountTotal, 0), 0)),
+  );
+  const [currentOrderDeliveryCharge, setCurrentOrderDeliveryCharge] = useState(
+    () => round2(Math.max(toNumber(orderDeliveryCharge, 0), 0)),
+  );
+  const [currentOrderDeliveryTypeId, setCurrentOrderDeliveryTypeId] = useState(
+    () => Math.max(0, Math.floor(toNumber(orderDeliveryTypeId, 0))),
   );
   const [currentSplitItems, setCurrentSplitItems] =
     useState<SplitSelectableItem[]>(splitItems);
@@ -283,6 +295,16 @@ export default function PaymentScreen(props: PaymentScreenProps) {
   }, [orderDiscountTotal]);
 
   useEffect(() => {
+    setCurrentOrderDeliveryCharge(round2(Math.max(toNumber(orderDeliveryCharge, 0), 0)));
+  }, [orderDeliveryCharge]);
+
+  useEffect(() => {
+    setCurrentOrderDeliveryTypeId(
+      Math.max(0, Math.floor(toNumber(orderDeliveryTypeId, 0))),
+    );
+  }, [orderDeliveryTypeId]);
+
+  useEffect(() => {
     setCurrentSplitItems(splitItems);
   }, [splitItems]);
 
@@ -301,6 +323,10 @@ export default function PaymentScreen(props: PaymentScreenProps) {
   const resolvedOrderDiscountTotal = round2(
     Math.max(toNumber(currentOrderDiscountTotal, 0), 0),
   );
+  const resolvedOrderDeliveryCharge = round2(
+    Math.max(toNumber(currentOrderDeliveryCharge, 0), 0),
+  );
+  const deliveryChargeNum = round2(clamp(toAmount(deliveryChargeValue), 0, 999999));
   const resolvedOrderSubTotal = round2(
     Math.max(
       toNumber(currentOrderSubTotal, 0),
@@ -345,13 +371,21 @@ export default function PaymentScreen(props: PaymentScreenProps) {
   const displayDiscount = isSplitMode
     ? splitDiscountTotal
     : resolvedOrderDiscountTotal;
+  const showDeliveryChargeField = currentOrderDeliveryTypeId === 1;
+  const displayDeliveryCharge = showDeliveryChargeField
+    ? isSplitMode && splitRemainingAmount > 0
+      ? 0
+      : deliveryChargeNum
+    : 0;
   const baseTotal = round2(Math.max(displaySubTotal - displayDiscount, 0));
   const tipNum = round2(clamp(toAmount(tipValue), 0, 999999));
   const giftCardTotal = useMemo(
-    () => round2(getGiftCardDiscount(activeGiftCard, baseTotal + tipNum)),
-    [activeGiftCard, baseTotal, tipNum],
+    () => round2(getGiftCardDiscount(activeGiftCard, baseTotal + displayDeliveryCharge + tipNum)),
+    [activeGiftCard, baseTotal, displayDeliveryCharge, tipNum],
   );
-  const due = round2(Math.max(baseTotal + tipNum - giftCardTotal, 0));
+  const due = round2(
+    Math.max(baseTotal + displayDeliveryCharge + tipNum - giftCardTotal, 0),
+  );
   const showPrintPreview = !!getCurrentFlowHandlers()?.onPrintPreview && !hidePrintPreview;
   const isSplitInvalid = isSplitMode && splitItemTotal <= 0;
   const row1Count = 2 + (showPrintPreview ? 1 : 0);
@@ -427,6 +461,7 @@ export default function PaymentScreen(props: PaymentScreenProps) {
     orderTotal?: number;
     orderSubTotal?: number;
     orderDiscountTotal?: number;
+    orderDeliveryCharge?: number;
     splitItems?: SplitSelectableItem[];
     allowSplitOption?: boolean;
   }) => {
@@ -453,6 +488,24 @@ export default function PaymentScreen(props: PaymentScreenProps) {
         0,
       ),
     );
+    setCurrentOrderDeliveryCharge(
+      Math.max(
+        toNumber(
+          resetPayment?.orderDeliveryCharge,
+          currentOrderDeliveryCharge,
+        ),
+        0,
+      ),
+    );
+    setDeliveryChargeValue(
+      `${Math.max(
+        toNumber(
+          resetPayment?.orderDeliveryCharge,
+          currentOrderDeliveryCharge,
+        ),
+        0,
+      )}`,
+    );
     setCurrentSplitItems(nextSplitItems);
     setCurrentAllowSplitOption(nextAllowSplitOption);
     setTipValue("");
@@ -466,6 +519,12 @@ export default function PaymentScreen(props: PaymentScreenProps) {
     setActiveTab(nextAllowSplitOption && nextSplitItems.length > 0 ? 2 : 0);
     setIsSplitMode(nextAllowSplitOption && nextSplitItems.length > 0);
   };
+
+  useEffect(() => {
+    setDeliveryChargeValue(
+      resolvedOrderDeliveryCharge > 0 ? `${resolvedOrderDeliveryCharge}` : "",
+    );
+  }, [resolvedOrderDeliveryCharge, currentOrderDeliveryTypeId]);
 
   const resolvePaymentMethod = () => {
     if (isSplitMode) return splitPaymentMethod;
@@ -483,6 +542,7 @@ export default function PaymentScreen(props: PaymentScreenProps) {
       label: getPaymentLabel(paymentMethod),
       paymentMethod,
       tip: tipNum,
+      deliveryCharge: displayDeliveryCharge,
       giftCardTotal,
       cashProvided: paymentMethod === 0 ? toAmount(cashProvided) : undefined,
       isCorporate,
@@ -977,6 +1037,25 @@ export default function PaymentScreen(props: PaymentScreenProps) {
                 />
               </View>
 
+              {showDeliveryChargeField ? (
+                <View style={{ marginTop: 12 }}>
+                  <Text style={{ color: colors.textSecondary }}>
+                    Delivery Charge
+                  </Text>
+                  <TextInput
+                    keyboardType="numeric"
+                    placeholder="Enter delivery charge"
+                    placeholderTextColor={colors.textSecondary}
+                    value={deliveryChargeValue}
+                    onChangeText={setDeliveryChargeValue}
+                    style={[
+                      styles.input,
+                      { borderColor: colors.border, color: colors.text },
+                    ]}
+                  />
+                </View>
+              ) : null}
+
               {showGiftCardSection ? (
                 <View style={{ marginTop: 12 }}>
                   <Text style={{ color: colors.textSecondary }}>
@@ -1099,6 +1178,16 @@ export default function PaymentScreen(props: PaymentScreenProps) {
                   <Text style={{ color: colors.textSecondary }}>Discount</Text>
                   <Text style={{ color: colors.error, fontWeight: "700" }}>
                     -{formatCurrency(displayDiscount)}
+                  </Text>
+                </View>
+              ) : null}
+              {displayDeliveryCharge > 0 ? (
+                <View style={styles.summaryRow}>
+                  <Text style={{ color: colors.textSecondary }}>
+                    Delivery Charge
+                  </Text>
+                  <Text style={{ color: colors.text, fontWeight: "700" }}>
+                    {formatCurrency(displayDeliveryCharge)}
                   </Text>
                 </View>
               ) : null}
