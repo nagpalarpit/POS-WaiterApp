@@ -59,6 +59,7 @@ import {
   getSelectedCustomerAddress,
   resolveOrderCustomer,
 } from "../utils/customerData";
+import { useSettings } from "../hooks/useSettings";
 
 const TSC_OFFLINE_MESSAGE =
   "Active TSS not found for the given POS and company.";
@@ -603,6 +604,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
   );
   const [pendingSettle, setPendingSettle] = useState(false);
   const pendingSettleRef = useRef(false);
+  const { settings } = useSettings();
 
   useEffect(() => {
     pendingSettleRef.current = pendingSettle;
@@ -625,12 +627,27 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
   const selectedCustomerName = getCustomerDisplayName(selectedCustomer);
   const selectedCustomerAddress = getSelectedCustomerAddress(selectedCustomer);
   const selectedCustomerAddressText = formatCustomerAddress(selectedCustomerAddress);
+  const settingsDeliveryCharge =
+    settings?.deliveryCharge !== undefined &&
+    settings?.deliveryCharge !== null
+      ? toNumber(settings.deliveryCharge, 0)
+      : null;
+  const customerAddressDeliveryCharge =
+    selectedCustomerAddress?.deliveryCharge !== undefined &&
+    selectedCustomerAddress?.deliveryCharge !== null
+      ? toNumber(selectedCustomerAddress.deliveryCharge, 0)
+      : null;
+  const storedDeliveryCharge =
+    displayedOrderDetails?.deliveryCharge !== undefined &&
+    displayedOrderDetails?.deliveryCharge !== null
+      ? toNumber(displayedOrderDetails.deliveryCharge, 0)
+      : null;
   const resolvedDeliveryCharge =
     serviceTypeId === 1
-      ? toNumber(
-          displayedOrderDetails?.deliveryCharge,
-          toNumber(selectedCustomerAddress?.deliveryCharge, 0),
-        )
+      ? customerAddressDeliveryCharge ??
+        settingsDeliveryCharge ??
+        storedDeliveryCharge ??
+        0
       : 0;
   const orderStatusLabel = getOrderStatusLabel(order);
   const statusTone = getStatusTone(orderStatusLabel, colors);

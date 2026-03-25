@@ -30,6 +30,7 @@ import {
 import PinModal from "./PinModal";
 import AppBottomSheet from "./AppBottomSheet";
 import AppBottomSheetTextInput from "./AppBottomSheetTextInput";
+import { useSettings } from "../hooks/useSettings";
 
 type PaymentDetail = {
   paymentProcessorId: number;
@@ -156,6 +157,12 @@ const sanitizeAmountInput = (value: string): string => {
   return `${whole}.${rest.join("")}`;
 };
 
+const normalizeNullableAmount = (value: unknown): number | null => {
+  if (value === null || value === undefined) return null;
+  if (typeof value === "string" && value.trim() === "") return null;
+  return round2(Math.max(toNumber(value, 0), 0));
+};
+
 const PAYMENT_METHOD_LABELS: Record<number, string> = {
   0: "Cash",
   1: "Card",
@@ -207,6 +214,7 @@ export default function PaymentScreen(props: PaymentScreenProps) {
   } = params;
   const { colors } = useTheme();
   const { showToast } = useToast();
+  const { settings } = useSettings();
   const scrollRef = useRef<ScrollView>(null);
   const insets = useSafeAreaInsets();
   const closeHandledRef = useRef(false);
@@ -359,6 +367,9 @@ export default function PaymentScreen(props: PaymentScreenProps) {
   const resolvedOrderDiscountTotal = round2(
     Math.max(toNumber(currentOrderDiscountTotal, 0), 0),
   );
+  const resolvedSettingsDeliveryCharge = normalizeNullableAmount(
+    settings?.deliveryCharge,
+  );
   const resolvedOrderDeliveryCharge = round2(
     Math.max(toNumber(currentOrderDeliveryCharge, 0), 0),
   );
@@ -408,10 +419,16 @@ export default function PaymentScreen(props: PaymentScreenProps) {
     ? splitDiscountTotal
     : resolvedOrderDiscountTotal;
   const showDeliveryChargeField = currentOrderDeliveryTypeId === 1;
+  const lockedDeliveryChargeSource =
+    currentSelectedAddressDeliveryCharge != null
+      ? "address"
+      : resolvedSettingsDeliveryCharge != null
+        ? "settings"
+        : null;
   const isAddressDeliveryChargeLocked =
     showDeliveryChargeField &&
     !isSplitMode &&
-    currentSelectedAddressDeliveryCharge != null &&
+    lockedDeliveryChargeSource != null &&
     !deliveryChargePinVerified;
   const displayDeliveryCharge = showDeliveryChargeField
     ? isSplitMode && splitRemainingAmount > 0
@@ -566,6 +583,9 @@ export default function PaymentScreen(props: PaymentScreenProps) {
       currentOrderDeliveryTypeId === 1 &&
       currentSelectedAddressDeliveryCharge != null
         ? currentSelectedAddressDeliveryCharge
+        : currentOrderDeliveryTypeId === 1 &&
+            resolvedSettingsDeliveryCharge != null
+          ? resolvedSettingsDeliveryCharge
         : resolvedOrderDeliveryCharge;
     setDeliveryChargeValue(
       preferredDeliveryCharge > 0 ? `${preferredDeliveryCharge}` : "",
@@ -574,7 +594,12 @@ export default function PaymentScreen(props: PaymentScreenProps) {
     resolvedOrderDeliveryCharge,
     currentOrderDeliveryTypeId,
     currentSelectedAddressDeliveryCharge,
+    resolvedSettingsDeliveryCharge,
   ]);
+
+  useEffect(() => {
+    setDeliveryChargePinVerified(lockedDeliveryChargeSource == null);
+  }, [lockedDeliveryChargeSource]);
 
   const openDeliveryChargeEditor = () => {
     if (!showDeliveryChargeField || isSplitMode) {
@@ -590,6 +615,7 @@ export default function PaymentScreen(props: PaymentScreenProps) {
       deliveryChargeValue ||
         `${Math.max(
           toNumber(currentSelectedAddressDeliveryCharge, 0),
+          toNumber(resolvedSettingsDeliveryCharge, 0),
           toNumber(currentOrderDeliveryCharge, 0),
           0,
         )}`,
@@ -604,6 +630,7 @@ export default function PaymentScreen(props: PaymentScreenProps) {
       deliveryChargeValue ||
         `${Math.max(
           toNumber(currentSelectedAddressDeliveryCharge, 0),
+          toNumber(resolvedSettingsDeliveryCharge, 0),
           toNumber(currentOrderDeliveryCharge, 0),
           0,
         )}`,
@@ -1201,9 +1228,13 @@ export default function PaymentScreen(props: PaymentScreenProps) {
                     {isSplitMode && splitRemainingAmount > 0
                       ? "Delivery charge is applied only when the final split is settled."
                       : isAddressDeliveryChargeLocked
-                        ? "This charge came from the selected address. Enter PIN to override it."
+                        ? lockedDeliveryChargeSource === "address"
+                          ? "This charge came from the selected address. Enter PIN to override it."
+                          : "This charge came from settings. Enter PIN to override it."
                         : currentSelectedAddressDeliveryCharge != null
                           ? "Address delivery charge unlocked. You can change it if needed."
+                          : resolvedSettingsDeliveryCharge != null
+                            ? "Settings delivery charge unlocked. You can change it if needed."
                           : "No address-fixed delivery charge found. You can change this amount if needed."}
                   </Text>
                 </View>

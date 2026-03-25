@@ -1,15 +1,17 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../constants/storageKeys';
 import localDatabase from '../services/localDatabase';
 import api from '../services/api';
 import { API_ENDPOINTS } from '../config/apiEndpoints';
+import { getSocket, onLocalSocketStatusChange } from '../services/socket';
 
 export interface Settings {
   totalTables?: number;
   enableDelivery?: boolean;
   enablePickup?: boolean;
   enableGroupLabel?: boolean;
+  deliveryCharge?: number | null;
   companyId?: string | number;
   companyName?: string;
   company?: {
@@ -52,6 +54,9 @@ const normalizeSettingsRecord = (record: any): Settings | null => {
 
   return {
     ...(settingInfo as Settings),
+    ...(settingInfo?.deliveryCharge !== undefined && settingInfo?.deliveryCharge !== ''
+      ? { deliveryCharge: Number(settingInfo.deliveryCharge) || 0 }
+      : {}),
     ...(companyId !== undefined ? { companyId } : {}),
     ...(companyName ? { companyName } : {}),
     company: {
@@ -72,7 +77,7 @@ export const useSettings = () => {
   /**
    * Load settings from local server or cloud fallback
    */
-  const loadSettings = async () => {
+  const loadSettings = useCallback(async () => {
     try {
       setLoadingSettings(true);
 
@@ -130,11 +135,65 @@ export const useSettings = () => {
     } finally {
       setLoadingSettings(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     loadSettings();
-  }, []);
+  }, [loadSettings]);
+
+  useEffect(() => {
+    let detachSocketListener: (() => void) | null = null;
+
+    const attachSettingsListener = () => {
+      const socket = getSocket();
+      if (!socket) {
+        return;
+      }
+
+      const handleSyncSettings = (payload: any) => {
+        setSettings((current) => {
+          const nextDeliveryCharge =
+            payload?.deliveryCharge !== undefined && payload?.deliveryCharge !== ''
+              ? Number(payload.deliveryCharge) || 0
+              : current?.deliveryCharge ?? null;
+
+          return {
+            ...DEFAULT_SETTINGS,
+            ...(current || {}),
+            ...(payload || {}),
+            deliveryCharge: nextDeliveryCharge,
+            company: {
+              ...(current?.company || {}),
+            },
+          };
+        });
+
+        void loadSettings();
+      };
+
+      socket.on('sync-settings', handleSyncSettings);
+      detachSocketListener = () => {
+        socket.off('sync-settings', handleSyncSettings);
+      };
+    };
+
+    attachSettingsListener();
+
+    const unsubscribeSocketStatus = onLocalSocketStatusChange((connected) => {
+      detachSocketListener?.();
+      detachSocketListener = null;
+
+      if (connected) {
+        attachSettingsListener();
+        void loadSettings();
+      }
+    });
+
+    return () => {
+      detachSocketListener?.();
+      unsubscribeSocketStatus();
+    };
+  }, [loadSettings]);
 
   return {
     settings,
