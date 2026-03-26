@@ -25,6 +25,7 @@ export const MenuItemCard: React.FC<MenuItemCardProps> = ({
   const hasVariants =
     Array.isArray(item.menuItemVariants) && item.menuItemVariants.length > 0;
   const hasDescription = !!item.description?.trim();
+  const itemCode = item.customId || item.id;
 
   return (
     <TouchableOpacity
@@ -62,6 +63,7 @@ export const MenuItemCard: React.FC<MenuItemCardProps> = ({
 
       <View style={{ marginTop: 10 }}>
         <Text style={{ color: colors.text, fontSize: 14, fontWeight: '700' }} numberOfLines={2}>
+          {itemCode ? `${itemCode}. ` : ''}
           {item.name}
         </Text>
 

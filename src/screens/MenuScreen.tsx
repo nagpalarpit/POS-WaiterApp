@@ -117,6 +117,17 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
   const isVoucherFlowItem = (item: any, category?: any) =>
     isVoucherCategory(category) || item?.vouchers != null;
 
+  const matchesMenuSearch = (item: any, query: string) => {
+    const trimmedQuery = query.trim();
+    if (!trimmedQuery) return true;
+
+    const normalizedQuery = trimmedQuery.toLowerCase();
+    const itemName = String(item?.name || '').toLowerCase();
+    const itemCustomId = String(item?.customId ?? item?.id ?? '').toLowerCase();
+
+    return itemName.includes(normalizedQuery) || itemCustomId.includes(normalizedQuery);
+  };
+
   const closeItemDetail = () => {
     setShowItemDetail(false);
     setSelectedMenuItem(null);
@@ -128,14 +139,29 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
 
   const resolveSingleVoucherItem = (categories: any[], voucherCategory: any) => {
     const categoryId = Number(voucherCategory?.categoryId ?? 0);
-    const itemId = Number(voucherCategory?.items?.[0]?.itemId ?? 0);
-    if (!categoryId || !itemId) return null;
+    const itemId = Number(
+      voucherCategory?.items?.[0]?.itemId ??
+        voucherCategory?.items?.[0]?.menuItemId ??
+        voucherCategory?.items?.[0]?.id ??
+        0,
+    );
+    const itemName =
+      typeof voucherCategory?.items?.[0] === 'string'
+        ? voucherCategory.items[0].trim()
+        : typeof voucherCategory?.items?.[0]?.name === 'string'
+          ? voucherCategory.items[0].name.trim()
+          : typeof voucherCategory?.items?.[0]?.itemName === 'string'
+            ? voucherCategory.items[0].itemName.trim()
+          : '';
+    if (!categoryId || (!itemId && !itemName)) return null;
 
     const matchedCategory = categories.find((menuCategory) => Number(menuCategory?.id) === categoryId);
     if (!matchedCategory) return null;
 
     const matchedItem = matchedCategory?.menuItems?.find(
-      (menuItem: any) => Number(menuItem?.id) === itemId,
+      (menuItem: any) =>
+        (itemId > 0 && Number(menuItem?.id) === itemId) ||
+        (itemName !== '' && String(menuItem?.name || '').trim() === itemName),
     );
 
     return matchedItem ? cloneData(matchedItem) : null;
@@ -314,24 +340,45 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
     setShowGroupModal(true);
   };
 
-  const activeCategory = menuData.categories[menuData.activeCategory];
-  const filteredItemsCount = useMemo(() => {
-    const items = activeCategory?.menuItems || [];
-    const query = searchQuery.trim().toLowerCase();
-    if (!query) return items.length;
-    return items.filter((item) => {
-      const searchable = [
-        item.name,
-        item.description,
-        item.sku,
-        String(item.customId ?? ''),
-      ]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase();
-      return searchable.includes(query);
-    }).length;
-  }, [activeCategory, searchQuery]);
+  const filteredCategories = useMemo(() => {
+    if (!searchQuery.trim()) {
+      return menuData.categories;
+    }
+
+    return menuData.categories
+      .map((category) => ({
+        ...category,
+        menuItems: (category.menuItems || []).filter((item) =>
+          matchesMenuSearch(item, searchQuery),
+        ),
+      }))
+      .filter((category) => (category.menuItems || []).length > 0);
+  }, [menuData.categories, searchQuery]);
+
+  const selectedCategoryId = menuData.categories[menuData.activeCategory]?.id;
+  const activeFilteredCategoryIndex = useMemo(() => {
+    if (!filteredCategories.length) {
+      return 0;
+    }
+
+    const matchedIndex = filteredCategories.findIndex(
+      (category) => category.id === selectedCategoryId,
+    );
+
+    return matchedIndex >= 0 ? matchedIndex : 0;
+  }, [filteredCategories, selectedCategoryId]);
+
+  const handleCategorySelect = (filteredIndex: number) => {
+    const selectedCategory = filteredCategories[filteredIndex];
+    if (!selectedCategory) {
+      return;
+    }
+
+    const sourceIndex = menuData.categories.findIndex(
+      (category) => category.id === selectedCategory.id,
+    );
+    menuData.setActiveCategory(sourceIndex >= 0 ? sourceIndex : 0);
+  };
 
   // Setup haptic feedback for cart quantity changes (animation handled in useCartFeedback)
   const previousCartQtyRef = useRef<number | null>(null);
@@ -444,13 +491,16 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
   };
 
   const addToCart = (item: any, categoryOverride?: any) => {
-    const category = categoryOverride || menuData.categories[menuData.activeCategory];
+    const category =
+      categoryOverride ||
+      filteredCategories[activeFilteredCategoryIndex] ||
+      menuData.categories[menuData.activeCategory];
     const normalizedItem = normalizeMenuItemForOptions(item);
+    const voucherFlow = isVoucherFlowItem(normalizedItem, category);
     const hasVariants =
       Array.isArray(normalizedItem.menuItemVariants) &&
       normalizedItem.menuItemVariants.length > 0;
-    const opensOptionsModal =
-      isVoucherFlowItem(normalizedItem, category) || hasVariants;
+    const opensOptionsModal = voucherFlow || hasVariants;
 
     if (item?.vouchers != null) {
       const preparedVoucher = prepareVoucherItem(normalizedItem);
@@ -469,20 +519,6 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
         preparedVoucher.requiresSelection === true ||
         hasVariants;
 
-      if (
-        !ensureGroupSelection({
-          category,
-          rawItem: preparedVoucher.item,
-          normalizedItem: preparedVoucher.item,
-          opensOptionsModal: shouldOpenVoucherModal,
-        })
-      ) {
-        if (shouldOpenVoucherModal) {
-          setSelectedVoucherCategories(preparedVoucher.categories || []);
-        }
-        return;
-      }
-
       if (shouldOpenVoucherModal) {
         setSelectedMenuCategory(category);
         setSelectedMenuItem(preparedVoucher.item);
@@ -492,6 +528,14 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
       }
 
       void handleAddToCartDirect(category, preparedVoucher.item, null, null, undefined);
+      return;
+    }
+
+    if (voucherFlow) {
+      setSelectedMenuCategory(category);
+      setSelectedMenuItem(normalizedItem);
+      setSelectedVoucherCategories([]);
+      setShowItemDetail(true);
       return;
     }
 
@@ -725,7 +769,7 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
         >
           <MaterialIcons name="search" size={19} color={colors.textSecondary} />
           <TextInput
-            placeholder="Search by item, code, or description"
+            placeholder="Search by item name or custom ID"
             placeholderTextColor={colors.textSecondary}
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -803,16 +847,16 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
         <View style={{ flex: 1 }}>
           {/* Category Tabs */}
           <CategoryTabs
-            categories={menuData.categories}
-            activeCategory={menuData.activeCategory}
-            onCategorySelect={menuData.setActiveCategory}
+            categories={filteredCategories}
+            activeCategory={activeFilteredCategoryIndex}
+            onCategorySelect={handleCategorySelect}
             colors={colors}
           />
 
           {/* Menu Items Grid */}
           <MenuItemsGrid
-            categories={menuData.categories}
-            activeCategory={menuData.activeCategory}
+            categories={filteredCategories}
+            activeCategory={activeFilteredCategoryIndex}
             onAddToCart={addToCart}
             searchQuery={searchQuery}
             colors={colors}

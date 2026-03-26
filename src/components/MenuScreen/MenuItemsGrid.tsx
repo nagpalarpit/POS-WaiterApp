@@ -14,7 +14,7 @@ interface MenuItemsGridProps {
 }
 
 /**
- * Grid of menu items for the active category
+ * Grid of menu items for the active visible category
  */
 export const MenuItemsGrid: React.FC<MenuItemsGridProps> = ({
   categories,
@@ -30,38 +30,26 @@ export const MenuItemsGrid: React.FC<MenuItemsGridProps> = ({
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 40, paddingHorizontal: 16 }}>
         <MaterialCommunityIcons
-          name="clipboard-off"
+          name={searchQuery.trim() ? 'food-off' : 'clipboard-off'}
           size={48}
           color={colors.textSecondary}
           style={{ marginBottom: 12 }}
         />
         <Text style={{ color: colors.text, fontSize: 16, fontWeight: '700', textAlign: 'center', marginBottom: 4 }}>
-          No Menu Available
+          {searchQuery.trim() ? 'No matching items' : 'No Menu Available'}
         </Text>
         <Text style={{ color: colors.textSecondary, fontSize: 13, textAlign: 'center' }}>
-          Please check back later or contact support
+          {searchQuery.trim()
+            ? `Try another item name or custom ID for "${searchQuery}"`
+            : 'Please check back later or contact support'}
         </Text>
       </View>
     );
   }
 
   const currentCategory = categories[activeCategory];
-  const normalizedSearch = searchQuery.trim().toLowerCase();
-  const menuItems = (currentCategory?.menuItems || []).filter((item) => {
-    if (!normalizedSearch) return true;
-
-    const searchable = [
-      item.name,
-      item.description,
-      item.sku,
-      String(item.customId ?? ''),
-    ]
-      .filter(Boolean)
-      .join(' ')
-      .toLowerCase();
-
-    return searchable.includes(normalizedSearch);
-  });
+  const normalizedSearch = searchQuery.trim();
+  const menuItems = currentCategory?.menuItems || [];
 
   const renderEmptyState = () => (
     <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 44, paddingHorizontal: 14 }}>
@@ -70,7 +58,9 @@ export const MenuItemsGrid: React.FC<MenuItemsGridProps> = ({
         {normalizedSearch ? 'No matching items' : `No items in ${currentCategory?.name || 'this category'}`}
       </Text>
       <Text style={{ color: colors.textSecondary, marginTop: 6, textAlign: 'center', fontSize: 12 }}>
-        {normalizedSearch ? `Try another keyword for "${searchQuery}"` : 'Items will appear here when available'}
+        {normalizedSearch
+          ? `Try another item name or custom ID for "${searchQuery}"`
+          : 'Items will appear here when available'}
       </Text>
     </View>
   );
