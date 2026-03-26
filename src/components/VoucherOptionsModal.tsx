@@ -39,8 +39,59 @@ const toNumber = (value: unknown, fallback = 0): number => {
 
 const cloneData = <T,>(value: T): T => JSON.parse(JSON.stringify(value));
 
-const normalizeOptionVariants = (item: any) =>
+const getAllowedStrings = (values: any, keys: string[] = ['name']): string[] =>
+  Array.isArray(values)
+    ? values
+        .map((entry: any) => {
+          if (typeof entry === 'string') return entry.trim();
+          if (!entry || typeof entry !== 'object') return '';
+
+          for (const key of keys) {
+            if (typeof entry?.[key] === 'string' && entry[key].trim()) {
+              return entry[key].trim();
+            }
+          }
+
+          return '';
+        })
+        .filter(Boolean)
+    : [];
+
+const getAllowedItemIds = (values: any): number[] =>
+  Array.isArray(values)
+    ? values
+        .map((entry: any) =>
+          Number(
+            entry?.itemId ??
+              entry?.menuItemId ??
+              entry?.id ??
+              (typeof entry === 'number' && Number.isFinite(entry) ? entry : 0),
+          ),
+        )
+        .filter(Boolean)
+    : [];
+
+const normalizeOptionVariants = (item: any, voucherCategory?: any) => {
+  const allowedVariantNames = getAllowedStrings(voucherCategory?.variantName, [
+    'name',
+    'variantName',
+  ]);
+  const allowedAttributeNames = getAllowedStrings(voucherCategory?.attributeName, [
+    'name',
+    'attributeName',
+  ]);
+  const allowedAttributeValueNames = getAllowedStrings(
+    voucherCategory?.attributeValueName,
+    ['name', 'attributeValueName'],
+  );
+
+  return (
   normalizeMenuItemVariants(item)
+    .filter((variant: any) =>
+      allowedVariantNames.length > 0
+        ? allowedVariantNames.includes(String(variant?.name || '').trim())
+        : true,
+    )
     .map((variant: any, variantIndex: number) => ({
       ...variant,
       id: variant?.id ?? variant?.menuItemVariantId ?? variantIndex + 1,
@@ -53,6 +104,11 @@ const normalizeOptionVariants = (item: any) =>
           : []
       )
         .filter(Boolean)
+        .filter((attribute: any) =>
+          allowedAttributeNames.length > 0
+            ? allowedAttributeNames.includes(String(attribute?.name ?? '').trim())
+            : true,
+        )
         .map((attribute: any, attributeIndex: number) => ({
           ...attribute,
           id: attribute?.id ?? attribute?.menuItemVariantAttributeId ?? attributeIndex + 1,
@@ -66,21 +122,31 @@ const normalizeOptionVariants = (item: any) =>
             : Array.isArray(attribute?.attributeValues)
               ? attribute.attributeValues
               : []
-          ).map((value: any, valueIndex: number) => ({
-            ...value,
-            id: value?.id ?? value?.menuItemVariantAttributeValueId ?? valueIndex + 1,
-            name:
-              value?.name ??
-              value?.menuItemVariantAttributeValue?.name ??
-              `Value ${valueIndex + 1}`,
-            price: toNumber(
-              value?.price ?? value?.unitPrice ?? value?.menuItemVariantAttributeValue?.price,
-              0,
-            ),
-          })),
-        })),
+          )
+            .map((value: any, valueIndex: number) => ({
+              ...value,
+              id: value?.id ?? value?.menuItemVariantAttributeValueId ?? valueIndex + 1,
+              name:
+                value?.name ??
+                value?.menuItemVariantAttributeValue?.name ??
+                `Value ${valueIndex + 1}`,
+              price: toNumber(
+                value?.price ?? value?.unitPrice ?? value?.menuItemVariantAttributeValue?.price,
+                0,
+              ),
+            }))
+            .filter((value: any) =>
+              allowedAttributeValueNames.length > 0
+                ? allowedAttributeValueNames.includes(String(value?.name ?? '').trim())
+                : true,
+            )
+            .sort((a: any, b: any) => String(a?.name || '').localeCompare(String(b?.name || ''))),
+        }))
+        .sort((a: any, b: any) => String(a?.name || '').localeCompare(String(b?.name || ''))),
     }))
-    .sort((a: any, b: any) => String(a?.name || '').localeCompare(String(b?.name || '')));
+    .sort((a: any, b: any) => String(a?.name || '').localeCompare(String(b?.name || '')))
+  );
+};
 
 const buildVoucherSlots = (item: any, availableCategories: any[]): VoucherSlot[] => {
   const voucherCategories = Array.isArray(item?.vouchers?.customerBuys?.categories)
@@ -89,25 +155,44 @@ const buildVoucherSlots = (item: any, availableCategories: any[]): VoucherSlot[]
   if (!voucherCategories.length || !availableCategories.length) return [];
 
   const slots: VoucherSlot[] = [];
+  const sortedCategories = availableCategories.map((categoryEntry: any) => ({
+    ...cloneData(categoryEntry),
+    menuItems: (Array.isArray(categoryEntry?.menuItems) ? [...categoryEntry.menuItems] : [])
+      .sort(
+        (a: any, b: any) =>
+          toNumber(a?.customId ?? a?.id, 0) - toNumber(b?.customId ?? b?.id, 0),
+      ),
+  }));
+
   voucherCategories.forEach((voucherCategory: any, voucherCategoryIndex: number) => {
-    const matchedCategory = availableCategories.find(
+    const matchedCategory = sortedCategories.find(
       (entry: any) => Number(entry?.id) === Number(voucherCategory?.categoryId),
     );
     if (!matchedCategory) return;
 
-    const allowedItemIds = Array.isArray(voucherCategory?.items)
-      ? voucherCategory.items.map((entry: any) => Number(entry?.itemId ?? 0)).filter(Boolean)
-      : [];
+    const allowedItemIds = getAllowedItemIds(voucherCategory?.items);
+    const allowedItemNames = getAllowedStrings(voucherCategory?.items, ['name', 'itemName']);
 
     const items = (Array.isArray(matchedCategory?.menuItems) ? matchedCategory.menuItems : [])
-      .filter((menuItem: any) =>
-        allowedItemIds.length > 0 ? allowedItemIds.includes(Number(menuItem?.id)) : true,
-      )
+      .filter((menuItem: any) => {
+        if (allowedItemIds.length > 0) {
+          return allowedItemIds.includes(Number(menuItem?.id ?? menuItem?.menuItemId ?? 0));
+        }
+
+        if (allowedItemNames.length > 0) {
+          return allowedItemNames.includes(String(menuItem?.name || '').trim());
+        }
+
+        return true;
+      })
       .map((menuItem: any) => ({
         ...menuItem,
-        menuItemVariants: normalizeOptionVariants(menuItem),
+        menuItemVariants: normalizeOptionVariants(menuItem, voucherCategory),
       }))
-      .sort((a: any, b: any) => Number(a?.customId ?? 0) - Number(b?.customId ?? 0));
+      .sort(
+        (a: any, b: any) =>
+          toNumber(a?.customId ?? a?.id, 0) - toNumber(b?.customId ?? b?.id, 0),
+      );
 
     const quantity = Math.max(toNumber(voucherCategory?.quantity, 1), 1);
     for (let slotIndex = 0; slotIndex < quantity; slotIndex += 1) {
@@ -155,7 +240,37 @@ export default function VoucherOptionsModal({
   const isVariantVisible = normalizedVariants.length > 1;
 
   useEffect(() => {
+    console.log('VoucherOptionsModal: props/update', {
+      visible,
+      itemName: item?.name,
+      itemId: item?.id,
+      categoryName: category?.name,
+      categoryId: category?.id,
+      availableCategoriesCount: Array.isArray(availableCategories)
+        ? availableCategories.length
+        : 0,
+      voucherSlotsCount: voucherSlots.length,
+      isDiscountVoucher,
+      variantsCount: normalizedVariants.length,
+      vouchers: item?.vouchers,
+    });
+  }, [
+    availableCategories,
+    category,
+    isDiscountVoucher,
+    item,
+    normalizedVariants.length,
+    visible,
+    voucherSlots.length,
+  ]);
+
+  useEffect(() => {
     if (!visible) return;
+    console.log('VoucherOptionsModal: initializing state', {
+      itemName: item?.name,
+      voucherSlotsCount: voucherSlots.length,
+      variantNames: normalizedVariants.map((variant: any) => variant?.name),
+    });
     setSelectedVariant(normalizedVariants[0] ?? null);
     setSelectedAttribute(null);
     setSelectedAttributeValues([]);
@@ -347,6 +462,12 @@ export default function VoucherOptionsModal({
   };
 
   const handleVoucherSave = () => {
+    console.log('VoucherOptionsModal: handleVoucherSave', {
+      voucherReady,
+      selectedVoucherItemsCount: selectedVoucherItems.filter(Boolean).length,
+      selectedVoucherVariantsCount: selectedVoucherVariants.filter(Boolean).length,
+      selectedVoucherAttributesCount: selectedVoucherAttributes.length,
+    });
     if (!voucherReady) return;
 
     const voucherItem = cloneData(item);

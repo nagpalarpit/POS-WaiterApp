@@ -21,6 +21,13 @@ import { CommonActions } from "@react-navigation/native";
 import { useTheme } from "../theme/ThemeProvider";
 import Card from "./Card";
 import { formatCurrency } from "../utils/currency";
+import {
+  getAttributeValueName,
+  getAttributeValuePrice,
+  getAttributeValueQuantity,
+  getItemOptionsSummary,
+} from "../utils/cartCalculations";
+import { getVoucherDetailLines } from "../utils/voucherDetails";
 import giftCardService from "../services/giftCardService";
 import { useToast } from "./ToastProvider";
 import {
@@ -40,8 +47,14 @@ type PaymentDetail = {
 type SplitSelectableItem = {
   key: string;
   name: string;
+  itemName?: string;
+  customId?: number | string;
   quantity: number;
   unitTotal: number;
+  variantName?: string;
+  attributeName?: string;
+  attributeValues?: any[];
+  discountItems?: any[];
 };
 
 type GiftCard = {
@@ -1046,6 +1059,8 @@ export default function PaymentScreen(props: PaymentScreenProps) {
                         0,
                         Math.floor(splitSelections[index] || 0),
                       );
+                      const optionsSummary = getItemOptionsSummary(item as any);
+                      const voucherDetailLines = getVoucherDetailLines(item as any);
                       return (
                         <View
                           key={item.key || `${index}`}
@@ -1067,6 +1082,70 @@ export default function PaymentScreen(props: PaymentScreenProps) {
                             >
                               {item.name}
                             </Text>
+                            {!!optionsSummary && (
+                              <Text
+                                style={{
+                                  color: colors.textSecondary,
+                                  marginTop: 2,
+                                  fontSize: 12,
+                                }}
+                              >
+                                {optionsSummary}
+                              </Text>
+                            )}
+                            {voucherDetailLines.length > 0 && (
+                              <View style={{ marginTop: 2, marginBottom: 4 }}>
+                                {voucherDetailLines.map((line) => (
+                                  <Text
+                                    key={`${item.key}-${line.key}`}
+                                    style={{
+                                      color: colors.textSecondary,
+                                      marginTop: 2,
+                                      marginLeft: line.indent,
+                                      fontSize: line.isSection ? 10 : 12,
+                                      fontWeight:
+                                        line.isSection || line.isItem ? "600" : "400",
+                                      textTransform:
+                                        line.isSection ? "uppercase" : "none",
+                                      letterSpacing: line.isSection ? 0.6 : 0,
+                                    }}
+                                  >
+                                    {line.text}
+                                  </Text>
+                                ))}
+                              </View>
+                            )}
+                            {Array.isArray(item.attributeValues) &&
+                            item.attributeValues.length > 0 ? (
+                              <View style={{ marginTop: 2, marginBottom: 4 }}>
+                                {item.attributeValues.map(
+                                  (attributeValue: any, valueIndex: number) => {
+                                    const name = getAttributeValueName(attributeValue);
+                                    const valueQuantity =
+                                      getAttributeValueQuantity(attributeValue);
+                                    const valuePrice =
+                                      getAttributeValuePrice(attributeValue);
+                                    if (!name) return null;
+
+                                    return (
+                                      <Text
+                                        key={`${item.key}-value-${valueIndex}`}
+                                        style={{
+                                          color: colors.textSecondary,
+                                          marginTop: 2,
+                                          fontSize: 12,
+                                        }}
+                                      >
+                                        • {valueQuantity} x {name}
+                                        {valuePrice > 0
+                                          ? ` (+${formatCurrency(valuePrice)})`
+                                          : ""}
+                                      </Text>
+                                    );
+                                  },
+                                )}
+                              </View>
+                            ) : null}
                             <Text
                               style={{
                                 color: colors.textSecondary,

@@ -12,6 +12,7 @@ import {
   getItemUnitTotal,
 } from '../../utils/cartCalculations';
 import { formatCurrency } from '../../utils/currency';
+import { getVoucherDetailLines } from '../../utils/voucherDetails';
 
 interface CartItemRowProps {
   item: CartItem;
@@ -35,6 +36,7 @@ export const CartItemRow: React.FC<CartItemRowProps> = ({
   const itemUnitTotal = getItemUnitTotal(item);
   const itemLineTotal = getItemLineTotal(item);
   const optionsSummary = getItemOptionsSummary(item);
+  const voucherDetailLines = getVoucherDetailLines(item);
 
   return (
     <View
@@ -50,6 +52,28 @@ export const CartItemRow: React.FC<CartItemRowProps> = ({
         <Text className="text-xs" style={{ color: colors.textSecondary, marginBottom: 4 }}>
           {optionsSummary}
         </Text>
+      )}
+
+      {voucherDetailLines.length > 0 && (
+        <View style={{ marginBottom: 6 }}>
+          {voucherDetailLines.map((line) => (
+            <Text
+              key={line.key}
+              className="text-xs"
+              style={{
+                color: line.isSection ? colors.textSecondary : colors.textSecondary,
+                marginBottom: 3,
+                marginLeft: line.indent,
+                fontSize: line.isSection ? 10 : 12,
+                fontWeight: line.isSection || line.isItem ? '600' : '400',
+                textTransform: line.isSection ? 'uppercase' : 'none',
+                letterSpacing: line.isSection ? 0.6 : 0,
+              }}
+            >
+              {line.text}
+            </Text>
+          ))}
+        </View>
       )}
 
       {/* Variant price */}

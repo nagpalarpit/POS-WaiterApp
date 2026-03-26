@@ -52,6 +52,7 @@ import { useToast } from "../components/ToastProvider";
 import { setPaymentFlowHandlers } from "../services/paymentFlowStore";
 import serverConnection from "../services/serverConnection";
 import { formatOrderServiceTime } from "../utils/orderServiceDisplay";
+import { getVoucherDetailLines } from "../utils/voucherDetails";
 import {
   mergeOrderCustomerData,
   formatCustomerAddress,
@@ -563,8 +564,14 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
       items.map((item: any, index: number) => ({
         key: `${item.cartId || item.menuItemId || index}-${index}`,
         name: `${item.customId ? `${item.customId}. ` : ""}${item.itemName || "Item"}`,
+        itemName: item.itemName || "Item",
+        customId: item.customId,
         quantity: Math.max(getCartItemQuantity(item), 0),
         unitTotal: round2(getItemUnitTotal(item)),
+        variantName: item.variantName,
+        attributeName: item.attributeName,
+        attributeValues: item.attributeValues ?? [],
+        discountItems: item.discountItems ?? [],
       })),
     [items],
   );
@@ -1470,8 +1477,14 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
               return {
                 key: `${normalizedItem.cartId || normalizedItem.menuItemId || index}-${index}`,
                 name: `${normalizedItem.customId ? `${normalizedItem.customId}. ` : ""}${normalizedItem.itemName || "Item"}`,
+                itemName: normalizedItem.itemName || "Item",
+                customId: normalizedItem.customId,
                 quantity: Math.max(getCartItemQuantity(normalizedItem), 0),
                 unitTotal: round2(getItemUnitTotal(normalizedItem)),
+                variantName: normalizedItem.variantName,
+                attributeName: normalizedItem.attributeName,
+                attributeValues: normalizedItem.attributeValues ?? [],
+                discountItems: normalizedItem.discountItems ?? [],
               };
             },
           );
@@ -2271,6 +2284,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
     const itemUnitTotal = getItemUnitTotal(it);
     const itemLineTotal = getItemLineTotal(it);
     const optionsSummary = getItemOptionsSummary(it);
+    const voucherDetailLines = getVoucherDetailLines(it);
 
     return (
       <Card
@@ -2294,6 +2308,27 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
               >
                 {optionsSummary}
               </Text>
+            )}
+
+            {voucherDetailLines.length > 0 && (
+              <View style={{ marginTop: 2, marginBottom: 6 }}>
+                {voucherDetailLines.map((line) => (
+                  <Text
+                    key={`${it.cartId || it.itemId}-${line.key}`}
+                    style={{
+                      color: colors.textSecondary,
+                      marginTop: 2,
+                      marginLeft: line.indent,
+                      fontSize: line.isSection ? 10 : 12,
+                      fontWeight: line.isSection || line.isItem ? "600" : "400",
+                      textTransform: line.isSection ? "uppercase" : "none",
+                      letterSpacing: line.isSection ? 0.6 : 0,
+                    }}
+                  >
+                    {line.text}
+                  </Text>
+                ))}
+              </View>
             )}
 
             {Array.isArray(it.attributeValues) &&
