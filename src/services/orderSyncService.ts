@@ -193,6 +193,48 @@ const removeOrderCalculationTaxFields = <T>(value: T): T => {
   return sanitized as T;
 };
 
+type PosOrderSnapshotOptions = {
+  keepPrintFields?: boolean;
+};
+
+export const sanitizeOrderInfoForPos = <T extends Record<string, any>>(
+  orderInfo: T,
+  options: PosOrderSnapshotOptions = {},
+): T => {
+  if (!orderInfo || typeof orderInfo !== 'object') {
+    return orderInfo;
+  }
+
+  const sanitized: Record<string, any> = {
+    ...orderInfo,
+  };
+
+  delete sanitized.localOrderId;
+  delete sanitized._id;
+  delete sanitized.id;
+  delete sanitized.parentLocalOrderId;
+  delete sanitized.parentStornoLocalOrderId;
+  delete sanitized.paymentMethod;
+  delete sanitized.orderPaymentSummary;
+  delete sanitized.orderPaymentDetails;
+  delete sanitized.giftCardLogs;
+  delete sanitized.appliedGiftCard;
+  delete sanitized.isfullPaidWithGiftCard;
+
+  if (!options.keepPrintFields) {
+    delete sanitized.printObj;
+  } else if (sanitized.printObj && typeof sanitized.printObj === 'object') {
+    sanitized.printObj = {
+      ...sanitized.printObj,
+    };
+    delete sanitized.printObj.localOrderId;
+    delete sanitized.printObj._id;
+    delete sanitized.printObj.id;
+  }
+
+  return sanitized as T;
+};
+
 export const initOrderSync = () => {
   const socket = getSocket();
   if (!socket) return;
@@ -279,7 +321,10 @@ export const emitPosPrint = (orderInfo: any, paymentMethod?: number) => {
   const socket = getSocket();
   if (!socket) return;
   const printRequestId = registerPrintRequest();
-  const normalizedOrderInfo = mergeOrderCustomerData(orderInfo);
+  const normalizedOrderInfo = sanitizeOrderInfoForPos(
+    mergeOrderCustomerData(orderInfo),
+    { keepPrintFields: true },
+  );
   const currentUser = buildPosPrintCurrentUser(
     resolveOrderCustomer(normalizedOrderInfo),
   );
@@ -304,7 +349,10 @@ export const emitPosPrintPreview = (orderInfo: any, paymentMethod?: number) => {
   const socket = getSocket();
   if (!socket) return;
   const printRequestId = registerPrintRequest();
-  const normalizedOrderInfo = mergeOrderCustomerData(orderInfo);
+  const normalizedOrderInfo = sanitizeOrderInfoForPos(
+    mergeOrderCustomerData(orderInfo),
+    { keepPrintFields: true },
+  );
   const currentUser = buildPosPrintCurrentUser(
     resolveOrderCustomer(normalizedOrderInfo),
   );

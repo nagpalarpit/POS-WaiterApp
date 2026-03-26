@@ -161,6 +161,91 @@ class OrderService {
     return picked;
   }
 
+  private stripUndefinedDeep<T>(value: T): T {
+    if (value === undefined) {
+      return undefined as T;
+    }
+
+    if (value === null || typeof value !== 'object' || value instanceof Date) {
+      return value;
+    }
+
+    if (Array.isArray(value)) {
+      return value
+        .map((item) => this.stripUndefinedDeep(item))
+        .filter((item) => item !== undefined) as T;
+    }
+
+    const sanitized: Record<string, any> = {};
+
+    Object.entries(value as Record<string, any>).forEach(([key, itemValue]) => {
+      if (itemValue === undefined) return;
+
+      const cleanedValue = this.stripUndefinedDeep(itemValue);
+      if (cleanedValue !== undefined) {
+        sanitized[key] = cleanedValue;
+      }
+    });
+
+    return sanitized as T;
+  }
+
+  private buildEditPaymentSettleOrderInfo(orderInfo: any): any {
+    const merged = this.stripUndefinedDeep({ ...(orderInfo || {}) }) || {};
+
+    delete merged.id;
+    delete merged._id;
+    delete merged.paymentMethod;
+    delete merged.tip;
+    delete merged.deliveryCharge;
+    delete merged.orderPaymentSummary;
+    delete merged.orderPaymentDetails;
+
+    if (!Object.prototype.hasOwnProperty.call(merged, 'pickupDateTime')) {
+      merged.pickupDateTime = null;
+    }
+
+    if (!Object.prototype.hasOwnProperty.call(merged, 'orderTaxTotal')) {
+      merged.orderTaxTotal = 0;
+    }
+
+    if (!Object.prototype.hasOwnProperty.call(merged, 'orderCartTaxAndChargesTotal')) {
+      merged.orderCartTaxAndChargesTotal = 0;
+    }
+
+    const resolvedCompany =
+      merged.company ?? merged.user?.company ?? merged.tableArea?.company ?? undefined;
+
+    if (resolvedCompany) {
+      merged.company = resolvedCompany;
+
+      if (merged.tableArea && !merged.tableArea.company) {
+        merged.tableArea = {
+          ...merged.tableArea,
+          company: resolvedCompany,
+        };
+      }
+    }
+
+    if (Array.isArray(merged.orderItem)) {
+      merged.orderItem = merged.orderItem.map((item: any) => {
+        const nextItem = this.stripUndefinedDeep({ ...(item || {}) }) || {};
+
+        if (!Object.prototype.hasOwnProperty.call(nextItem, 'atgOrderPayload')) {
+          nextItem.atgOrderPayload = null;
+        }
+
+        if (Array.isArray(nextItem.discountItems) && nextItem.discountItems.length === 0) {
+          delete nextItem.discountItems;
+        }
+
+        return nextItem;
+      });
+    }
+
+    return merged;
+  }
+
   private buildCompactSettleOrderInfo(orderInfo: any): any {
     return this.removeNullishDeep(
       this.pickDefinedFields(orderInfo, [
@@ -214,17 +299,16 @@ class OrderService {
     extra: any = {},
   ): any {
     const extraOrderInfo = extra?.orderInfo || {};
-    const compactOrderInfo = {
-      ...this.buildCompactSettleOrderInfo(orderInfo ?? settlePayload?.orderInfo),
-      ...this.buildCompactSettleOrderInfo(extraOrderInfo),
-    };
+    const mergedOrderInfo = this.buildEditPaymentSettleOrderInfo({
+      ...(orderInfo ?? settlePayload?.orderInfo ?? {}),
+      ...extraOrderInfo,
+    });
     const extraFields = { ...(extra || {}) };
     delete extraFields.orderInfo;
 
-    return this.removeNullishDeep({
+    const sanitizedSettleInfo = this.removeNullishDeep({
       ...this.pickDefinedFields(settlePayload, [
         'currency',
-        'paymentMethod',
         'amount',
         'tip',
         'deliveryCharge',
@@ -235,10 +319,70 @@ class OrderService {
         'isTscOffline',
       ]),
       ...extraFields,
-      ...(Object.keys(compactOrderInfo).length > 0
-        ? { orderInfo: compactOrderInfo }
-        : {}),
     });
+
+    if (mergedOrderInfo && Object.keys(mergedOrderInfo).length > 0) {
+      sanitizedSettleInfo.orderInfo = mergedOrderInfo;
+    }
+
+    return sanitizedSettleInfo;
+  }
+
+  private buildRemoteSettleOrderInfo(orderInfo: any): any {
+    const sourceOrderInfo = this.stripUndefinedDeep({ ...(orderInfo || {}) }) || {};
+    const normalizedOrderInfo = this.buildEditPaymentSettleOrderInfo(orderInfo);
+
+    if (!normalizedOrderInfo || typeof normalizedOrderInfo !== 'object') {
+      return normalizedOrderInfo;
+    }
+
+    const remoteOrderInfo = { ...normalizedOrderInfo };
+
+    const remoteLocalOrderId =
+      sourceOrderInfo.localOrderId ??
+      sourceOrderInfo._id ??
+      sourceOrderInfo.id;
+
+    if (remoteLocalOrderId !== undefined && remoteLocalOrderId !== null && remoteLocalOrderId !== '') {
+      remoteOrderInfo.localOrderId = remoteLocalOrderId;
+    }
+
+    delete remoteOrderInfo.id;
+    delete remoteOrderInfo._id;
+    delete remoteOrderInfo.settleInfo;
+    delete remoteOrderInfo.orderDetails;
+
+    return remoteOrderInfo;
+  }
+
+  private buildRemoteSettlePayload(settlePayload: any): any {
+    const sanitizedRemotePayload =
+      this.removeNullishDeep({
+        ...this.pickDefinedFields(settlePayload, [
+          'id',
+          'currency',
+          'paymentMethod',
+          'amount',
+          'moneyBack',
+          'tip',
+          'deliveryCharge',
+          'isEditPayment',
+          'print',
+          'splitLog',
+          'isOrderPaid',
+          'isTscOffline',
+        ]),
+      }) || {};
+
+    const remoteOrderInfo = this.buildRemoteSettleOrderInfo(
+      settlePayload?.orderInfo || {},
+    );
+
+    if (remoteOrderInfo && Object.keys(remoteOrderInfo).length > 0) {
+      sanitizedRemotePayload.orderInfo = remoteOrderInfo;
+    }
+
+    return sanitizedRemotePayload;
   }
 
   private async resolveOrderIdCandidates(
@@ -613,14 +757,17 @@ class OrderService {
   async settleOrder(orderId: string, settlePayload: any, allowOfflineFallback: boolean = false) {
     try {
       const sanitizedSettlePayload = this.removeNullishDeep(settlePayload);
+      const remoteSettlePayload = this.buildRemoteSettlePayload(
+        sanitizedSettlePayload,
+      );
 
       // POST to remote settle endpoint
-      const res = await api.post(API_ENDPOINTS.order.SETTLE, sanitizedSettlePayload);
+      const res = await api.post(API_ENDPOINTS.order.SETTLE, remoteSettlePayload);
 
       console.log("res===>", res);
 
       const data = res?.data || {};
-      const normalized = this.normalizeSettleResponse(data, sanitizedSettlePayload);
+      const normalized = this.normalizeSettleResponse(data, remoteSettlePayload);
       const updatePayload = this.buildSettleUpdatePayload(
         sanitizedSettlePayload,
         normalized,
@@ -692,7 +839,10 @@ class OrderService {
   async settleBulkOrder(items: any[]) {
     try {
       const sanitizedItems = this.removeNullishDeep(items);
-      const res = await api.post(API_ENDPOINTS.order.SETTLE_BULK, sanitizedItems);
+      const remoteItems = Array.isArray(sanitizedItems)
+        ? sanitizedItems.map((item: any) => this.buildRemoteSettlePayload(item))
+        : [];
+      const res = await api.post(API_ENDPOINTS.order.SETTLE_BULK, remoteItems);
       return res?.data ?? res;
     } catch (error) {
       console.warn("Remote bulk settle failed:", error);

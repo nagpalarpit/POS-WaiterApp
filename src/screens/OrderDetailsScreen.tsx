@@ -45,6 +45,7 @@ import {
   emitPosPrint,
   emitPosPrintPreview,
   lockOrder,
+  sanitizeOrderInfoForPos,
   lockPayment,
   unlockOrder,
 } from "../services/orderSyncService";
@@ -83,6 +84,38 @@ const normalizeGiftCardLogs = (value: any) => {
   if (value === undefined) return undefined;
   if (value === null) return null;
   return Array.isArray(value) ? value : [value];
+};
+const buildOrderSyncInfo = (
+  orderInfo: any,
+  orderNumber?: string | number | null,
+) => {
+  const normalized = sanitizeOrderInfoForPos(mergeOrderCustomerData({
+    ...(orderInfo || {}),
+    orderNumber:
+      orderInfo?.orderNumber ||
+      orderInfo?.customOrderId ||
+      orderNumber ||
+      orderInfo?._id ||
+      orderInfo?.id,
+  }));
+
+  return normalized;
+};
+
+const sanitizePersistedOrderDetails = (orderInfo: any) => {
+  if (!orderInfo || typeof orderInfo !== "object") {
+    return orderInfo;
+  }
+
+  const sanitized = {
+    ...orderInfo,
+  };
+
+  delete sanitized.localOrderId;
+  delete sanitized._id;
+  delete sanitized.id;
+
+  return sanitized;
 };
 const buildDiscountPayload = (
   source: any,
@@ -1343,7 +1376,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
         try {
           const tscStartPayload: any = {
             orderStatusId: ORDER_STATUS.DELIVERED,
-            orderDetails: { ...splitOrderInfo },
+            orderDetails: sanitizePersistedOrderDetails(splitOrderInfo),
             companyId,
             parentLocalOrderId: localOrderId,
             revision: 1,
@@ -1384,7 +1417,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
 
         const splitCreatePayload: any = {
           orderStatusId: ORDER_STATUS.DELIVERED,
-          orderDetails: splitOrderInfo,
+          orderDetails: sanitizePersistedOrderDetails(splitOrderInfo),
           companyId,
           settleInfo: splitSettlePayload,
           parentLocalOrderId: localOrderId,
@@ -1447,7 +1480,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
 
           await orderService.updateOrder(`${localOrderId}`, {
             orderStatusId: ORDER_STATUS.PENDING,
-            orderDetails: remainingOrderDetails,
+            orderDetails: sanitizePersistedOrderDetails(remainingOrderDetails),
             settleInfo: {
               ...splitSettlePayload,
               splitLog: true,
@@ -1459,9 +1492,15 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
           }
 
           await emitOrderSync("ORDER_UPDATED", {
-            tableNo: orderDetails?.tableNo ?? null,
-            orderNumber: order?.customOrderId || order?._id,
-            orderDeliveryTypeId,
+            orderInfo: buildOrderSyncInfo(
+              {
+                ...remainingOrderDetails,
+                localOrderId,
+                customOrderId:
+                  order?.customOrderId || remainingOrderDetails?.customOrderId,
+              },
+              order?.customOrderId || order?._id,
+            ),
           });
           await lockPayment({
             ...order,
@@ -1601,6 +1640,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
           count: getOrderItemCount(mergedOrderItems) || toNumber(orderDetails?.count, 1),
           isSplitOrder: true,
           isPaid: 1,
+          orderEditInOffline: true,
           localOrderId,
           customOrderId: order?.customOrderId || orderDetails?.customOrderId,
           parentLocalOrderId: undefined,
@@ -1643,6 +1683,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
         });
 
         const mainBulkSettleObj = {
+          id: localOrderId,
           currency,
           paymentMethod: 3,
           amount: round2(mainOrderTotal),
@@ -1691,7 +1732,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
 
         await orderService.updateOrder(`${localOrderId}`, {
           orderStatusId: ORDER_STATUS.DELIVERED,
-          orderDetails: finalizedMainOrderInfo,
+          orderDetails: sanitizePersistedOrderDetails(finalizedMainOrderInfo),
           settleInfo: {
             ...mainLocalSettleInfo,
             splitLog: true,
@@ -1852,7 +1893,6 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
                     ...(localOrderRecord?.settleInfo?.orderInfo || {}),
                     ...updatedOrderDetails,
                     isSynced: true,
-                    localOrderId: currentLocalId,
                     parentLocalOrderId:
                       localOrderRecord?.parentLocalOrderId || undefined,
                     customOrderId:
@@ -1864,7 +1904,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
                 const localOrderUpdatePayload: any = {
                   orderStatusId: ORDER_STATUS.DELIVERED,
                   isSynced: true,
-                  orderDetails: updatedOrderDetails,
+                  orderDetails: sanitizePersistedOrderDetails(updatedOrderDetails),
                   settleInfo: updatedSettleInfo,
                 };
 
@@ -1900,9 +1940,15 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
         }
 
         await emitOrderSync("ORDER_PAID", {
-          tableNo: orderDetails?.tableNo ?? null,
-          orderNumber: order?.customOrderId || order?._id,
-          orderDeliveryTypeId,
+          orderInfo: buildOrderSyncInfo(
+            {
+              ...finalizedMainOrderInfo,
+              localOrderId,
+              customOrderId:
+                order?.customOrderId || finalizedMainOrderInfo?.customOrderId,
+            },
+            order?.customOrderId || order?._id,
+          ),
         });
 
         showToast("success", "Split payment completed");
@@ -1953,6 +1999,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
         isCorporate,
         isFinalBillPrint: !!option.print,
         canceledOrderPayment: orderDetails?.canceledOrderPayment ?? 0,
+        orderEditInOffline: true,
         invoiceNumber,
         paidBy: paidBy || undefined,
         company: orderDetails?.company || order?.company || undefined,
@@ -2026,10 +2073,10 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
             await orderService.updateOrder(`${orderId}`, {
               orderStatusId: ORDER_STATUS.DELIVERED,
               updatedAt: offlineOrderInfo.updatedAt ?? now,
-              orderDetails: {
+              orderDetails: sanitizePersistedOrderDetails({
                 ...offlineOrderInfo,
                 isTscOffline: true,
-              },
+              }),
               settleInfo: orderService.buildLocalSettleInfo(
                 settlePayload,
                 {
@@ -2051,9 +2098,16 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
           emitPosPrint(offlineOrderInfo, selectedPaymentMethod);
         }
         await emitOrderSync("ORDER_PAID", {
-          tableNo: orderDetails?.tableNo ?? null,
-          orderNumber: order?.customOrderId || order?._id,
-          orderDeliveryTypeId,
+          orderInfo: buildOrderSyncInfo(
+            {
+              ...offlineOrderInfo,
+              localOrderId:
+                order?._id || order?.id || order?.orderId || orderDetails?.localOrderId,
+              customOrderId:
+                order?.customOrderId || offlineOrderInfo?.customOrderId,
+            },
+            order?.customOrderId || order?._id,
+          ),
         });
         await unlockOrder(order);
         setMarking(false);
@@ -2095,9 +2149,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
           await orderService.updateOrder(`${orderId}`, {
             orderStatusId: ORDER_STATUS.DELIVERED,
             updatedAt: orderInfo.updatedAt ?? now,
-            orderDetails: {
-              ...orderInfo,
-            },
+            orderDetails: sanitizePersistedOrderDetails(orderInfo),
             settleInfo: orderService.buildLocalSettleInfo(
               settlePayload,
               orderInfo,
@@ -2116,9 +2168,15 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
         emitPosPrint(orderInfo, selectedPaymentMethod);
       }
       await emitOrderSync("ORDER_PAID", {
-        tableNo: orderDetails?.tableNo ?? null,
-        orderNumber: order?.customOrderId || order?._id,
-        orderDeliveryTypeId,
+        orderInfo: buildOrderSyncInfo(
+          {
+            ...orderInfo,
+            localOrderId:
+              order?._id || order?.id || order?.orderId || orderDetails?.localOrderId,
+            customOrderId: order?.customOrderId || orderInfo?.customOrderId,
+          },
+          order?.customOrderId || order?._id,
+        ),
       });
       await unlockOrder(order);
       setMarking(false);
