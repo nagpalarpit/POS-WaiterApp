@@ -22,6 +22,7 @@ import {
 } from '../components/auth/AuthPrimitives';
 import { STORAGE_KEYS } from '../constants/storageKeys';
 import { useTheme } from '../theme/ThemeProvider';
+import { useTranslation } from '../contexts/LanguageContext';
 import serverConnection from '../services/serverConnection';
 import { setLocalBaseUrl } from '../services/localApi';
 import { useToast } from '../components/ToastProvider';
@@ -45,6 +46,7 @@ export default function ConnectionScreen({
   onConnected,
 }: ConnectionScreenProps) {
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const { showToast } = useToast();
   const { isLocalServerReachable, resumeLocalServerRetry } = useConnection();
 
@@ -92,7 +94,7 @@ export default function ConnectionScreen({
     }
 
     setDebugTone('success');
-    setDebugInfo('Local server connected. Closing...');
+    setDebugInfo(t('localServerConnectedClosing'));
     clearAutoCloseTimer();
 
     autoCloseTimerRef.current = setTimeout(() => {
@@ -102,7 +104,7 @@ export default function ConnectionScreen({
     }, AUTO_CLOSE_DELAY_MS);
 
     return clearAutoCloseTimer;
-  }, [visible, loading, isLocalServerReachable]);
+  }, [visible, loading, isLocalServerReachable, t]);
 
   useEffect(() => {
     return clearAutoCloseTimer;
@@ -123,13 +125,13 @@ export default function ConnectionScreen({
 
     if (!trimmedIp) {
       fireErrorNotification();
-      showToast('error', 'Please enter server IP');
+      showToast('error', t('pleaseEnterServerIp'));
       return;
     }
 
     if (trimmedPort && !/^\d+$/.test(trimmedPort)) {
       fireErrorNotification();
-      showToast('error', 'Port must contain only numbers');
+      showToast('error', t('portMustContainOnlyNumbers'));
       return;
     }
 
@@ -139,7 +141,7 @@ export default function ConnectionScreen({
     fireImpact();
     setLoading(true);
     setDebugTone('default');
-    setDebugInfo(`Testing ${host}`);
+    setDebugInfo(`${t('testingConnection')} ${host}`);
 
     try {
       const success = await serverConnection.setServerUrl(host);
@@ -156,21 +158,21 @@ export default function ConnectionScreen({
         }
 
         setDebugTone('success');
-        setDebugInfo('Connected successfully. Closing...');
+        setDebugInfo(t('connectedSuccessfullyClosing'));
         fireSuccessNotification();
         return;
       }
 
       const lastError = serverConnection.getLastError();
       setDebugTone('error');
-      setDebugInfo(lastError || 'Unable to reach the server.');
+      setDebugInfo(lastError || t('connectionFailed'));
       fireErrorNotification();
-      showToast('error', 'Failed to connect to server');
+      showToast('error', t('failedToConnectToServer'));
     } catch (error: any) {
       setDebugTone('error');
-      setDebugInfo(error?.message || 'Connection error');
+      setDebugInfo(error?.message || t('connectionError'));
       fireErrorNotification();
-      showToast('error', 'Connection error');
+      showToast('error', t('connectionError'));
     } finally {
       setLoading(false);
     }
@@ -182,8 +184,8 @@ export default function ConnectionScreen({
     <AppBottomSheet
       visible={visible}
       onClose={requestClose}
-      title="Connect to local POS"
-      subtitle="Enter the local server details."
+      title={t('connectToLocalPos')}
+      subtitle={t('connectTheDeviceToTheLocalPosServiceBeforeLoggingIn')}
       snapPoints={['56%']}
       footer={<TouchableOpacity
         onPress={handleConnect}
@@ -199,20 +201,20 @@ export default function ConnectionScreen({
       >
         {loading ? (
           <Text style={[styles.primaryButtonText, { color: colors.textInverse || '#fff' }]}>
-            Connecting...
+            {t('connecting')}
           </Text>
         ) : (
           <>
             <MaterialIcons name="wifi-tethering" size={18} color={colors.textInverse || '#fff'} />
             <Text style={[styles.primaryButtonText, { color: colors.textInverse || '#fff' }]}>
-              Connect
+              {t('connect')}
             </Text>
           </>
         )}
       </TouchableOpacity>}
     >
       <View style={styles.formSection}>
-        <Text style={[styles.label, { color: colors.textSecondary || colors.text }]}>Server IP Address</Text>
+        <Text style={[styles.label, { color: colors.textSecondary || colors.text }]}>{t('serverIpAddress')}</Text>
         <View
           style={[
             styles.inputWrap,
@@ -243,9 +245,7 @@ export default function ConnectionScreen({
       </View>
 
       <View style={styles.formSection}>
-        <Text style={[styles.label, { color: colors.textSecondary || colors.text }]}>
-          Port (optional)
-        </Text>
+        <Text style={[styles.label, { color: colors.textSecondary || colors.text }]}>{t('portOptional')}</Text>
         <View
           style={[
             styles.inputWrap,

@@ -7,6 +7,7 @@ import { useToast } from './ToastProvider';
 import localDatabase from '../services/localDatabase';
 import AppBottomSheet from './AppBottomSheet';
 import AppBottomSheetTextInput from './AppBottomSheetTextInput';
+import { useTranslation } from '../contexts/LanguageContext';
 
 type Props = {
   visible: boolean;
@@ -28,6 +29,7 @@ const normalizeCompanyId = (data: any): number => {
 export default function PinModal({ visible, onClose, onVerified }: Props) {
   const { colors } = useTheme();
   const { showToast } = useToast();
+  const { t } = useTranslation();
   const [pin, setPin] = useState('');
   const [checking, setChecking] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
@@ -58,8 +60,8 @@ export default function PinModal({ visible, onClose, onVerified }: Props) {
 
       const res = await localDatabase.select('settings', { where });
       if (!Array.isArray(res) || res.length === 0) {
-        setErrorMessage('Wrong PIN');
-        showToast('error', 'Wrong PIN');
+        setErrorMessage(t('wrongPin'));
+        showToast('error', t('wrongPin'));
         return;
       }
 
@@ -67,8 +69,8 @@ export default function PinModal({ visible, onClose, onVerified }: Props) {
       onClose();
     } catch (error) {
       console.error('PinModal: Failed to verify pin', error);
-      setErrorMessage('Unable to verify PIN');
-      showToast('error', 'Unable to verify PIN');
+      setErrorMessage(t('unableToVerifyPin'));
+      showToast('error', t('unableToVerifyPin'));
     } finally {
       setChecking(false);
     }
@@ -88,7 +90,7 @@ export default function PinModal({ visible, onClose, onVerified }: Props) {
         ]}
       >
         <Text style={[styles.secondaryButtonText, { color: colors.textSecondary || colors.text }]}>
-          Cancel
+          {t('cancel')}
         </Text>
       </TouchableOpacity>
       <TouchableOpacity
@@ -103,7 +105,7 @@ export default function PinModal({ visible, onClose, onVerified }: Props) {
         ]}
       >
         <Text style={[styles.primaryButtonText, { color: colors.textInverse || '#fff' }]}>
-          Submit
+          {t('confirm')}
         </Text>
       </TouchableOpacity>
     </View>
@@ -113,13 +115,13 @@ export default function PinModal({ visible, onClose, onVerified }: Props) {
     <AppBottomSheet
       visible={visible}
       onClose={onClose}
-      title="PIN"
-      subtitle="Enter PIN to continue."
+      title={t('pin')}
+      subtitle={t('enterPinToContinue')}
       snapPoints={['52%']}
       footer={footer}
     >
       <View style={styles.formSection}>
-        <Text style={[styles.label, { color: colors.textSecondary || colors.text }]}>PIN</Text>
+        <Text style={[styles.label, { color: colors.textSecondary || colors.text }]}>{t('pin')}</Text>
         <AppBottomSheetTextInput
           value={pin}
           onChangeText={(value) => {
@@ -128,7 +130,7 @@ export default function PinModal({ visible, onClose, onVerified }: Props) {
               setErrorMessage('');
             }
           }}
-          placeholder="Enter PIN"
+          placeholder={t('enterPin')}
           placeholderTextColor={colors.textSecondary || colors.text}
           keyboardType="number-pad"
           secureTextEntry

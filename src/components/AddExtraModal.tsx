@@ -10,6 +10,7 @@ import { useTheme } from '../theme/ThemeProvider';
 import { useToast } from './ToastProvider';
 import AppBottomSheet from './AppBottomSheet';
 import AppBottomSheetTextInput from './AppBottomSheetTextInput';
+import { useTranslation } from '../contexts/LanguageContext';
 
 const EXTRA_CATEGORY = {
   FOOD: 1,
@@ -34,6 +35,7 @@ const parsePriceValue = (value: string): number => {
 
 export default function AddExtraModal({ visible, onClose, onSave }: Props) {
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const { showToast } = useToast();
   const [itemName, setItemName] = useState('');
   const [priceInput, setPriceInput] = useState('');
@@ -57,7 +59,7 @@ export default function AddExtraModal({ visible, onClose, onSave }: Props) {
 
   const handleSave = () => {
     if (!isValid) {
-      showToast('error', 'Enter item name and valid price.');
+      showToast('error', t('enterItemNameAndValidPrice'));
       return;
     }
     onSave({
@@ -79,9 +81,9 @@ export default function AddExtraModal({ visible, onClose, onSave }: Props) {
             backgroundColor: colors.searchBackground || colors.surface,
           },
         ]}
-      >
+        >
         <Text style={[styles.secondaryButtonText, { color: colors.textSecondary || colors.text }]}>
-          Cancel
+          {t('cancel')}
         </Text>
       </TouchableOpacity>
 
@@ -95,10 +97,10 @@ export default function AddExtraModal({ visible, onClose, onSave }: Props) {
             opacity: isValid ? 1 : 0.5,
           },
         ]}
-      >
+        >
         <MaterialIcons name="add-circle-outline" size={18} color={colors.textInverse || '#fff'} />
         <Text style={[styles.primaryButtonText, { color: colors.textInverse || '#fff' }]}>
-          Save Extra
+          {t('saveExtra')}
         </Text>
       </TouchableOpacity>
     </View>
@@ -108,13 +110,13 @@ export default function AddExtraModal({ visible, onClose, onSave }: Props) {
     <AppBottomSheet
       visible={visible}
       onClose={onClose}
-      title="Add Extra"
-      subtitle="Create an extra item with a name, price, and category."
+      title={t('addExtra')}
+      subtitle={t('addExtraDescription')}
       snapPoints={['70%']}
       footer={footer}
     >
       <View style={styles.formSection}>
-        <Text style={[styles.label, { color: colors.textSecondary || colors.text }]}>Item Name</Text>
+        <Text style={[styles.label, { color: colors.textSecondary || colors.text }]}>{t('itemName')}</Text>
         <View
           style={[
             styles.inputWrap,
@@ -133,7 +135,7 @@ export default function AddExtraModal({ visible, onClose, onSave }: Props) {
           <AppBottomSheetTextInput
             value={itemName}
             onChangeText={setItemName}
-            placeholder="Enter extra item name"
+            placeholder={t('enterExtraItemName')}
             placeholderTextColor={colors.textSecondary || colors.text}
             style={[styles.input, { color: colors.text }]}
           />
@@ -141,7 +143,7 @@ export default function AddExtraModal({ visible, onClose, onSave }: Props) {
       </View>
 
       <View style={styles.formSection}>
-        <Text style={[styles.label, { color: colors.textSecondary || colors.text }]}>Price</Text>
+        <Text style={[styles.label, { color: colors.textSecondary || colors.text }]}>{t('price')}</Text>
         <View
           style={[
             styles.inputWrap,
@@ -169,11 +171,11 @@ export default function AddExtraModal({ visible, onClose, onSave }: Props) {
       </View>
 
       <View style={styles.formSection}>
-        <Text style={[styles.label, { color: colors.textSecondary || colors.text }]}>Category</Text>
+        <Text style={[styles.label, { color: colors.textSecondary || colors.text }]}>{t('category')}</Text>
         <View style={styles.categoryRow}>
           {[
-            { id: EXTRA_CATEGORY.FOOD, label: 'Food' },
-            { id: EXTRA_CATEGORY.DRINK, label: 'Drink' },
+            { id: EXTRA_CATEGORY.FOOD, label: t('food') },
+            { id: EXTRA_CATEGORY.DRINK, label: t('drink') },
           ].map((entry) => {
             const selected = extraCategory === entry.id;
             return (

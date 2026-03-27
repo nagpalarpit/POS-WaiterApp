@@ -150,11 +150,11 @@ class AuthService {
 
       throw new Error('Invalid response from cloud server');
     } catch (error: any) {
-      throw new Error(
-        error.response?.data?.message ||
-          error.message ||
-          'Cloud login failed'
-      );
+      const message = error.response?.data?.message || error.message;
+      if (message === 'Network Error') {
+        throw new Error('Unable to reach server. Please check your internet connection and server address.');
+      }
+      throw new Error(message || 'Cloud login failed');
     }
   }
 

@@ -3,6 +3,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeProvider';
+import { useTranslation } from '../contexts/LanguageContext';
 
 type ComingSoonScreenProps = {
   title: string;
@@ -16,6 +17,7 @@ export default function ComingSoonScreen({
   icon,
 }: ComingSoonScreenProps) {
   const { colors } = useTheme();
+  const { t } = useTranslation();
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top', 'bottom']}>
@@ -47,7 +49,7 @@ export default function ComingSoonScreen({
           ]}
         >
           <Text style={[styles.badgeText, { color: colors.textSecondary || colors.text }]}>
-            Coming soon
+            {t('comingSoon')}
           </Text>
         </View>
       </View>

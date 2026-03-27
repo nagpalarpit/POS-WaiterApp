@@ -3,6 +3,7 @@ import { StyleSheet, View, Text, TouchableOpacity } from 'react-native';
 import { useTheme } from '../theme/ThemeProvider';
 import AppBottomSheet from './AppBottomSheet';
 import AppBottomSheetTextInput from './AppBottomSheetTextInput';
+import { useTranslation } from '../contexts/LanguageContext';
 
 interface Props {
     visible: boolean;
@@ -13,6 +14,7 @@ interface Props {
 
 export default function ItemNoteModal({ visible, initialNote = '', onClose, onSave }: Props) {
     const { colors } = useTheme();
+    const { t } = useTranslation();
     const [note, setNote] = useState(initialNote || '');
 
     useEffect(() => {
@@ -32,7 +34,7 @@ export default function ItemNoteModal({ visible, initialNote = '', onClose, onSa
                     },
                 ]}
             >
-                <Text style={[styles.secondaryButtonText, { color: colors.textSecondary || colors.text }]}>Cancel</Text>
+                <Text style={[styles.secondaryButtonText, { color: colors.textSecondary || colors.text }]}>{t('cancel')}</Text>
             </TouchableOpacity>
             <TouchableOpacity
                 onPress={() => { onSave(note); onClose(); }}
@@ -44,7 +46,7 @@ export default function ItemNoteModal({ visible, initialNote = '', onClose, onSa
                     },
                 ]}
             >
-                <Text style={[styles.primaryButtonText, { color: colors.textInverse || '#fff' }]}>Save Note</Text>
+                <Text style={[styles.primaryButtonText, { color: colors.textInverse || '#fff' }]}>{t('saveNote')}</Text>
             </TouchableOpacity>
         </View>
     );
@@ -53,17 +55,17 @@ export default function ItemNoteModal({ visible, initialNote = '', onClose, onSa
         <AppBottomSheet
             visible={visible}
             onClose={onClose}
-            title="Item Note"
-            subtitle="Add a quick instruction for this item."
+            title={t('itemNote')}
+            subtitle={t('addQuickInstructionForThisItem')}
             snapPoints={['56%']}
             footer={footer}
         >
             <View style={styles.formSection}>
-                <Text style={[styles.label, { color: colors.textSecondary || colors.text }]}>Note</Text>
+                <Text style={[styles.label, { color: colors.textSecondary || colors.text }]}>{t('note')}</Text>
                 <AppBottomSheetTextInput
                     value={note}
                     onChangeText={setNote}
-                    placeholder="Add note for this item"
+                    placeholder={t('addNoteForThisItem')}
                     placeholderTextColor={colors.textSecondary || colors.text}
                     style={[
                         styles.textArea,

@@ -1,3 +1,5 @@
+import { AppLanguage, translate } from '../i18n/translations';
+
 export const ORDER_STATUS = {
   PENDING: 1,
   CONFIRMED: 2,
@@ -10,20 +12,20 @@ export const ORDER_STATUS = {
   TSC_CANCELED: 9,
 };
 
-export function getOrderStatusLabel(orderOrId: any): string {
+export function getOrderStatusLabel(orderOrId: any, language: AppLanguage = 'en'): string {
   const statusId = typeof orderOrId === 'number' ? orderOrId : (orderOrId?.orderDetails?.orderStatusId ?? orderOrId?.orderStatusId);
 
-  if (statusId === ORDER_STATUS.PENDING) return 'Pending';
-  if (statusId === ORDER_STATUS.CONFIRMED) return 'Confirmed';
-  if (statusId === ORDER_STATUS.AWAITING_PICKUP) return 'Awaiting Pickup';
-  if (statusId === ORDER_STATUS.IN_TRANSIT) return 'In Transit';
-  if (statusId === ORDER_STATUS.DELIVERED) return 'Delivered';
-  if (statusId === ORDER_STATUS.CANCELED) return 'Canceled';
-  if (statusId === ORDER_STATUS.REJECTED) return 'Rejected';
-  if (statusId === ORDER_STATUS.REFUNDED) return 'Refunded';
-  if (statusId === ORDER_STATUS.TSC_CANCELED) return 'TSC Canceled';
+  if (statusId === ORDER_STATUS.PENDING) return translate(language, 'orderStatusPending');
+  if (statusId === ORDER_STATUS.CONFIRMED) return translate(language, 'orderStatusConfirmed');
+  if (statusId === ORDER_STATUS.AWAITING_PICKUP) return translate(language, 'orderStatusAwaitingPickup');
+  if (statusId === ORDER_STATUS.IN_TRANSIT) return translate(language, 'orderStatusInTransit');
+  if (statusId === ORDER_STATUS.DELIVERED) return translate(language, 'orderStatusDelivered');
+  if (statusId === ORDER_STATUS.CANCELED) return translate(language, 'orderStatusCanceled');
+  if (statusId === ORDER_STATUS.REJECTED) return translate(language, 'orderStatusRejected');
+  if (statusId === ORDER_STATUS.REFUNDED) return translate(language, 'orderStatusRefunded');
+  if (statusId === ORDER_STATUS.TSC_CANCELED) return translate(language, 'orderStatusTscCanceled');
 
-  return 'Unknown';
+  return translate(language, 'orderStatusUnknown');
 }
 
 export default {

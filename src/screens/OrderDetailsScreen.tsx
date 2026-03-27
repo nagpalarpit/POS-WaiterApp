@@ -53,6 +53,7 @@ import { useToast } from "../components/ToastProvider";
 import { setPaymentFlowHandlers } from "../services/paymentFlowStore";
 import serverConnection from "../services/serverConnection";
 import { formatOrderServiceTime } from "../utils/orderServiceDisplay";
+import { useTranslation } from "../contexts/LanguageContext";
 import { getVoucherDetailLines } from "../utils/voucherDetails";
 import {
   mergeOrderCustomerData,
@@ -480,11 +481,11 @@ const normalizeOrderItem = (item: any, index: number) => {
   };
 };
 
-const getOrderTypeLabel = (deliveryType: number, tableNo?: number) => {
-  if (tableNo) return `Table ${tableNo}`;
-  if (deliveryType === 1) return "Delivery";
-  if (deliveryType === 2) return "Pickup";
-  return "Dine In";
+const getOrderTypeLabel = (deliveryType: number, t: (key: string) => string, tableNo?: number) => {
+  if (tableNo) return `${t("table")} ${tableNo}`;
+  if (deliveryType === 1) return t("delivery");
+  if (deliveryType === 2) return t("pickup");
+  return t("dineIn");
 };
 
 const getStatusTone = (statusLabel: string, colors: any) => {
@@ -529,20 +530,6 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
   const [pinModalVisible, setPinModalVisible] = useState(false);
   const [cancelModalVisible, setCancelModalVisible] = useState(false);
   const [canceling, setCanceling] = useState(false);
-
-  const PAYMENT_METHOD_LABELS: Record<number, string> = {
-    0: "Cash",
-    1: "Card",
-    2: "Cash + Card",
-    3: "Split Payment",
-    4: "Gift Card",
-    5: "Debitor",
-    6: "Liefernado",
-    7: "Uber",
-    8: "Wolt",
-    9: "Bolt",
-    10: "Schlemmerblock",
-  };
 
   if (!order) {
     return (
@@ -595,8 +582,8 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
     () =>
       items.map((item: any, index: number) => ({
         key: `${item.cartId || item.menuItemId || index}-${index}`,
-        name: `${item.customId ? `${item.customId}. ` : ""}${item.itemName || "Item"}`,
-        itemName: item.itemName || "Item",
+        name: `${item.customId ? `${item.customId}. ` : ""}${item.itemName || t("item")}`,
+        itemName: item.itemName || t("item"),
         customId: item.customId,
         quantity: Math.max(getCartItemQuantity(item), 0),
         unitTotal: round2(getItemUnitTotal(item)),
@@ -644,6 +631,20 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
   const [pendingSettle, setPendingSettle] = useState(false);
   const pendingSettleRef = useRef(false);
   const { settings } = useSettings();
+  const { t, language } = useTranslation();
+  const PAYMENT_METHOD_LABELS: Record<number, string> = {
+    0: t("cash"),
+    1: t("card"),
+    2: t("cashAndCard"),
+    3: t("splitPayment"),
+    4: t("giftCard"),
+    5: t("debitorPayment"),
+    6: "Liefernado",
+    7: "Uber",
+    8: "Wolt",
+    9: "Bolt",
+    10: "Schlemmerblock",
+  };
 
   useEffect(() => {
     pendingSettleRef.current = pendingSettle;
@@ -656,7 +657,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
     groupCount > 0 ? groupedItems[groupCount - 1].groupType : null;
 
   const paymentLabel =
-    PAYMENT_METHOD_LABELS[selectedPaymentId ?? paymentProcessorId] || "Not set";
+    PAYMENT_METHOD_LABELS[selectedPaymentId ?? paymentProcessorId] || t("notSet");
   const serviceTypeId = displayedOrderDetails?.orderDeliveryTypeId ?? 0;
   const serviceTimeLabel = formatOrderServiceTime(
     displayedOrderDetails?.pickupDateTime,
@@ -688,7 +689,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
         storedDeliveryCharge ??
         0
       : 0;
-  const orderStatusLabel = getOrderStatusLabel(order);
+  const orderStatusLabel = getOrderStatusLabel(order, language);
   const statusTone = getStatusTone(orderStatusLabel, colors);
   const isPaid = displayedOrderDetails?.isPaid === 1;
   const statusId = displayedOrderDetails?.orderStatusId ?? order?.orderStatusId;
@@ -751,7 +752,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
 
   const handleDeletePress = () => {
     if (isOrderPaid) {
-      showToast("error", "Paid orders cannot be cancelled");
+      showToast("error", t("paidOrdersCannotBeCancelled"));
       return;
     }
     if (canceling) return;
@@ -767,7 +768,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
     if (!order) return;
     const trimmed = reason.trim();
     if (!trimmed) {
-      showToast("error", "Please enter a reason");
+      showToast("error", t("pleaseEnterReason"));
       return;
     }
     if (canceling) return;
@@ -927,7 +928,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
           if (!lastObj?.success) {
             updatedDetails.isTscOffline = true;
             if (lastObj?.data === TSC_OFFLINE_MESSAGE) {
-              showToast("error", "TSC offline. Please check connection.");
+              showToast("error", t("tscOfflinePleaseCheckConnection"));
             }
           } else {
             updatedDetails.tsc = [...tscArray, ...tscEntries];
@@ -998,12 +999,12 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
       });
       await unlockOrder(order);
 
-      showToast("success", "Order cancelled successfully");
+      showToast("success", t("orderCancelledSuccessfully"));
       setCancelModalVisible(false);
       navigation.goBack();
     } catch (error) {
       console.error("Cancel order failed:", error);
-      showToast("error", "Unable to cancel order");
+      showToast("error", t("unableToCancelOrder"));
     } finally {
       setCanceling(false);
     }
@@ -1514,8 +1515,8 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
               const normalizedItem = normalizeOrderItem(item, index);
               return {
                 key: `${normalizedItem.cartId || normalizedItem.menuItemId || index}-${index}`,
-                name: `${normalizedItem.customId ? `${normalizedItem.customId}. ` : ""}${normalizedItem.itemName || "Item"}`,
-                itemName: normalizedItem.itemName || "Item",
+                name: `${normalizedItem.customId ? `${normalizedItem.customId}. ` : ""}${normalizedItem.itemName || t("item")}`,
+                itemName: normalizedItem.itemName || t("item"),
                 customId: normalizedItem.customId,
                 quantity: Math.max(getCartItemQuantity(normalizedItem), 0),
                 unitTotal: round2(getItemUnitTotal(normalizedItem)),
@@ -1537,7 +1538,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
           );
           showToast(
             "success",
-            `Split payment saved (${paidItemQty} item${paidItemQty === 1 ? "" : "s"} paid)`,
+            t("splitPaymentSaved"),
           );
           setMarking(false);
           return {
@@ -1972,7 +1973,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
           ),
         });
 
-        showToast("success", "Split payment completed");
+        showToast("success", t("splitPaymentCompleted"));
         await unlockOrder(order);
         setMarking(false);
         return { keepModalOpen: false, resetToDashboard: true };
@@ -2205,7 +2206,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
     } catch (err) {
       setMarking(false);
       console.error("Error settling order after payment selection:", JSON.stringify(err));
-      showToast("error", "Unable to complete payment");
+      showToast("error", t("unableToCompletePayment"));
       return { keepModalOpen: false };
     }
   };
@@ -2272,7 +2273,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
       emitPosPrintPreview(previewOrderInfo, paymentMethod);
     } catch (error) {
       console.error("Print preview failed:", error);
-      showToast("error", "Unable to generate print preview");
+      showToast("error", t("unableToGeneratePrintPreview"));
     }
   };
 
@@ -2310,7 +2311,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
     registerPaymentHandlers(shouldSettle);
 
     navigation.push("Payment", {
-        title: shouldSettle ? "Settle Payment" : "Change Payment Method",
+        title: shouldSettle ? t("payment") : t("changePaymentMethod"),
         orderTotal: totals.total,
         orderSubTotal: totals.subtotal,
         orderDiscountTotal: totals.discount,
@@ -2543,7 +2544,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
                   fontWeight: "700",
                 }}
               >
-                {isPaid ? "Paid" : orderStatusLabel}
+                {isPaid ? t("paid") : orderStatusLabel}
               </Text>
             </View>
           </View>
@@ -2579,6 +2580,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
               >
                 {getOrderTypeLabel(
                   displayedOrderDetails?.orderDeliveryTypeId ?? 0,
+                  t,
                   displayedOrderDetails?.tableNo,
                 )}
               </Text>
@@ -2630,7 +2632,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
                     color={colors.textSecondary}
                   />
                   <Text style={{ color: colors.textSecondary, fontSize: 12, marginLeft: 6 }}>
-                    {serviceTypeId === 1 ? "Delivery Time" : "Pickup Time"}:{" "}
+                    {serviceTypeId === 1 ? t("deliveryTime") : t("pickupTime")}:{" "}
                     <Text style={{ color: colors.text, fontWeight: "700" }}>
                       {serviceTimeLabel}
                     </Text>
@@ -2646,7 +2648,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
                     color={colors.textSecondary}
                   />
                   <Text style={{ color: colors.textSecondary, fontSize: 12, marginLeft: 6 }}>
-                    Family Name:{" "}
+                    {t("familyName")}:{" "}
                     <Text style={{ color: colors.text, fontWeight: "700" }}>
                       {familyName}
                     </Text>
@@ -2673,9 +2675,9 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
                   color={colors.textSecondary}
                 />
                 <Text style={{ color: colors.textSecondary, fontSize: 12, marginLeft: 6 }}>
-                  Customer:{" "}
+                  {t("customer")}:{" "}
                   <Text style={{ color: colors.text, fontWeight: "700" }}>
-                    {selectedCustomerName || selectedCustomer.mobileNo || "Selected Customer"}
+                    {selectedCustomerName || selectedCustomer.mobileNo || t("selectedCustomer")}
                   </Text>
                 </Text>
               </View>
@@ -2727,7 +2729,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
                 marginLeft: 6,
               }}
             >
-              Payment:{" "}
+              {t("payment")}:{" "}
               <Text style={{ color: colors.text, fontWeight: "700" }}>
                 {paymentLabel}
               </Text>
@@ -2758,7 +2760,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
                       fontSize: 12,
                     }}
                   >
-                    {section === "items" ? "Items" : "Notes"}
+                    {section === "items" ? t("items") : t("notes")}
                   </Text>
                 </TouchableOpacity>
               );
@@ -2774,8 +2776,8 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
       >
         {items.length === 0 ? (
           <Card style={{ padding: 14 }}>
-            <Text style={{ color: colors.textSecondary }}>
-              No items in this order
+              <Text style={{ color: colors.textSecondary }}>
+              {t("noItemsInThisOrder")}
             </Text>
           </Card>
         ) : activeSection === "items" ? (
@@ -2831,10 +2833,10 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
             <Text
               style={{ color: colors.text, fontWeight: "700", marginBottom: 8 }}
             >
-              Order Note
-            </Text>
-            <Text style={{ color: colors.textSecondary }}>
-              {displayedOrderDetails?.orderNotes || "No order note added."}
+                {t("orderNote")}
+              </Text>
+              <Text style={{ color: colors.textSecondary }}>
+              {displayedOrderDetails?.orderNotes || t("noOrderNoteAdded")}
             </Text>
 
             <View
@@ -2852,7 +2854,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
                   marginBottom: 8,
                 }}
               >
-                Item Notes
+                {t("itemNotes")}
               </Text>
               {items.some((it: any) => !!it.orderItemNote) ? (
                 items
@@ -2881,7 +2883,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
                   ))
               ) : (
                 <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
-                  No item-level notes.
+                  {t("noItemLevelNotes")}
                 </Text>
               )}
             </View>
@@ -2892,18 +2894,18 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
               <Text
                 style={{ color: colors.text, fontWeight: "700", marginBottom: 8 }}
               >
-                Payment Summary
+                {t("paymentSummary")}
               </Text>
               <View style={styles.paymentRow}>
                 <Text style={{ color: colors.textSecondary }}>
-                  Current Method
+                  {t("currentMethod")}
                 </Text>
                 <Text style={{ color: colors.text, fontWeight: "700" }}>
                   {paymentLabel}
                 </Text>
               </View>
               <View style={styles.paymentRow}>
-                <Text style={{ color: colors.textSecondary }}>Total Amount</Text>
+                <Text style={{ color: colors.textSecondary }}>{t("totalAmount")}</Text>
                 <Text style={{ color: colors.text, fontWeight: "700" }}>
                   {formatCurrency(totals.total)}
                 </Text>
@@ -2931,7 +2933,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
                     fontSize: 12,
                   }}
                 >
-                  Change Payment Method
+                  {t("changePaymentMethod")}
                 </Text>
               </TouchableOpacity>
             </Card>
@@ -2972,14 +2974,14 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
           ]}
         >
           <View style={styles.summaryRow}>
-            <Text style={{ color: colors.textSecondary }}>Subtotal</Text>
+            <Text style={{ color: colors.textSecondary }}>{t("subtotal")}</Text>
             <Text style={{ color: colors.text, fontWeight: "700" }}>
               {formatCurrency(totals.subtotal)}
             </Text>
           </View>
           {totals.discount > 0 ? (
             <View style={styles.summaryRow}>
-              <Text style={{ color: colors.textSecondary }}>Discount</Text>
+              <Text style={{ color: colors.textSecondary }}>{t("discount")}</Text>
               <Text style={{ color: colors.error, fontWeight: "700" }}>
                 {formatCurrency(-totals.discount)}
               </Text>
@@ -2995,7 +2997,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
               },
             ]}
           >
-            <Text style={{ color: colors.text, fontWeight: "800" }}>Total</Text>
+            <Text style={{ color: colors.text, fontWeight: "800" }}>{t("total")}</Text>
             <Text
               style={{ color: colors.primary, fontWeight: "800", fontSize: 17 }}
             >
@@ -3047,7 +3049,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
                 fontSize: 12,
               }}
             >
-              Edit Order
+              {t("editOrder")}
             </Text>
           </TouchableOpacity>
 
@@ -3076,10 +3078,10 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
               }}
             >
               {marking
-                ? "Processing..."
+                ? t("processing")
                 : isPaid
-                  ? "Already Paid"
-                  : "Mark as Paid"}
+                  ? t("alreadyPaid")
+                  : t("markAsPaid")}
             </Text>
           </TouchableOpacity>
         </View>

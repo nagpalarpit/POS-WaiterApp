@@ -26,7 +26,14 @@ localApi.interceptors.request.use(
       headers.Authorization = `Bearer ${token}`;
     }
 
-    const posId = posIdService.getPosId();
+    let posId = posIdService.getPosId();
+    if (!posId) {
+      // Try to load from storage
+      posId = await posIdService.loadPosId();
+      if (!posId) {
+        console.warn('Local API interceptor: PosId missing - requests may fail');
+      }
+    }
     if (posId) {
       headers['PosId'] = posId;
     }

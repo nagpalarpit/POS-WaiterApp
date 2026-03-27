@@ -6,6 +6,7 @@ import AppBottomSheetTextInput from './AppBottomSheetTextInput';
 import { useTheme } from '../theme/ThemeProvider';
 import { useToast } from './ToastProvider';
 import { OrderServiceTiming } from '../types/orderFlow';
+import { useTranslation } from '../contexts/LanguageContext';
 
 type Props = {
   visible: boolean;
@@ -39,11 +40,11 @@ const buildScheduledDateTime = (hours: number, minutes: number) => {
   return formatOrderDateTime(scheduledDate);
 };
 
-const formatPreviewTime = (dateTime?: string | null) => {
-  if (!dateTime) return 'ASAP';
+const formatPreviewTime = (dateTime?: string | null, asapLabel = 'ASAP', scheduledLabel = 'Scheduled') => {
+  if (!dateTime) return asapLabel;
   const normalized = String(dateTime).replace(' ', 'T');
   const date = new Date(normalized);
-  if (Number.isNaN(date.getTime())) return 'Scheduled';
+  if (Number.isNaN(date.getTime())) return scheduledLabel;
   return date.toLocaleTimeString([], {
     hour: '2-digit',
     minute: '2-digit',
@@ -58,6 +59,7 @@ export default function OrderTimeModal({
   onSave,
 }: Props) {
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const { showToast } = useToast();
   const [familyName, setFamilyName] = useState('');
   const [isManualTime, setIsManualTime] = useState(false);
@@ -90,14 +92,14 @@ export default function OrderTimeModal({
   }, [initialValue, visible]);
 
   const isPickup = deliveryType === 2;
-  const modalTitle = isPickup ? 'Add Pickup Time' : 'Add Delivery Time';
+  const modalTitle = isPickup ? t('addPickupTime') : t('addDeliveryTime');
   const modalSubtitle = isPickup
-    ? 'Set pickup timing and optional family name before opening the menu.'
-    : 'Set delivery timing before opening the menu.';
+    ? t('setPickupTimingAndOptionalFamilyNameBeforeOpeningTheMenu')
+    : t('setDeliveryTimingBeforeOpeningTheMenu');
   const snapPoints = isPickup ? ['84%'] : ['74%'];
   const timePreview = useMemo(
-    () => formatPreviewTime(initialValue?.pickupDateTime),
-    [initialValue?.pickupDateTime],
+    () => formatPreviewTime(initialValue?.pickupDateTime, t('asap'), t('scheduled')),
+    [initialValue?.pickupDateTime, t],
   );
 
   const parsedManualHour = parseInt(manualHour || '0', 10);
@@ -138,7 +140,7 @@ export default function OrderTimeModal({
 
   const handleSave = () => {
     if (isManualTime && !isManualValid) {
-      showToast('error', 'Enter a valid hour and minute.');
+      showToast('error', t('enterValidHourAndMinute'));
       return;
     }
 
@@ -170,7 +172,7 @@ export default function OrderTimeModal({
         ]}
       >
         <Text style={[styles.secondaryButtonText, { color: colors.textSecondary || colors.text }]}>
-          Cancel
+          {t('cancel')}
         </Text>
       </TouchableOpacity>
 
@@ -186,7 +188,7 @@ export default function OrderTimeModal({
         ]}
       >
         <Text style={[styles.primaryButtonText, { color: colors.textInverse || '#fff' }]}>
-          Save
+          {t('save')}
         </Text>
       </TouchableOpacity>
     </View>
@@ -204,7 +206,7 @@ export default function OrderTimeModal({
       {isPickup ? (
         <View style={styles.formSection}>
           <Text style={[styles.label, { color: colors.textSecondary || colors.text }]}>
-            Family Name
+            {t('familyName')}
           </Text>
           <View
             style={[
@@ -224,7 +226,7 @@ export default function OrderTimeModal({
             <AppBottomSheetTextInput
               value={familyName}
               onChangeText={setFamilyName}
-              placeholder="Enter family name"
+              placeholder={t('enterFamilyName')}
               placeholderTextColor={colors.textSecondary || colors.text}
               style={[styles.input, { color: colors.text }]}
             />
@@ -235,7 +237,7 @@ export default function OrderTimeModal({
       <View style={styles.formSection}>
         <View style={styles.rowBetween}>
           <Text style={[styles.label, { color: colors.textSecondary || colors.text }]}>
-            Set Time Manually
+            {t('setTimeManually')}
           </Text>
           <Switch
             value={isManualTime}
@@ -248,14 +250,14 @@ export default function OrderTimeModal({
 
       <View style={[styles.previewCard, { borderColor: colors.border, backgroundColor: colors.surface }]}>
         <Text style={{ color: colors.textSecondary || colors.text, fontSize: 12, fontWeight: '600' }}>
-          Current selection
+          {t('currentSelection')}
         </Text>
         <Text style={{ color: colors.text, fontSize: 18, fontWeight: '800', marginTop: 6 }}>
           {timePreview}
         </Text>
         {isPickup && familyName.trim() ? (
           <Text style={{ color: colors.textSecondary || colors.text, fontSize: 12, marginTop: 4 }}>
-            Family: {familyName.trim()}
+            {t('family')}: {familyName.trim()}
           </Text>
         ) : null}
       </View>

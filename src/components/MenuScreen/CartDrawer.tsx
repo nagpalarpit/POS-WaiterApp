@@ -25,6 +25,7 @@ import {
     getCartItemQuantity,
 } from '../../utils/cartCalculations';
 import { formatCurrency } from '../../utils/currency';
+import { useTranslation } from '../../contexts/LanguageContext';
 
 type CartRouteParams = {
     tableNo?: number;
@@ -38,6 +39,7 @@ type CartRouteParams = {
  */
 export default function CartScreen({ navigation, route }: any) {
     const { colors } = useTheme();
+    const { t } = useTranslation();
     const insets = useSafeAreaInsets();
     const { showToast } = useToast();
     const params: CartRouteParams = route?.params || {};
@@ -105,7 +107,7 @@ export default function CartScreen({ navigation, route }: any) {
                     }}
                 >
                     <Text style={{ fontSize: 16, fontWeight: '700', color: colors.text }}>
-                        Order Summary
+                        {t('orderSummary')}
                     </Text>
                     <Text
                         style={{
@@ -115,7 +117,7 @@ export default function CartScreen({ navigation, route }: any) {
                         }}
                     >
                         {cartData.cartQuantity}{' '}
-                        {cartData.cartQuantity === 1 ? 'item' : 'items'} -{' '}
+                        {cartData.cartQuantity === 1 ? t('item') : t('items')} -{' '}
                         {formatCurrency(total)}
                     </Text>
                 </View>
@@ -190,7 +192,7 @@ export default function CartScreen({ navigation, route }: any) {
 
     const proceedToCheckout = async () => {
         if (cartData.cart.items.length === 0) {
-            showToast('error', 'Please add items to cart');
+            showToast('error', t('pleaseAddItemsToCart'));
             return;
         }
 
@@ -224,7 +226,7 @@ export default function CartScreen({ navigation, route }: any) {
                             const items = groupedItems[groupType] || [];
                             const label =
                                 items.find((item) => item.groupLabel)?.groupLabel ||
-                                `Gange ${groupType}`;
+                                `${t('group')} ${groupType}`;
                             const isExpanded = groupCount <= 1 || expandedGroupType === groupType;
                             return (
                                 <View key={`group-${groupType}`} style={{ marginBottom: 14 }}>
@@ -340,7 +342,7 @@ export default function CartScreen({ navigation, route }: any) {
                                 marginBottom: 8,
                             }}
                         >
-                            Cart is Empty
+                            {t('cartIsEmpty')}
                         </Text>
                         <Text
                             style={{
@@ -350,7 +352,7 @@ export default function CartScreen({ navigation, route }: any) {
                                 lineHeight: 20,
                             }}
                         >
-                            Add items from the menu to get started
+                            {t('addItemsFromMenuToGetStarted')}
                         </Text>
                         <View
                             style={{
@@ -369,7 +371,7 @@ export default function CartScreen({ navigation, route }: any) {
                                     textAlign: 'center',
                                 }}
                             >
-                                Tap on items to add them
+                                {t('tapOnItemsToAddThem')}
                             </Text>
                         </View>
                     </View>
@@ -412,8 +414,8 @@ export default function CartScreen({ navigation, route }: any) {
                                 letterSpacing: 0.3,
                             }}
                         >
-                            Continue to Checkout ({cartData.cartQuantity}{' '}
-                            {cartData.cartQuantity === 1 ? 'item' : 'items'})
+                            {t('continueToCheckout')} ({cartData.cartQuantity}{' '}
+                            {cartData.cartQuantity === 1 ? t('item') : t('items')})
                         </Text>
                     </TouchableOpacity>
                 </View>
@@ -441,7 +443,7 @@ export default function CartScreen({ navigation, route }: any) {
                         }
                         cartNotes.setShowCartNoteModal(false);
                     } catch (err) {
-                        showToast('error', 'Failed to save cart note');
+                        showToast('error', t('failedToSaveCartNote'));
                     }
                 }}
             />

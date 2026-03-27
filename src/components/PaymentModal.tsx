@@ -38,6 +38,7 @@ import PinModal from "./PinModal";
 import AppBottomSheet from "./AppBottomSheet";
 import AppBottomSheetTextInput from "./AppBottomSheetTextInput";
 import { useSettings } from "../hooks/useSettings";
+import { useTranslation } from "../contexts/LanguageContext";
 
 type PaymentDetail = {
   paymentProcessorId: number;
@@ -227,18 +228,19 @@ export default function PaymentScreen(props: PaymentScreenProps) {
   } = params;
   const { colors } = useTheme();
   const { showToast } = useToast();
+  const { t } = useTranslation();
   const { settings } = useSettings();
   const scrollRef = useRef<ScrollView>(null);
   const insets = useSafeAreaInsets();
   const closeHandledRef = useRef(false);
   const primaryTabs = [
-    { id: 0, label: "Cash" },
-    { id: 1, label: "Card" },
-    { id: 2, label: "Split" },
-    { id: 99, label: "Other" },
+    { id: 0, label: t('cash') },
+    { id: 1, label: t('card') },
+    { id: 2, label: t('split') },
+    { id: 99, label: t('other') },
   ];
   const otherMethods = [
-    { id: 5, label: "Debitor" },
+    { id: 5, label: t('debitorPayment') },
     { id: 6, label: "Lieferando" },
     { id: 7, label: "Uber" },
     { id: 8, label: "Wolt" },
@@ -310,19 +312,19 @@ export default function PaymentScreen(props: PaymentScreenProps) {
 
   useLayoutEffect(() => {
     if (navigation?.setOptions) {
-      navigation.setOptions({ headerTitle: title });
+      navigation.setOptions({ headerTitle: title || t('payment') });
     }
-  }, [navigation, title]);
+  }, [navigation, title, t]);
 
   useEffect(() => {
     if (!getCurrentFlowHandlers()?.onSelect) {
-      showToast("error", "Payment session expired. Please try again.");
+      showToast("error", t('paymentSessionExpired'));
       if (navigation?.goBack) {
         navigation.goBack();
       }
       return;
     }
-  }, [navigation, showToast]);
+  }, [navigation, showToast, t]);
 
   useEffect(() => {
     return () => {
@@ -479,7 +481,7 @@ export default function PaymentScreen(props: PaymentScreenProps) {
         return;
       }
       if (currentSplitItems.length === 0) {
-        showToast("error", "No items available for split payment.");
+        showToast("error", t('noItemsAvailableForSplit'));
         return;
       }
       setShowOtherMethods(false);
@@ -737,12 +739,12 @@ export default function PaymentScreen(props: PaymentScreenProps) {
   const handleConfirm = async (print = false, isCorporate = false) => {
     if (isProcessing) return;
     if (isSplitInvalid) {
-      showToast("error", "Select at least one item to split.");
+      showToast("error", t('selectAtLeastOneItemToSplit'));
       return;
     }
     const paymentMethod = resolvePaymentMethod();
     if (paymentMethod == null) {
-      showToast("error", "Select a payment method.");
+      showToast("error", t('selectPaymentMethod'));
       return;
     }
 
@@ -766,7 +768,7 @@ export default function PaymentScreen(props: PaymentScreenProps) {
       }
     } catch (error) {
       console.log("Payment failed:", error);
-      showToast("error", "Unable to process payment");
+      showToast("error", t('unableToProcessPayment'));
     } finally {
       setIsProcessing(false);
     }
@@ -876,13 +878,13 @@ export default function PaymentScreen(props: PaymentScreenProps) {
               <View>
                 <View style={styles.sectionHeaderRow}>
                   <Text style={{ color: colors.textSecondary }}>
-                    Other Payments
+                    {t('otherPayments')}
                   </Text>
                   <TouchableOpacity
                     onPress={handleOtherBack}
                     style={styles.linkBtn}
                   >
-                    <Text style={{ color: colors.textSecondary }}>Back</Text>
+                    <Text style={{ color: colors.textSecondary }}>{t('back')}</Text>
                   </TouchableOpacity>
                 </View>
                 <View style={styles.methodWrap}>
@@ -920,7 +922,7 @@ export default function PaymentScreen(props: PaymentScreenProps) {
               <View>
                 <View style={styles.sectionHeaderRow}>
                   <Text style={{ color: colors.textSecondary }}>
-                    Split items (pay selected quantity only)
+                    {t('splitItemsPaySelectedQuantityOnly')}
                   </Text>
                 </View>
                 <View style={styles.splitHeaderRow}>
@@ -964,7 +966,7 @@ export default function PaymentScreen(props: PaymentScreenProps) {
                 <Text
                   style={{ color: colors.textSecondary, marginBottom: 8 }}
                 >
-                  Payment Methods
+                  {t('paymentMethods')}
                 </Text>
                 <ScrollView
                   horizontal
@@ -1010,7 +1012,7 @@ export default function PaymentScreen(props: PaymentScreenProps) {
               {!isSplitMode && !showOtherMethods && activeTab === 0 && (
                 <View>
                   <Text style={{ color: colors.textSecondary }}>
-                    Cash provided
+                    {t('cashProvided')}
                   </Text>
                   <TextInput
                     keyboardType="numeric"
@@ -1025,7 +1027,7 @@ export default function PaymentScreen(props: PaymentScreenProps) {
                   />
 
                   <Text style={{ color: colors.textSecondary, marginTop: 8 }}>
-                    Cash to return
+                    {t('cashToReturn')}
                   </Text>
                   <View style={[styles.input, { justifyContent: "center" }]}>
                     <Text style={{ color: colors.text }}>
@@ -1040,7 +1042,7 @@ export default function PaymentScreen(props: PaymentScreenProps) {
               {!isSplitMode && !showOtherMethods && activeTab === 1 && (
                 <View>
                   <Text style={{ color: colors.textSecondary }}>
-                    Card payment selected
+                    {t('cardPaymentSelected')}
                   </Text>
                 </View>
               )}
@@ -1051,7 +1053,7 @@ export default function PaymentScreen(props: PaymentScreenProps) {
                     <Text
                       style={{ color: colors.textSecondary, marginTop: 8 }}
                     >
-                      No items available for split.
+                      {t('noItemsAvailableForSplit')}
                     </Text>
                   ) : (
                     currentSplitItems.map((item, index) => {
@@ -1215,10 +1217,10 @@ export default function PaymentScreen(props: PaymentScreenProps) {
                     ]}
                   >
                     <Text style={{ color: colors.textSecondary }}>
-                      Selected: {formatCurrency(splitItemTotal)}
+                      {t('selected')}: {formatCurrency(splitItemTotal)}
                     </Text>
                     <Text style={{ color: colors.text, fontWeight: "700" }}>
-                      Remaining: {formatCurrency(splitRemainingAmount)}
+                      {t('remaining')}: {formatCurrency(splitRemainingAmount)}
                     </Text>
                   </View>
                 </View>
@@ -1226,11 +1228,11 @@ export default function PaymentScreen(props: PaymentScreenProps) {
 
               <View style={{ marginTop: 12 }}>
                 <Text style={{ color: colors.textSecondary }}>
-                  Add Tip (optional)
+                  {t('addTipOptional')}
                 </Text>
                 <TextInput
                   keyboardType="numeric"
-                  placeholder="Enter tip amount"
+                  placeholder={t('enterTipAmount')}
                   placeholderTextColor={colors.textSecondary}
                   value={tipValue}
                   onChangeText={setTipValue}
@@ -1253,7 +1255,7 @@ export default function PaymentScreen(props: PaymentScreenProps) {
                     }}
                   >
                     <Text style={{ color: colors.textSecondary }}>
-                      Delivery Charge
+                      {t('deliveryCharge')}
                     </Text>
                     {!isSplitMode ? (
                       <TouchableOpacity
@@ -1276,8 +1278,8 @@ export default function PaymentScreen(props: PaymentScreenProps) {
                           }}
                         >
                           {isAddressDeliveryChargeLocked
-                            ? "PIN to Change"
-                            : "Change"}
+                            ? t('pinToChange')
+                            : t('change')}
                         </Text>
                       </TouchableOpacity>
                     ) : null}
@@ -1311,10 +1313,10 @@ export default function PaymentScreen(props: PaymentScreenProps) {
                           ? "This charge came from the selected address. Enter PIN to override it."
                           : "This charge came from settings. Enter PIN to override it."
                         : currentSelectedAddressDeliveryCharge != null
-                          ? "Address delivery charge unlocked. You can change it if needed."
+                          ? t('deliveryChargeUnlockedAddress')
                           : resolvedSettingsDeliveryCharge != null
-                            ? "Settings delivery charge unlocked. You can change it if needed."
-                          : "No address-fixed delivery charge found. You can change this amount if needed."}
+                            ? t('deliveryChargeUnlockedSettings')
+                            : t('deliveryChargeNoAddress')}
                   </Text>
                 </View>
               ) : null}
@@ -1322,7 +1324,7 @@ export default function PaymentScreen(props: PaymentScreenProps) {
               {showGiftCardSection ? (
                 <View style={{ marginTop: 12 }}>
                   <Text style={{ color: colors.textSecondary }}>
-                    Gift Card
+                    {t('giftCard')}
                   </Text>
                   {activeGiftCard ? (
                     <View style={styles.giftCardRow}>
@@ -1347,7 +1349,7 @@ export default function PaymentScreen(props: PaymentScreenProps) {
                             marginTop: 2,
                           }}
                         >
-                          Applied: {formatCurrency(giftCardTotal)}
+                          {t('selected')}: {formatCurrency(giftCardTotal)}
                         </Text>
                       </View>
                       <TouchableOpacity
@@ -1358,14 +1360,14 @@ export default function PaymentScreen(props: PaymentScreenProps) {
                         ]}
                       >
                         <Text style={{ color: colors.textSecondary }}>
-                          Remove
+                          {t('remove')}
                         </Text>
                       </TouchableOpacity>
                     </View>
                   ) : (
                     <View style={styles.giftCardInputRow}>
                       <TextInput
-                        placeholder="Gift card code"
+                        placeholder={t('giftCardCode')}
                         placeholderTextColor={colors.textSecondary}
                         value={isSplitMode ? splitGiftCode : giftCode}
                         onChangeText={
@@ -1409,7 +1411,7 @@ export default function PaymentScreen(props: PaymentScreenProps) {
                           <ActivityIndicator color={colors.textInverse} />
                         ) : (
                           <Text style={{ color: colors.textInverse }}>
-                            Add
+                            {t('add')}
                           </Text>
                         )}
                       </TouchableOpacity>
@@ -1431,14 +1433,14 @@ export default function PaymentScreen(props: PaymentScreenProps) {
               ]}
             >
               <View style={styles.summaryRow}>
-                <Text style={{ color: colors.textSecondary }}>Subtotal</Text>
+                <Text style={{ color: colors.textSecondary }}>{t('subtotal')}</Text>
                 <Text style={{ color: colors.text, fontWeight: "700" }}>
                   {formatCurrency(displaySubTotal)}
                 </Text>
               </View>
               {displayDiscount > 0 ? (
                 <View style={styles.summaryRow}>
-                  <Text style={{ color: colors.textSecondary }}>Discount</Text>
+                  <Text style={{ color: colors.textSecondary }}>{t('discount')}</Text>
                   <Text style={{ color: colors.error, fontWeight: "700" }}>
                     -{formatCurrency(displayDiscount)}
                   </Text>
@@ -1447,7 +1449,7 @@ export default function PaymentScreen(props: PaymentScreenProps) {
               {displayDeliveryCharge > 0 ? (
                 <View style={styles.summaryRow}>
                   <Text style={{ color: colors.textSecondary }}>
-                    Delivery Charge
+                    {t('deliveryCharge')}
                   </Text>
                   <Text style={{ color: colors.text, fontWeight: "700" }}>
                     {formatCurrency(displayDeliveryCharge)}
@@ -1456,7 +1458,7 @@ export default function PaymentScreen(props: PaymentScreenProps) {
               ) : null}
               {tipNum > 0 ? (
                 <View style={styles.summaryRow}>
-                  <Text style={{ color: colors.textSecondary }}>Tip</Text>
+                  <Text style={{ color: colors.textSecondary }}>{t('tip')}</Text>
                   <Text style={{ color: colors.text, fontWeight: "700" }}>
                     {formatCurrency(tipNum)}
                   </Text>
@@ -1465,7 +1467,7 @@ export default function PaymentScreen(props: PaymentScreenProps) {
               {giftCardTotal > 0 ? (
                 <View style={styles.summaryRow}>
                   <Text style={{ color: colors.textSecondary }}>
-                    Gift Card
+                    {t('giftCard')}
                   </Text>
                   <Text style={{ color: colors.error, fontWeight: "700" }}>
                     -{formatCurrency(giftCardTotal)}
@@ -1483,7 +1485,7 @@ export default function PaymentScreen(props: PaymentScreenProps) {
                 ]}
               >
                 <Text style={{ color: colors.text, fontWeight: "800" }}>
-                  Order Total
+                  {t('orderTotal')}
                 </Text>
                 <Text
                   style={{
@@ -1528,7 +1530,7 @@ export default function PaymentScreen(props: PaymentScreenProps) {
                   <Text
                     style={{ color: colors.textSecondary, fontWeight: "700" }}
                   >
-                    Back
+                    {t('back')}
                   </Text>
                 </TouchableOpacity>
               ) : (
@@ -1548,7 +1550,7 @@ export default function PaymentScreen(props: PaymentScreenProps) {
                   <Text
                     style={{ color: colors.textSecondary, fontWeight: "700" }}
                   >
-                    Cancel
+                    {t('cancel')}
                   </Text>
                 </TouchableOpacity>
               )}
@@ -1572,7 +1574,7 @@ export default function PaymentScreen(props: PaymentScreenProps) {
                     <ActivityIndicator color={colors.textInverse} />
                   ) : (
                     <Text style={{ color: colors.text, fontWeight: "700" }}>
-                      Print Preview
+                      {t('printPreview')}
                     </Text>
                   )}
                 </TouchableOpacity>
@@ -1599,7 +1601,7 @@ export default function PaymentScreen(props: PaymentScreenProps) {
                   <Text
                     style={{ color: colors.textInverse, fontWeight: "700" }}
                   >
-                    Pay
+                    {t('pay')}
                   </Text>
                 )}
               </TouchableOpacity>
@@ -1630,7 +1632,7 @@ export default function PaymentScreen(props: PaymentScreenProps) {
                   <Text
                     style={{ color: colors.textInverse, fontWeight: "700" }}
                   >
-                    Pay & Print
+                    {t('payAndPrint')}
                   </Text>
                 )}
               </TouchableOpacity>
@@ -1661,7 +1663,7 @@ export default function PaymentScreen(props: PaymentScreenProps) {
                       ellipsizeMode="tail"
                       style={{ color: colors.textInverse, fontWeight: "700" }}
                     >
-                      Betriebsaufwand
+                      {t('operatingExpense')}
                     </Text>
                   )}
                 </TouchableOpacity>
@@ -1678,8 +1680,8 @@ export default function PaymentScreen(props: PaymentScreenProps) {
       <AppBottomSheet
         visible={deliveryChargeEditorVisible}
         onClose={() => setDeliveryChargeEditorVisible(false)}
-        title="Delivery Charge"
-        subtitle="Update the delivery charge for this payment."
+        title={t('deliveryCharge')}
+        subtitle={`${t('change')} ${t('deliveryCharge')}`}
         snapPoints={["40%"]}
         scrollable={false}
         footer={
@@ -1696,7 +1698,7 @@ export default function PaymentScreen(props: PaymentScreenProps) {
               ]}
             >
               <Text style={{ color: colors.textSecondary, fontWeight: "700" }}>
-                Cancel
+                {t('cancel')}
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -1710,7 +1712,7 @@ export default function PaymentScreen(props: PaymentScreenProps) {
               ]}
             >
               <Text style={{ color: colors.textInverse, fontWeight: "700" }}>
-                Save
+                {t('save')}
               </Text>
             </TouchableOpacity>
           </View>
@@ -1718,11 +1720,11 @@ export default function PaymentScreen(props: PaymentScreenProps) {
       >
         <View>
           <Text style={{ color: colors.textSecondary, marginBottom: 8 }}>
-            Delivery Charge
+            {t('deliveryCharge')}
           </Text>
           <AppBottomSheetTextInput
             keyboardType="numeric"
-            placeholder="Enter delivery charge"
+            placeholder={t('enterDeliveryCharge')}
             placeholderTextColor={colors.textSecondary}
             value={deliveryChargeDraft}
             onChangeText={(value) =>

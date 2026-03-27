@@ -30,6 +30,7 @@ import { useTheme } from '../theme/ThemeProvider';
 import { useToast } from '../components/ToastProvider';
 import { useConnection } from '../contexts/ConnectionProvider';
 import { useAuth } from '../contexts/AuthContext';
+import { useTranslation } from '../contexts/LanguageContext';
 import { STORAGE_KEYS } from '../constants/storageKeys';
 import StatusBarIndicator from '../components/StatusBarIndicator';
 import LocalServerLockOverlay from '../components/LocalServerLockOverlay';
@@ -124,6 +125,7 @@ type MainStackProps = {
 
 function MainStack({ initialRouteName }: MainStackProps) {
   const { colors } = useTheme();
+  const { t } = useTranslation();
 
   return (
     <Stack.Navigator
@@ -147,7 +149,7 @@ function MainStack({ initialRouteName }: MainStackProps) {
         name="Dashboard"
         component={DashboardScreen}
         options={({ navigation }) => ({
-          title: 'Dashboard',
+          title: t('dashboard'),
           headerLeft: ({ tintColor }) => (
             <HeaderMenuButton
               color={tintColor || colors.text}
@@ -160,7 +162,7 @@ function MainStack({ initialRouteName }: MainStackProps) {
         name="Account"
         component={AccountScreen}
         options={({ navigation }) => ({
-          title: 'Account',
+          title: t('account'),
           headerLeft: ({ tintColor }) => (
             <HeaderMenuButton
               color={tintColor || colors.text}
@@ -173,7 +175,7 @@ function MainStack({ initialRouteName }: MainStackProps) {
         name="Settings"
         component={SettingsScreen}
         options={({ navigation }) => ({
-          title: 'Settings',
+          title: t('settings'),
           headerLeft: ({ tintColor }) => (
             <HeaderMenuButton
               color={tintColor || colors.text}
@@ -186,7 +188,7 @@ function MainStack({ initialRouteName }: MainStackProps) {
         name="Support"
         component={SupportScreen}
         options={({ navigation }) => ({
-          title: 'Help & Support',
+          title: t('helpAndSupport'),
           headerLeft: ({ tintColor }) => (
             <HeaderMenuButton
               color={tintColor || colors.text}
@@ -195,30 +197,32 @@ function MainStack({ initialRouteName }: MainStackProps) {
           ),
         })}
       />
-      <Stack.Screen name="Menu" component={MenuScreen} options={{ title: 'Menu' }} />
-      <Stack.Screen name="Cart" component={CartScreen} options={{ title: 'Order Summary' }} />
-      <Stack.Screen name="Payment" component={PaymentScreen} options={{ title: 'Payment' }} />
-      <Stack.Screen name="Checkout" component={CheckoutScreen} options={{ title: 'Checkout' }} />
-      <Stack.Screen name="OrderDetails" component={OrderDetailsScreen} options={{ title: 'Order Details' }} />
+      <Stack.Screen name="Menu" component={MenuScreen} options={{ title: t('menu') }} />
+      <Stack.Screen name="Cart" component={CartScreen} options={{ title: t('orderSummary') }} />
+      <Stack.Screen name="Payment" component={PaymentScreen} options={{ title: t('payment') }} />
+      <Stack.Screen name="Checkout" component={CheckoutScreen} options={{ title: t('checkout') }} />
+      <Stack.Screen name="OrderDetails" component={OrderDetailsScreen} options={{ title: t('orderDetails') }} />
     </Stack.Navigator>
   );
 }
 
 function AccountScreen() {
+  const { t } = useTranslation();
   return (
     <ComingSoonScreen
-      title="Account"
-      description="Profile details, shift preferences, and device-specific account options will live here."
+      title={t('account')}
+      description={t('accountDescription')}
       icon="person-outline"
     />
   );
 }
 
 function SupportScreen() {
+  const { t } = useTranslation();
   return (
     <ComingSoonScreen
-      title="Help & Support"
-      description="Support contacts, troubleshooting help, and short guides will appear here."
+      title={t('helpAndSupport')}
+      description={t('supportDescription')}
       icon="help-outline"
     />
   );
@@ -228,6 +232,7 @@ function CustomDrawerContent(
   props: DrawerContentComponentProps & { currentScreenName?: string },
 ) {
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const { showToast } = useToast();
   const { logout: performLogout } = useAuth();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
@@ -276,10 +281,10 @@ function CustomDrawerContent(
     label: string;
     icon: React.ComponentProps<typeof MaterialIcons>['name'];
   }> = [
-      { screen: 'Dashboard', label: 'Dashboard', icon: 'dashboard' },
-      { screen: 'Account', label: 'Account', icon: 'person-outline' },
-      { screen: 'Settings', label: 'Settings', icon: 'settings' },
-      { screen: 'Support', label: 'Help & Support', icon: 'help-outline' },
+      { screen: 'Dashboard', label: t('dashboard'), icon: 'dashboard' },
+      { screen: 'Account', label: t('account'), icon: 'person-outline' },
+      { screen: 'Settings', label: t('settings'), icon: 'settings' },
+      { screen: 'Support', label: t('helpAndSupport'), icon: 'help-outline' },
     ];
 
   const navigateTo = (screenName: DrawerItemScreen) => {
@@ -300,16 +305,16 @@ function CustomDrawerContent(
 
     setIsLoggingOut(true);
     try {
+      props.navigation.closeDrawer()
       await performLogout();
-      await posIdService.clearPosId();
+      // posId should persist across logouts as it's tied to the terminal
       await serverConnection.disconnect();
-      await AsyncStorage.clear();
+      // Only clear web storage (localStorage/sessionStorage) - React Native doesn't have these, but keep for completeness
       clearWebStorage();
     } catch (_) {
-      showToast('error', 'Unable to logout. Please try again.');
+      showToast('error', t('unableToLogout'));
     } finally {
       setIsLoggingOut(false);
-      props.navigation.closeDrawer();
       props.navigation.reset({
         index: 0,
         routes: [{ name: 'IPEntry' }],
@@ -385,7 +390,7 @@ function CustomDrawerContent(
               marginBottom: 10,
             }}
           >
-            Menu
+            {t('menu')}
           </Text>
 
           {drawerItems.map((item) => {
@@ -460,7 +465,7 @@ function CustomDrawerContent(
           >
             <MaterialIcons name="logout" size={18} color={colors.textInverse || '#fff'} />
             <Text style={{ color: colors.textInverse || '#fff', fontWeight: '700', marginLeft: 8 }}>
-              {isLoggingOut ? 'Logging out...' : 'Logout'}
+              {isLoggingOut ? t('loggingOut') : t('logout')}
             </Text>
           </TouchableOpacity>
         </View>
@@ -472,6 +477,7 @@ function CustomDrawerContent(
 export default function AppNavigator() {
   const { colors } = useTheme();
   const { showToast } = useToast();
+  const { t } = useTranslation();
   const { isAuthenticated, isLoading, user } = useAuth();
   const { isLocalServerReachable } = useConnection();
   const [currentRouteName, setCurrentRouteName] = useState<string | undefined>();
@@ -483,22 +489,22 @@ export default function AppNavigator() {
     const unsubscribe = onOrderSync((payload) => {
       const eventType = String(payload?.eventType || '').toUpperCase();
       if (eventType === 'PRINT_SUCCESS') {
-        showToast('success', 'Print successful');
+        showToast('success', t('printSuccessful'));
         return;
       }
 
       if (eventType === 'PRINT_ERROR') {
         const message =
-          payload?.orderData?.printMessage ||
-          payload?.orderData?.orderInfo?.printMessage ||
-          payload?.orderData?.message ||
-          'Print failed';
+        payload?.orderData?.printMessage ||
+        payload?.orderData?.orderInfo?.printMessage ||
+        payload?.orderData?.message ||
+          t('printFailed');
         showToast('error', message);
       }
     });
 
     return unsubscribe;
-  }, [showToast]);
+  }, [showToast, t]);
 
   useEffect(() => {
     const resolveOnboarding = async () => {
@@ -540,7 +546,7 @@ export default function AppNavigator() {
     [colors]
   );
 
-  if (isLoading || isCheckingOnboarding) {
+  if (isCheckingOnboarding) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' }}>
         <ActivityIndicator size="large" color={colors.primary} />
@@ -581,6 +587,15 @@ export default function AppNavigator() {
           connectionModalVisible={isConnectionModalVisible}
           onConnectionModalVisibleChange={setIsConnectionModalVisible}
         />
+
+        {
+          Boolean(isLoading) && (
+            <View style={{ flex: 1, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center', position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 999, opacity: 0.9 }}>
+              <ActivityIndicator size="large" color={colors.primary} />
+            </View>
+          )
+        }
+
         <View style={{ flex: 1 }}>
           <Drawer.Navigator
             key={navigatorKey}

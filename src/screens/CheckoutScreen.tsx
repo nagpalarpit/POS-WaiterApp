@@ -12,6 +12,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeProvider';
+import { useTranslation } from '../contexts/LanguageContext';
 import { useOrderSubmit } from '../hooks/useOrderSubmit';
 import { useCartNotes } from '../hooks/useCartNotes';
 import cartService, { Cart, CartItem } from '../services/cartService';
@@ -44,12 +45,16 @@ interface CheckoutScreenProps {
   route: any;
 }
 
-const getServiceTypeLabel = (deliveryType: number, tableNo: number | null) => {
-  if (tableNo) return `Table ${tableNo}`;
-  if (deliveryType === 1) return 'Delivery';
-  if (deliveryType === 2) return 'Pickup';
-  if (deliveryType === 3) return 'Kiosk';
-  return 'Walk-in';
+const getServiceTypeLabel = (
+  deliveryType: number,
+  tableNo: number | null,
+  t: (key: string, params?: Record<string, string | number | null | undefined>) => string,
+) => {
+  if (tableNo) return `${t('table')} ${tableNo}`;
+  if (deliveryType === 1) return t('delivery');
+  if (deliveryType === 2) return t('pickup');
+  if (deliveryType === 3) return t('kiosk');
+  return t('walkIn');
 };
 
 const toNumber = (value: unknown, fallback = 0): number => {
@@ -63,6 +68,7 @@ const toNumber = (value: unknown, fallback = 0): number => {
 
 export default function CheckoutScreen({ navigation, route }: CheckoutScreenProps) {
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
 
   const incomingCart = (route.params?.cart || { items: [], orderNote: '', discount: null }) as Cart;
@@ -75,12 +81,12 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
   const [checkoutCart, setCheckoutCart] = useState<Cart>(incomingCart);
   const [currentServiceTiming, setCurrentServiceTiming] = useState<OrderServiceTiming | null>(
     serviceTiming ??
-      (deliveryType !== 0
-        ? {
-            pickupDateTime: existingOrder?.orderDetails?.pickupDateTime ?? null,
-            familyName: existingOrder?.orderDetails?.familyName ?? '',
-          }
-        : null),
+    (deliveryType !== 0
+      ? {
+        pickupDateTime: existingOrder?.orderDetails?.pickupDateTime ?? null,
+        familyName: existingOrder?.orderDetails?.familyName ?? '',
+      }
+      : null),
   );
   const [showServiceTimeModal, setShowServiceTimeModal] = useState(false);
   const { showToast } = useToast();
@@ -127,15 +133,15 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
 
     setCurrentServiceTiming(
       serviceTiming ??
-        {
-          pickupDateTime: existingOrder?.orderDetails?.pickupDateTime ?? null,
-          familyName: existingOrder?.orderDetails?.familyName ?? '',
-        },
+      {
+        pickupDateTime: existingOrder?.orderDetails?.pickupDateTime ?? null,
+        familyName: existingOrder?.orderDetails?.familyName ?? '',
+      },
     );
   }, [deliveryType, existingOrder?.orderDetails?.familyName, existingOrder?.orderDetails?.pickupDateTime, serviceTiming]);
 
   useEffect(() => {
-    cartService.loadCart().then(setCheckoutCart).catch(() => {});
+    cartService.loadCart().then(setCheckoutCart).catch(() => { });
   }, []);
 
   useEffect(() => {
@@ -172,7 +178,7 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
       const updatedCart = await cartService.updateQuantity(cartId, quantity);
       setCheckoutCart(updatedCart);
     } catch (error) {
-      showToast('error', 'Failed to update item quantity');
+      showToast('error', t('failedToUpdateItemQuantity'));
     }
   };
 
@@ -187,7 +193,7 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
       const updatedCart = await cartService.removeFromCart(cartId);
       setCheckoutCart(updatedCart);
     } catch (error) {
-      showToast('error', 'Failed to remove item');
+      showToast('error', t('failedToRemoveItem'));
     }
   };
 
@@ -259,13 +265,13 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
 
   useLayoutEffect(() => {
     navigation.setOptions({
-      headerTitle: getServiceTypeLabel(deliveryType, tableNo),
+      headerTitle: getServiceTypeLabel(deliveryType, tableNo, t),
       headerStyle: { backgroundColor: colors.background },
       headerTintColor: colors.text,
       headerTitleStyle: { fontWeight: '700' },
       headerRight: () => null,
     });
-  }, [navigation, colors.background, colors.text, deliveryType, tableNo]);
+  }, [navigation, colors.background, colors.text, deliveryType, tableNo, t]);
 
   const handleSaveCartNote = async (note: string, discount: any) => {
     try {
@@ -280,7 +286,7 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
       setCheckoutCart(refreshedCart);
       cartNotes.setShowCartNoteModal(false);
     } catch (err) {
-      showToast('error', 'Failed to save cart note');
+      showToast('error', t('failedToSaveCartNote'));
     }
   };
 
@@ -303,16 +309,18 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
 
     return await new Promise<boolean>((resolve) => {
       Alert.alert(
-        'Minimum order not reached',
-        `This address requires a minimum order of ${formatCurrency(minimumOrderValue)}. Do you still want to continue?`,
+        t('minimumOrderNotReached'),
+        `${t('thisAddressRequiresAMinimumOrderOf', {
+          amount: formatCurrency(minimumOrderValue),
+        })} ${t('doYouStillWantToContinue')}`,
         [
           {
-            text: 'Cancel',
+            text: t('cancel'),
             style: 'cancel',
             onPress: () => resolve(false),
           },
           {
-            text: 'Continue',
+            text: t('continueAction'),
             onPress: () => resolve(true),
           },
         ],
@@ -327,12 +335,12 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
   const handlePlaceOrder = async () => {
     try {
       if (!checkoutCart.items?.length) {
-        showToast('error', 'Please add items before placing order');
+        showToast('error', t('pleaseAddItemsBeforePlacingOrder'));
         return;
       }
 
       if (deliveryType === 0 && !tableNo) {
-        showToast('error', 'Please select table');
+        showToast('error', t('pleaseSelectTable'));
         return;
       }
 
@@ -399,11 +407,11 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
       const { added: printSourceItems, removed: removedSourceItems } =
         existingOrder
           ? resolveDeltaPrintItems(
-              checkoutCart.items,
-              Array.isArray(checkoutCart.removedItems)
-                ? checkoutCart.removedItems
-                : [],
-            )
+            checkoutCart.items,
+            Array.isArray(checkoutCart.removedItems)
+              ? checkoutCart.removedItems
+              : [],
+          )
           : { added: checkoutCart.items, removed: [] };
 
       const submitResult = await orderSubmit.submitOrder(0);
@@ -451,14 +459,14 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
         const canceledPrintObj =
           canceledItems.length > 0
             ? {
-                items: canceledItems,
-                isOrderDetails: true,
-                currentUser: printCurrentUser,
-                orderInfo: {
-                  ...orderInfoForPrint,
-                  orderNumber: `${orderInfoForPrint.orderNumber}-C`,
-                },
-              }
+              items: canceledItems,
+              isOrderDetails: true,
+              currentUser: printCurrentUser,
+              orderInfo: {
+                ...orderInfoForPrint,
+                orderNumber: `${orderInfoForPrint.orderNumber}-C`,
+              },
+            }
             : undefined;
         if (printItems.length > 0 || canceledPrintObj) {
           emitPosKotPrint({
@@ -475,16 +483,30 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
       } else if (tableNo) {
         await unlockTable(tableNo);
       }
-      showToast('success', existingOrder ? 'Order updated successfully' : 'Order placed successfully');
+      showToast('success', existingOrder ? t('orderUpdatedSuccessfully') : t('orderPlacedSuccessfully'));
       if (toastNavTimer.current) clearTimeout(toastNavTimer.current);
       toastNavTimer.current = setTimeout(() => {
         navigation.navigate('Dashboard');
       }, 800);
     } catch (error) {
-      const message =
+      const rawMessage =
         (error as any)?.response?.data?.message ||
         (error as any)?.message ||
-        'Failed to place order';
+        '';
+      const message =
+        rawMessage === 'NO_ITEMS_IN_CART'
+          ? t('pleaseAddItemsBeforePlacingOrder')
+          : rawMessage === 'PLEASE_SELECT_TABLE'
+            ? t('pleaseSelectTable')
+            : rawMessage === 'COMPANY_ID_MISSING'
+              ? t('companyIdMissingPleaseLoginAgain')
+              : rawMessage === 'ORDER_ID_MISSING'
+                ? t('orderIdMissingUnableToUpdateOrder')
+                : rawMessage === 'FAILED_TO_CREATE_ORDER'
+                  ? t('failedToCreateOrder')
+                  : rawMessage === 'FAILED_TO_PLACE_ORDER'
+                    ? t('failedToPlaceOrder')
+                    : rawMessage || t('failedToPlaceOrder');
       showToast('error', message);
       console.error('Error placing order:', error);
     }
@@ -549,10 +571,10 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
                 />
                 <View style={{ marginLeft: 10, flex: 1 }}>
                   <Text style={{ color: colors.textSecondary, fontSize: 11 }}>
-                    {deliveryType === 1 ? 'Delivery' : 'Pickup'}
+                    {deliveryType === 1 ? t('delivery') : t('pickup')}
                   </Text>
                   <Text style={{ color: colors.text, fontWeight: '700', fontSize: 15, marginTop: 2 }}>
-                    {getServiceTypeLabel(deliveryType, tableNo)}
+                    {getServiceTypeLabel(deliveryType, tableNo, t)}
                   </Text>
                 </View>
               </View>
@@ -569,7 +591,7 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
               >
                 <MaterialCommunityIcons name="pencil-outline" size={15} color={colors.text} />
                 <Text style={{ color: colors.text, fontWeight: '700', fontSize: 12, marginLeft: 4 }}>
-                  Edit
+                  {t('edit')}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -582,7 +604,7 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
                   color={colors.textSecondary}
                 />
                 <Text style={{ color: colors.textSecondary, fontSize: 12, marginLeft: 8 }}>
-                  {deliveryType === 1 ? 'Delivery Time' : 'Pickup Time'}:{' '}
+                  {deliveryType === 1 ? t('deliveryTime') : t('pickupTime')}:{' '}
                   <Text style={{ color: colors.text, fontWeight: '700' }}>
                     {serviceTimeLabel}
                   </Text>
@@ -598,7 +620,7 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
                   color={colors.textSecondary}
                 />
                 <Text style={{ color: colors.textSecondary, fontSize: 12, marginLeft: 8 }}>
-                  Family Name:{' '}
+                  {t('familyName')}:{' '}
                   <Text style={{ color: colors.text, fontWeight: '700' }}>
                     {familyName}
                   </Text>
@@ -627,7 +649,7 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
                 />
                 <View style={{ marginLeft: 10, flex: 1 }}>
                   <Text style={{ color: colors.textSecondary, fontSize: 11 }}>
-                    Customer
+                    {t('customer')}
                   </Text>
                   <Text style={{ color: colors.text, fontWeight: '700', fontSize: 15, marginTop: 2 }}>
                     {selectedCustomerName}
@@ -670,7 +692,7 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
                   color={colors.textSecondary}
                 />
                 <Text style={{ color: colors.textSecondary, fontSize: 12, marginLeft: 8 }}>
-                  Minimum Order:{' '}
+                  {t('minimumOrder')}:{' '}
                   <Text style={{ color: colors.text, fontWeight: '700' }}>
                     {formatCurrency(selectedCustomerAddress.minimumOrderValue)}
                   </Text>
@@ -686,7 +708,7 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
                   color={colors.textSecondary}
                 />
                 <Text style={{ color: colors.textSecondary, fontSize: 12, marginLeft: 8 }}>
-                  Delivery Charge:{' '}
+                  {t('deliveryCharge')}:{' '}
                   <Text style={{ color: colors.text, fontWeight: '700' }}>
                     {formatCurrency(deliveryCharge)}
                   </Text>
@@ -744,9 +766,9 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
             ]}
           >
             <MaterialCommunityIcons name="cart-outline" size={34} color={colors.textSecondary} />
-            <Text style={{ color: colors.text, fontWeight: '700', marginTop: 10 }}>Cart is empty</Text>
+            <Text style={{ color: colors.text, fontWeight: '700', marginTop: 10 }}>{t('cartIsEmpty')}</Text>
             <Text style={{ color: colors.textSecondary, marginTop: 4, textAlign: 'center', fontSize: 12 }}>
-              Go back to menu and add items before checkout.
+              {t('goBackToMenuAndAddItemsBeforeCheckout')}
             </Text>
           </View>
         )}
@@ -773,7 +795,7 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
           ]}
         >
           <View style={styles.summaryRow}>
-            <Text style={{ color: colors.textSecondary, fontSize: 12 }}>Subtotal</Text>
+            <Text style={{ color: colors.textSecondary, fontSize: 12 }}>{t('subtotal')}</Text>
             <Text style={{ color: colors.text, fontWeight: '700' }}>
               {formatCurrency(subtotal)}
             </Text>
@@ -781,7 +803,7 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
 
           {discountAmount > 0 ? (
             <View style={styles.summaryRow}>
-              <Text style={{ color: colors.textSecondary, fontSize: 12 }}>Discount</Text>
+              <Text style={{ color: colors.textSecondary, fontSize: 12 }}>{t('discount')}</Text>
               <Text style={{ color: colors.error, fontWeight: '700' }}>
                 {formatCurrency(-discountAmount)}
               </Text>
@@ -790,7 +812,7 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
 
           {deliveryCharge > 0 ? (
             <View style={styles.summaryRow}>
-              <Text style={{ color: colors.textSecondary, fontSize: 12 }}>Delivery Charge</Text>
+              <Text style={{ color: colors.textSecondary, fontSize: 12 }}>{t('deliveryCharge')}</Text>
               <Text style={{ color: colors.text, fontWeight: '700' }}>
                 {formatCurrency(deliveryCharge)}
               </Text>
@@ -798,7 +820,7 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
           ) : null}
 
           <View style={[styles.summaryRow, { borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 8 }]}>
-            <Text style={{ color: colors.text, fontWeight: '800' }}>Total Payable</Text>
+            <Text style={{ color: colors.text, fontWeight: '800' }}>{t('totalPayable')}</Text>
             <Text style={{ color: colors.primary, fontWeight: '800', fontSize: 18 }}>
               {formatCurrency(totalPayable)}
             </Text>
@@ -818,7 +840,7 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
           >
             <MaterialCommunityIcons name="ticket-percent-outline" size={17} color={colors.text} />
             <Text style={{ color: colors.text, marginLeft: 6, fontWeight: '700', fontSize: 12 }}>
-              Note / Discount
+              {t('addOrderNoteDiscount')}
             </Text>
           </TouchableOpacity>
 
@@ -841,7 +863,7 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
               <>
                 <MaterialCommunityIcons name="check-circle-outline" size={18} color={colors.textInverse || '#fff'} />
                 <Text style={{ color: colors.textInverse || '#fff', marginLeft: 6, fontWeight: '800', fontSize: 13 }}>
-                  Place Order
+                  {t('placeOrder')}
                 </Text>
               </>
             )}

@@ -23,6 +23,7 @@ import {
   getCustomerDisplayName,
 } from '../utils/customerData';
 import { useSettings } from '../hooks/useSettings';
+import { useTranslation } from '../contexts/LanguageContext';
 
 type CustomerDrawerProps = {
   visible: boolean;
@@ -209,6 +210,7 @@ export default function CustomerDrawer({
   onSelect,
 }: CustomerDrawerProps) {
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const { settings } = useSettings();
   const [mode, setMode] = useState<'list' | 'form'>('list');
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -474,31 +476,31 @@ export default function CustomerDrawer({
     const nextErrors: Record<string, string> = {};
 
     if (!form.firstName.trim()) {
-      nextErrors.firstName = 'First name is required.';
+      nextErrors.firstName = t('firstNameIsRequired');
     }
 
     if (!form.mobileNo.trim()) {
-      nextErrors.mobileNo = 'Mobile number is required.';
+      nextErrors.mobileNo = t('mobileNumberIsRequired');
     }
 
     if (form.isDebitor && !form.customerCompanyName.trim()) {
-      nextErrors.customerCompanyName = 'Company name is required for debitor.';
+      nextErrors.customerCompanyName = t('companyNameIsRequiredForDebitor');
     }
 
     const visibleAddresses = form.addresses.filter((address) => !address.isDeleted);
     if (!visibleAddresses.length) {
-      nextErrors.addresses = 'At least one address is required.';
+      nextErrors.addresses = t('atLeastOneAddressIsRequired');
     }
 
     visibleAddresses.forEach((address) => {
       if (!address.addressLine1.trim()) {
-        nextErrors[`addressLine1-${address.localKey}`] = 'Address is required.';
+        nextErrors[`addressLine1-${address.localKey}`] = t('addressIsRequired');
       }
       if (!address.city.trim()) {
-        nextErrors[`city-${address.localKey}`] = 'City is required.';
+        nextErrors[`city-${address.localKey}`] = t('cityIsRequired');
       }
       if (!address.pincode.trim()) {
-        nextErrors[`pincode-${address.localKey}`] = 'Pincode is required.';
+        nextErrors[`pincode-${address.localKey}`] = t('pincodeIsRequired');
       }
     });
 
@@ -567,7 +569,7 @@ export default function CustomerDrawer({
       console.error('CustomerDrawer: Failed to save customer', error);
       setErrors((current) => ({
         ...current,
-        form: 'Unable to save customer right now.',
+        form: t('unableToSaveCustomerRightNow'),
       }));
     } finally {
       setSaving(false);
@@ -713,7 +715,7 @@ export default function CustomerDrawer({
               justifyContent: 'center',
             }}
           >
-            <Text style={{ color: colors.text, fontWeight: '700' }}>Clear Customer</Text>
+            <Text style={{ color: colors.text, fontWeight: '700' }}>{t('clearCustomer')}</Text>
           </TouchableOpacity>
         ) : null}
 
@@ -728,7 +730,7 @@ export default function CustomerDrawer({
             justifyContent: 'center',
           }}
         >
-          <Text style={{ color: colors.textInverse || '#fff', fontWeight: '800' }}>Done</Text>
+          <Text style={{ color: colors.textInverse || '#fff', fontWeight: '800' }}>{t('done')}</Text>
         </TouchableOpacity>
       </View>
     ) : (
@@ -748,7 +750,7 @@ export default function CustomerDrawer({
             opacity: saving ? 0.6 : 1,
           }}
         >
-          <Text style={{ color: colors.text, fontWeight: '700' }}>Back</Text>
+          <Text style={{ color: colors.text, fontWeight: '700' }}>{t('back')}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -768,7 +770,7 @@ export default function CustomerDrawer({
             <ActivityIndicator color={colors.textInverse || '#fff'} />
           ) : (
             <Text style={{ color: colors.textInverse || '#fff', fontWeight: '800' }}>
-              {editingCustomer ? 'Update Customer' : 'Add Customer'}
+              {editingCustomer ? t('updateCustomer') : t('addCustomer')}
             </Text>
           )}
         </TouchableOpacity>
@@ -786,8 +788,8 @@ export default function CustomerDrawer({
         justifyContent: 'center',
       }}
     >
-      <Text style={{ color: colors.textInverse || '#fff', fontWeight: '800' }}>
-        Done
+        <Text style={{ color: colors.textInverse || '#fff', fontWeight: '800' }}>
+        {t('done')}
       </Text>
     </TouchableOpacity>
   );
@@ -797,11 +799,11 @@ export default function CustomerDrawer({
       <BottomDrawer
         visible={visible}
         onClose={onClose}
-        title={mode === 'list' ? 'Customer' : editingCustomer ? 'Edit Customer' : 'Add Customer'}
+        title={mode === 'list' ? t('customer') : editingCustomer ? t('editCustomer') : t('addCustomer')}
         subtitle={
           mode === 'list'
-            ? 'Search, select, or create a customer for this order.'
-            : 'Use the same customer details and address rules as POS.'
+            ? t('searchSelectCreateCustomerForThisOrder')
+            : t('useSameCustomerDetailsAndAddressRulesAsPos')
         }
         fullHeight
         maxHeightRatio={0.98}
@@ -834,7 +836,7 @@ export default function CustomerDrawer({
               <TextInput
                 value={searchQuery}
                 onChangeText={setSearchQuery}
-                placeholder="Search customers"
+                placeholder={t('searchCustomers')}
                 placeholderTextColor={colors.textSecondary}
                 style={{
                   flex: 1,
@@ -870,7 +872,7 @@ export default function CustomerDrawer({
                   marginLeft: 6,
                 }}
               >
-                Add New
+                {t('addNew')}
               </Text>
             </TouchableOpacity>
           </View>
@@ -895,7 +897,7 @@ export default function CustomerDrawer({
                   letterSpacing: 0.8,
                 }}
               >
-                Selected For Order
+                {t('selectedForOrder')}
               </Text>
               <Text style={{ color: colors.text, fontSize: 16, fontWeight: '800', marginTop: 6 }}>
                 {getCustomerDisplayName(selectedCustomer) || selectedCustomer.mobileNo}
@@ -942,7 +944,7 @@ export default function CustomerDrawer({
                 color={colors.textSecondary}
               />
               <Text style={{ color: colors.text, fontWeight: '700', marginTop: 10 }}>
-                No customers found
+                {t('noCustomersFound')}
               </Text>
               <Text
                 style={{
@@ -952,7 +954,7 @@ export default function CustomerDrawer({
                   lineHeight: 18,
                 }}
               >
-                Try a different search or add a new customer.
+                {t('tryAnotherSearchOrAddNewCustomer')}
               </Text>
             </View>
           ) : (
@@ -995,7 +997,7 @@ export default function CustomerDrawer({
                             marginLeft: 8,
                           }}
                         >
-                          {getCustomerDisplayName(customer) || 'Unnamed Customer'}
+                          {getCustomerDisplayName(customer) || t('unnamedCustomer')}
                         </Text>
                       </View>
 
@@ -1040,7 +1042,7 @@ export default function CustomerDrawer({
                         color={colors.text}
                       />
                       <Text style={{ color: colors.text, fontWeight: '700', marginLeft: 6 }}>
-                        Edit
+                        {t('edit')}
                       </Text>
                     </TouchableOpacity>
                   </View>
@@ -1052,25 +1054,25 @@ export default function CustomerDrawer({
       ) : (
         <View>
           {renderField({
-            label: 'First Name',
+            label: t('firstName'),
             value: form.firstName,
             onChangeText: (value) => updateForm({ firstName: value }),
-            placeholder: 'Enter first name',
+            placeholder: t('enterFirstName'),
             error: errors.firstName,
           })}
 
           {renderField({
-            label: 'Last Name',
+            label: t('lastName'),
             value: form.lastName,
             onChangeText: (value) => updateForm({ lastName: value }),
-            placeholder: 'Enter last name',
+            placeholder: t('enterLastName'),
           })}
 
           {renderField({
-            label: 'Mobile Number',
+            label: t('mobileNumber'),
             value: form.mobileNo,
             onChangeText: (value) => updateForm({ mobileNo: value }),
-            placeholder: 'Enter mobile number',
+            placeholder: t('enterMobileNumber'),
             keyboardType: 'phone-pad',
             editable: !editingCustomer,
             error: errors.mobileNo,
@@ -1078,15 +1080,15 @@ export default function CustomerDrawer({
 
           {editingCustomer ? (
             <Text style={{ color: colors.textSecondary, fontSize: 11, marginTop: -8, marginBottom: 14 }}>
-              Mobile number stays locked in edit mode, matching POS behavior.
+              {t('mobileNumberStaysLockedInEditModeMatchingPosBehavior')}
             </Text>
           ) : null}
 
           {renderField({
-            label: 'Email',
+            label: t('email'),
             value: form.email,
             onChangeText: (value) => updateForm({ email: value }),
-            placeholder: 'Enter email address',
+            placeholder: t('enterEmailAddress'),
             keyboardType: 'email-address',
           })}
 
@@ -1103,10 +1105,10 @@ export default function CustomerDrawer({
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
               <View style={{ flex: 1, paddingRight: 10 }}>
                 <Text style={[styles.fieldLabel, { color: colors.text, marginBottom: 4 }]}>
-                  Debitor Customer
+                  {t('debitorCustomer')}
                 </Text>
                 <Text style={{ color: colors.textSecondary, fontSize: 12, lineHeight: 18 }}>
-                  Require company details when this customer is marked as debitor.
+                  {t('requireCompanyDetailsWhenThisCustomerIsMarkedAsDebitor')}
                 </Text>
               </View>
               <Switch
@@ -1124,18 +1126,18 @@ export default function CustomerDrawer({
           {form.isDebitor ? (
             <>
               {renderField({
-                label: 'Company Name',
+                label: t('companyName'),
                 value: form.customerCompanyName,
                 onChangeText: (value) => updateForm({ customerCompanyName: value }),
-                placeholder: 'Enter company name',
+                placeholder: t('enterCompanyName'),
                 error: errors.customerCompanyName,
               })}
 
               {renderField({
-                label: 'Steuer ID',
+                label: t('taxId'),
                 value: form.steuerId,
                 onChangeText: (value) => updateForm({ steuerId: value }),
-                placeholder: 'Enter steuer ID',
+                placeholder: t('enterTaxId'),
               })}
             </>
           ) : null}
@@ -1151,17 +1153,17 @@ export default function CustomerDrawer({
             >
               <View>
                 <Text style={{ color: colors.text, fontSize: 16, fontWeight: '800' }}>
-                  Addresses
+                  {t('addresses')}
                 </Text>
                 <Text style={{ color: colors.textSecondary, marginTop: 4, fontSize: 12 }}>
-                  Select the address that should be used for this order.
+                  {t('selectTheAddressThatShouldBeUsedForThisOrder')}
                 </Text>
               </View>
 
               <TouchableOpacity
                 onPress={addAddress}
                 accessibilityRole="button"
-                accessibilityLabel="Add address"
+                  accessibilityLabel={t('addAddress')}
                 style={{
                   width: 44,
                   height: 44,
@@ -1225,7 +1227,7 @@ export default function CustomerDrawer({
                           marginLeft: 8,
                         }}
                       >
-                        Address {index + 1}
+                        {t('address')} {index + 1}
                       </Text>
                     </TouchableOpacity>
 
@@ -1252,26 +1254,26 @@ export default function CustomerDrawer({
                   </View>
 
                   {renderField({
-                    label: 'Address',
+                    label: t('address'),
                     value: address.addressLine1,
                     onChangeText: (value) => updateAddress(address.localKey, { addressLine1: value }),
-                    placeholder: 'Street and house number',
+                    placeholder: t('streetAndHouseNumber'),
                     error: errors[`addressLine1-${address.localKey}`],
                     multiline: true,
                   })}
 
                   {renderField({
-                    label: 'Landmark',
+                    label: t('landmark'),
                     value: address.landmark || '',
                     onChangeText: (value) => updateAddress(address.localKey, { landmark: value }),
-                    placeholder: 'Optional landmark',
+                    placeholder: t('optionalLandmark'),
                   })}
 
                   {renderPickerField({
-                    label: 'Pincode',
+                    label: t('pincode'),
                     value: address.pincode,
                     onPress: () => openPincodePicker(address),
-                    placeholder: 'Tap to search post code or city',
+                    placeholder: t('tapToSearchPostCodeOrCity'),
                     error: errors[`pincode-${address.localKey}`],
                     disabled: loadingDeliverySettings,
                   })}
@@ -1280,16 +1282,16 @@ export default function CustomerDrawer({
                     <View style={{ marginTop: -6, marginBottom: 12, flexDirection: 'row', alignItems: 'center' }}>
                       <ActivityIndicator size="small" color={colors.primary} />
                       <Text style={{ color: colors.textSecondary, fontSize: 11, marginLeft: 8 }}>
-                        Loading delivery settings...
+                        {t('loadingDeliverySettings')}
                       </Text>
                     </View>
                   ) : null}
 
                   {renderField({
-                    label: 'City',
+                    label: t('city'),
                     value: address.city,
                     onChangeText: () => undefined,
-                    placeholder: 'Auto-filled from pincode',
+                    placeholder: t('autoFilledFromPincode'),
                     error: errors[`city-${address.localKey}`],
                     editable: false,
                   })}
@@ -1305,12 +1307,12 @@ export default function CustomerDrawer({
                     >
                       <Text style={{ color: colors.textSecondary, fontSize: 12, lineHeight: 18 }}>
                         {address.minimumOrderValue != null
-                          ? `Minimum order: ${address.minimumOrderValue}`
-                          : 'Minimum order: n/a'}
+                          ? `${t('minimumOrder')}: ${address.minimumOrderValue}`
+                          : t('minimumOrderNA')}
                         {'\n'}
                         {address.deliveryCharge != null
-                          ? `Delivery charge: ${address.deliveryCharge}`
-                          : 'Delivery charge: n/a'}
+                          ? `${t('deliveryCharge')}: ${address.deliveryCharge}`
+                          : t('deliveryChargeNA')}
                       </Text>
                     </View>
                   ) : null}
@@ -1331,8 +1333,8 @@ export default function CustomerDrawer({
       <BottomDrawer
         visible={visible && !!pincodePicker}
         onClose={closePincodePicker}
-        title="Select Pincode"
-        subtitle="Search by post code or city, then choose the matching delivery area."
+        title={t('selectPincode')}
+        subtitle={t('searchByPostCodeOrCity')}
         fullHeight
         maxHeightRatio={0.92}
         footer={pincodeFooter}
@@ -1355,7 +1357,7 @@ export default function CustomerDrawer({
             <TextInput
               value={pincodePicker?.query || ''}
               onChangeText={updatePincodeSearch}
-              placeholder="Search by post code or city"
+              placeholder={t('searchByPostCodeOrCity')}
               placeholderTextColor={colors.textSecondary}
               style={{
                 flex: 1,
@@ -1375,7 +1377,7 @@ export default function CustomerDrawer({
             <View style={{ paddingVertical: 12, alignItems: 'center' }}>
               <ActivityIndicator color={colors.primary} />
               <Text style={{ color: colors.textSecondary, marginTop: 8, fontSize: 12 }}>
-                Loading delivery settings...
+                {t('loadingDeliverySettings')}
               </Text>
             </View>
           ) : filteredPinOptions.length === 0 ? (
@@ -1395,7 +1397,7 @@ export default function CustomerDrawer({
                 color={colors.textSecondary}
               />
               <Text style={{ color: colors.text, fontWeight: '700', marginTop: 8 }}>
-                No delivery areas found
+                {t('noDeliveryAreasFound')}
               </Text>
               <Text
                 style={{
@@ -1406,7 +1408,7 @@ export default function CustomerDrawer({
                   fontSize: 12,
                 }}
               >
-                Try another post code or city for this address.
+                {t('tryAnotherPostCodeOrCityForThisAddress')}
               </Text>
             </View>
           ) : (
@@ -1446,12 +1448,12 @@ export default function CustomerDrawer({
                     }}
                   >
                     {pin.minimumOrderValue != null
-                      ? `Min ${pin.minimumOrderValue}`
-                      : 'Min n/a'}
+                      ? `${t('min')} ${pin.minimumOrderValue}`
+                      : `${t('min')} n/a`}
                     {'  '}
                     {pin.deliveryCharge != null
-                      ? `Charge ${pin.deliveryCharge}`
-                      : 'Charge n/a'}
+                      ? `${t('charge')} ${pin.deliveryCharge}`
+                      : `${t('charge')} n/a`}
                   </Text>
                 ) : null}
               </TouchableOpacity>

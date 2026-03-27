@@ -4,6 +4,7 @@ import AppBottomSheet from './AppBottomSheet';
 import { useTheme } from '../theme/ThemeProvider';
 import { formatCurrency } from '../utils/currency';
 import { normalizeMenuItemVariants } from '../hooks/useMenuData';
+import { useTranslation } from '../contexts/LanguageContext';
 
 type VoucherOptionsModalProps = {
   visible: boolean;
@@ -222,6 +223,7 @@ export default function VoucherOptionsModal({
   onConfirm,
 }: VoucherOptionsModalProps) {
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const [selectedVariant, setSelectedVariant] = useState<any>(null);
   const [selectedAttribute, setSelectedAttribute] = useState<any>(null);
   const [selectedAttributeValues, setSelectedAttributeValues] = useState<any[]>([]);
@@ -542,7 +544,7 @@ export default function VoucherOptionsModal({
           backgroundColor: colors.surface,
         }}
       >
-        <Text style={{ color: colors.textSecondary, fontWeight: '700' }}>Cancel</Text>
+        <Text style={{ color: colors.textSecondary, fontWeight: '700' }}>{t('cancel')}</Text>
       </TouchableOpacity>
 
       <TouchableOpacity
@@ -566,7 +568,7 @@ export default function VoucherOptionsModal({
         }}
       >
         <Text style={{ color: colors.textInverse || '#fff', fontWeight: '800' }}>
-          {isDiscountVoucher ? 'Add to Cart' : 'Continue'}
+          {isDiscountVoucher ? t('addToCart') : t('continueAction')}
         </Text>
       </TouchableOpacity>
     </View>
@@ -580,8 +582,8 @@ export default function VoucherOptionsModal({
     <AppBottomSheet
       visible={visible}
       onClose={onClose}
-      title={item?.name || 'Options'}
-      subtitle={category?.name ? `Category: ${category.name}` : 'Options'}
+      title={item?.name || t('options')}
+      subtitle={category?.name ? `${t('categoryLabel')}: ${category.name}` : t('options')}
       snapPoints={['92%']}
       footer={footer}
     >

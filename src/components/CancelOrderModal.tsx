@@ -4,6 +4,7 @@ import { useTheme } from '../theme/ThemeProvider';
 import { useToast } from './ToastProvider';
 import AppBottomSheet from './AppBottomSheet';
 import AppBottomSheetTextInput from './AppBottomSheetTextInput';
+import { useTranslation } from '../contexts/LanguageContext';
 
 type Props = {
   visible: boolean;
@@ -20,6 +21,7 @@ export default function CancelOrderModal({
 }: Props) {
   const { colors } = useTheme();
   const { showToast } = useToast();
+  const { t } = useTranslation();
   const [reason, setReason] = useState('');
 
   useEffect(() => {
@@ -31,7 +33,7 @@ export default function CancelOrderModal({
   const handleConfirm = () => {
     const trimmed = reason.trim();
     if (!trimmed) {
-      showToast('error', 'Please enter a reason');
+      showToast('error', t('pleaseEnterReason'));
       return;
     }
     onConfirm(trimmed);
@@ -52,7 +54,7 @@ export default function CancelOrderModal({
         ]}
       >
         <Text style={[styles.secondaryButtonText, { color: colors.textSecondary || colors.text }]}>
-          Cancel
+          {t('cancel')}
         </Text>
       </TouchableOpacity>
       <TouchableOpacity
@@ -73,7 +75,7 @@ export default function CancelOrderModal({
               { color: colors.textInverse || '#fff', opacity: loading ? 0 : 1 },
             ]}
           >
-            Confirm
+            {t('confirm')}
           </Text>
           {loading ? (
             <ActivityIndicator
@@ -91,17 +93,17 @@ export default function CancelOrderModal({
     <AppBottomSheet
       visible={visible}
       onClose={onClose}
-      title="Cancel Order"
-      subtitle="Enter a short reason to continue."
+      title={t('cancelOrder')}
+      subtitle={t('enterReason')}
       snapPoints={['56%']}
       footer={footer}
     >
       <View style={styles.formSection}>
-        <Text style={[styles.label, { color: colors.textSecondary || colors.text }]}>Reason</Text>
+        <Text style={[styles.label, { color: colors.textSecondary || colors.text }]}>{t('reason')}</Text>
         <AppBottomSheetTextInput
           value={reason}
           onChangeText={setReason}
-          placeholder="Enter cancel reason"
+          placeholder={t('enterCancelReason')}
           placeholderTextColor={colors.textSecondary || colors.text}
           style={[
             styles.textArea,

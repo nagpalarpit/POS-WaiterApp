@@ -3,12 +3,14 @@ import { CartDiscountType } from '../services/cartService';
 import { getDiscountTypeLabel } from '../utils/cartCalculations';
 import { Cart } from '../services/cartService';
 import { useToast } from '../components/ToastProvider';
+import { useTranslation } from '../contexts/LanguageContext';
 
 /**
  * Hook for managing cart notes and discount editing states
  */
 export const useCartNotes = (cart: Cart, onSaveNote: any, onSaveDiscount: any) => {
   const { showToast } = useToast();
+  const { t } = useTranslation();
   // Item note editing
   const [editingItemNoteId, setEditingItemNoteId] = useState<string | null>(null);
   const [itemNoteDraft, setItemNoteDraft] = useState('');
@@ -101,7 +103,7 @@ export const useCartNotes = (cart: Cart, onSaveNote: any, onSaveDiscount: any) =
       }
 
       if (discountTypeDraft === 'PERCENTAGE' && discountValue > 100) {
-        showToast('error', 'Percentage discount cannot exceed 100.');
+        showToast('error', t('customDiscountCannotExceed100'));
         return;
       }
 

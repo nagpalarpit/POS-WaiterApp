@@ -4,6 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import authService from '../services/authService';
 import { useToast } from '../components/ToastProvider';
 import { useConnection } from './ConnectionProvider';
+import { useTranslation } from './LanguageContext';
 import { SECURE_STORAGE_KEYS, STORAGE_KEYS } from '../constants/storageKeys';
 import { AuthContextType, AuthState, User } from '../types/auth';
 import {
@@ -17,6 +18,7 @@ const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
     const { showToast } = useToast();
+    const { t } = useTranslation();
     const { isLocalServerReachable, isCheckingLocal, refreshLocalServerStatus } = useConnection();
 
     const [state, setState] = useState<AuthState>({
@@ -116,7 +118,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     // Login function
-    const login = async (email: string, password: string): Promise<boolean> => {
+    const login = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
         setState(prev => ({ ...prev, isLoading: true }));
 
         try {
@@ -149,16 +151,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     isLoading: false,
                 }));
 
-                return true;
+                return { success: true };
             } else {
-                showToast('error', result.error || 'Login failed');
+                showToast('error', result.error || t('loginFailed'));
                 setState(prev => ({ ...prev, isLoading: false }));
-                return false;
+                return { success: false, error: result.error || t('loginFailed') };
             }
         } catch (error: any) {
-            showToast('error', error.message || 'An unexpected error occurred');
+            showToast('error', error.message || t('unexpectedErrorOccurred'));
             setState(prev => ({ ...prev, isLoading: false }));
-            return false;
+            return { success: false, error: error.message || t('unexpectedErrorOccurred') };
         }
     };
 
@@ -182,7 +184,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             });
         } catch (error) {
             console.error('Error during logout:', error);
-            showToast('error', 'Error during logout');
+            showToast('error', t('unableToLogout'));
             setState(prev => ({ ...prev, isLoading: false }));
         }
     };
@@ -237,7 +239,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         };
 
         restoreLocalSession();
-    }, [isLocalServerReachable, state.isAuthenticated, state.isLoading]);
+    }, [isLocalServerReachable, state.isAuthenticated]);
 
     const value: AuthContextType = {
         ...state,

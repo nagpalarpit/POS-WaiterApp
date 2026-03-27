@@ -41,6 +41,7 @@ import cartService from '../services/cartService';
 import { lockOrder, lockTable, unlockOrder, unlockTable } from '../services/orderSyncService';
 import { useToast } from '../components/ToastProvider';
 import { OrderServiceTiming } from '../types/orderFlow';
+import { useTranslation } from '../contexts/LanguageContext';
 import {
   formatCustomerAddress,
   getCustomerDisplayName,
@@ -58,6 +59,7 @@ interface MenuScreenProps {
  */
 export default function MenuScreen({ navigation, route }: MenuScreenProps) {
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const {
     tableNo = null,
     deliveryType = 0,
@@ -454,7 +456,7 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
   // Set header options
   useLayoutEffect(() => {
     navigation.setOptions({
-      headerTitle: 'Menu',
+      headerTitle: t('menuScreenTitle'),
       headerStyle: { backgroundColor: colors.background },
       headerTintColor: colors.text,
       headerTitleStyle: { fontWeight: '700' },
@@ -466,11 +468,11 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
             <MaterialIcons name="chevron-left" size={24} color={colors.text} />
             {tableNo ? (
-              <Text>Table {tableNo}</Text>
+              <Text>{t('table')} {tableNo}</Text>
             ) : deliveryType === 1 ? (
-              <Text>Delivery</Text>
+              <Text>{t('delivery')}</Text>
             ) : (
-              <Text>Pickup</Text>
+              <Text>{t('pickup')}</Text>
             )}
           </View>
         </TouchableOpacity>
@@ -519,6 +521,7 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
     cartData.cart.currentUser,
     groupLabelEnabled,
     handleAddGroup,
+    t,
   ]);
 
   // ===== Cart Operation Handlers =====
@@ -585,7 +588,7 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
       }
 
       if (!preparedVoucher?.item) {
-        showToast('error', 'Unable to open voucher');
+        showToast('error', t('unableToOpenVoucher'));
         return;
       }
 
@@ -690,7 +693,7 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
         attributeValues
       );
     } catch (error) {
-      showToast('error', 'Failed to add item to cart');
+      showToast('error', t('failedToAddItemToCart'));
     }
   };
 
@@ -773,7 +776,7 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
           }
 
           if (!preparedVoucher?.item) {
-            showToast('error', 'Unable to open voucher');
+            showToast('error', t('unableToOpenVoucher'));
             return;
           }
 
@@ -818,17 +821,17 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
   }) => {
     const categories = menuData.cartCategories || [];
     if (!categories.length) {
-      showToast('error', 'Extras are not configured.');
+      showToast('error', t('extrasAreNotConfigured'));
       return;
     }
     const categoryToUse = getCategoryByExtraCategory(payload.extraCategory);
     if (!categoryToUse) {
-      showToast('error', 'No extras category found.');
+      showToast('error', t('noExtrasCategoryFound'));
       return;
     }
     const itemId = categoryToUse?.menuItems?.[0]?.id;
     if (!itemId) {
-      showToast('error', 'No extra items configured.');
+      showToast('error', t('noExtraItemsConfigured'));
       return;
     }
 
@@ -848,13 +851,13 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
       await cartData.addToCartDirect(categoryToUse, item, null, null, undefined);
       setShowAddExtraModal(false);
     } catch (error) {
-      showToast('error', 'Failed to add extra item');
+      showToast('error', t('failedToAddExtraItem'));
     }
   };
 
   const proceedToCheckout = async () => {
     if (cartData.cart.items.length === 0) {
-      showToast('error', 'Please add items to cart');
+      showToast('error', t('pleaseAddItemsToCart'));
       return;
     }
 
@@ -878,7 +881,7 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
       }
       cartNotes.setShowCartNoteModal(false);
     } catch (err) {
-      showToast('error', 'Failed to save cart note');
+      showToast('error', t('failedToSaveCartNote'));
     }
   };
 
@@ -920,7 +923,7 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
         >
           <MaterialIcons name="search" size={19} color={colors.textSecondary} />
           <TextInput
-            placeholder="Search by item name or custom ID"
+            placeholder={t('searchByItemNameOrCustomId')}
             placeholderTextColor={colors.textSecondary}
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -970,7 +973,7 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
               />
               <View style={{ flex: 1, marginLeft: 10, paddingRight: 8 }}>
                 <Text style={{ color: colors.text, fontWeight: '800', fontSize: 14 }}>
-                  {selectedCustomerName || cartData.cart.currentUser.mobileNo || 'Selected Customer'}
+                  {selectedCustomerName || cartData.cart.currentUser.mobileNo || t('selectedCustomer')}
                 </Text>
                 {cartData.cart.currentUser.mobileNo ? (
                   <Text style={{ color: colors.textSecondary, marginTop: 3, fontSize: 12 }}>

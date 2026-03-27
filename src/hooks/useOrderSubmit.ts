@@ -159,11 +159,11 @@ export const useOrderSubmit = (
     try {
       void tax;
       if (!cart.items?.length) {
-        throw new Error('No items in cart');
+        throw new Error('NO_ITEMS_IN_CART');
       }
 
       if (deliveryType === 0 && !tableNo) {
-        throw new Error('Please select table');
+        throw new Error('PLEASE_SELECT_TABLE');
       }
 
       setLoading(true);
@@ -178,7 +178,7 @@ export const useOrderSubmit = (
       );
 
       if (!companyId) {
-        throw new Error('Company ID missing. Please login again.');
+        throw new Error('COMPANY_ID_MISSING');
       }
 
       const subtotal = getCartSubtotal(cart);
@@ -217,7 +217,7 @@ export const useOrderSubmit = (
           : posIdService.getPosId() || '';
 
       if (existingOrder && !existingOrderId) {
-        throw new Error('Order ID missing. Unable to update order.');
+        throw new Error('ORDER_ID_MISSING');
       }
 
       if (existingOrderId) {
@@ -452,7 +452,7 @@ export const useOrderSubmit = (
         await cartService.clearCart();
         return { success: true, order: result };
       } else {
-        throw new Error('Failed to create order');
+        throw new Error('FAILED_TO_CREATE_ORDER');
       }
     } catch (error) {
       console.error('Error submitting order:', error);

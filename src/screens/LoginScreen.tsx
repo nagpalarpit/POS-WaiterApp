@@ -27,6 +27,7 @@ import { useConnection } from '../contexts/ConnectionProvider';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../components/ToastProvider';
 import { fetchDiscountsForCompany } from '../services/discountService';
+import { useTranslation } from '../contexts/LanguageContext';
 
 export default function LoginScreen() {
   const navigation = useNavigation();
@@ -34,6 +35,7 @@ export default function LoginScreen() {
   const { login, isLoading } = useAuth();
   const { isLocalServerReachable } = useConnection();
   const { showToast } = useToast();
+  const { t } = useTranslation();
 
   const [username, setUsername] = useState('testyash1@gmail_test.com');
   const [password, setPassword] = useState('admin@123');
@@ -60,13 +62,13 @@ export default function LoginScreen() {
   const doLogin = async () => {
     if (!username.trim() || !password.trim()) {
       fireErrorNotification();
-      showToast('error', 'Please enter username and password');
+      showToast('error', t('enterUsernameAndPassword'));
       return;
     }
 
     if (!isLocalServerReachable) {
       fireErrorNotification();
-      showToast('info', 'Connect to local server before logging in');
+      showToast('info', t('connectToLocalServerBeforeLoggingIn'));
       return;
     }
 
@@ -74,12 +76,13 @@ export default function LoginScreen() {
     fireImpact();
 
     try {
-      const success = await login(username.trim(), password.trim());
+      const result = await login(username.trim(), password.trim());
 
-      if (!success) {
-        fireErrorNotification();
-        return;
-      }
+        if (!result.success) {
+          fireErrorNotification();
+          showToast('error', result.error || t('login'));
+          return;
+        }
 
       fireSuccessNotification();
 
@@ -102,7 +105,7 @@ export default function LoginScreen() {
 
     } catch (err: any) {
       fireErrorNotification();
-      showToast('error', err?.message || 'An unexpected error occurred');
+      showToast('error', err?.message || t('unableToProcessPayment'));
     }
   };
 
@@ -124,9 +127,9 @@ export default function LoginScreen() {
               </View>
             </View>
 
-            <Text style={[styles.title, { color: colors.text }]}>Welcome Waiter</Text>
+            <Text style={[styles.title, { color: colors.text }]}>{t('welcomeWaiter')}</Text>
             <Text style={[styles.subtitle, { color: colors.textSecondary || colors.text }]}>
-              Log into your account
+              {t('logIntoYourAccount')}
             </Text>
           </View>
 
@@ -136,15 +139,15 @@ export default function LoginScreen() {
               Platform.OS === 'android'
                 ? { backgroundColor: colors.surface, elevation: 2 }
                 : {
-                    backgroundColor: colors.surface,
-                    shadowColor: colors.border,
-                    shadowOpacity: 0.05,
-                    shadowRadius: 8,
-                    shadowOffset: { width: 0, height: 4 },
-                  },
+                  backgroundColor: colors.surface,
+                  shadowColor: colors.border,
+                  shadowOpacity: 0.05,
+                  shadowRadius: 8,
+                  shadowOffset: { width: 0, height: 4 },
+                },
             ]}
           >
-            <Text style={[styles.label, { color: colors.textSecondary || colors.text }]}>Email</Text>
+            <Text style={[styles.label, { color: colors.textSecondary || colors.text }]}>{t('email')}</Text>
             <View
               style={[
                 styles.inputWrap,
@@ -160,7 +163,7 @@ export default function LoginScreen() {
               <TextInput
                 value={username}
                 onChangeText={setUsername}
-                placeholder="Enter your email"
+                placeholder={t('enterYourEmail')}
                 placeholderTextColor={colors.textSecondary || colors.text}
                 keyboardType="email-address"
                 autoCapitalize="none"
@@ -171,7 +174,7 @@ export default function LoginScreen() {
             </View>
 
             <Text style={[styles.label, styles.labelSpacing, { color: colors.textSecondary || colors.text }]}>
-              Password
+              {t('password')}
             </Text>
             <View
               style={[
@@ -188,7 +191,7 @@ export default function LoginScreen() {
               <TextInput
                 value={password}
                 onChangeText={setPassword}
-                placeholder="Enter your password"
+                placeholder={t('enterYourPassword')}
                 placeholderTextColor={colors.textSecondary || colors.text}
                 secureTextEntry={!showPassword}
                 autoCapitalize="none"
@@ -211,7 +214,7 @@ export default function LoginScreen() {
             </View>
 
             <PrimaryButton
-              title={isLoading ? 'Signing in...' : 'Login'}
+              title={isLoading ? t('loading') : t('login')}
               onPress={doLogin}
               loading={isLoading}
               className="mt-4"
@@ -219,7 +222,7 @@ export default function LoginScreen() {
 
             {!isLocalServerReachable ? (
               <Text style={[styles.helperText, { color: colors.textSecondary || colors.text }]}>
-                Connect the device to the local POS service before logging in.
+                {t('connectTheDeviceToTheLocalPosServiceBeforeLoggingIn')}
               </Text>
             ) : null}
           </View>

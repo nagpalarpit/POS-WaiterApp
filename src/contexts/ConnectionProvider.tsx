@@ -46,17 +46,34 @@ export function ConnectionProvider({ children }: { children: React.ReactNode }) 
     }
 
     syncingPosIdRef.current = (async () => {
-      const previousPosId = await posIdService.getStoredPosId();
-      const nextPosId = await serverConnection.initializePosId();
-
-      if (previousPosId && nextPosId && previousPosId !== nextPosId) {
-        await authService.logout(
-          'POS assignment changed for this device. Please log in again.',
-        );
+      const maxAttempts = 3;
+      let lastError;
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        try {
+          const previousPosId = await posIdService.getStoredPosId();
+          const nextPosId = await serverConnection.initializePosId();
+          
+          if (previousPosId && nextPosId && previousPosId !== nextPosId) {
+            await authService.logout(
+              'POS assignment changed for this device. Please log in again.',
+            );
+          }
+          // success, break loop
+          return;
+        } catch (error) {
+          lastError = error;
+          console.log(`ConnectionProvider: Failed to refresh POS ID (attempt ${attempt}/${maxAttempts}):`, error);
+          if (attempt < maxAttempts) {
+            // wait before retry
+            await new Promise(resolve => setTimeout(resolve, 2000 * attempt));
+          }
+        }
       }
+      // all attempts failed
+      throw lastError;
     })()
       .catch((error) => {
-        console.log('ConnectionProvider: Failed to refresh POS ID:', error);
+        console.log('ConnectionProvider: Failed to refresh POS ID after retries:', error);
       })
       .finally(() => {
         syncingPosIdRef.current = null;

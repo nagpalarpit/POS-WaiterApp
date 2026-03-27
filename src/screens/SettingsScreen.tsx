@@ -1,12 +1,14 @@
 import React, { useCallback, useState } from 'react';
 import Constants from 'expo-constants';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeProvider';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import posIdService from '../services/posIdService';
 import { STORAGE_KEYS } from '../constants/storageKeys';
+import { useTranslation, useLanguage } from '../contexts/LanguageContext';
+import { LANGUAGE_OPTIONS } from "../i18n/translations"
 
 type InfoRowProps = {
   label: string;
@@ -38,8 +40,10 @@ function InfoRow({ label, value, isLast = false, colors }: InfoRowProps) {
 
 export default function SettingsScreen() {
   const { colors } = useTheme();
-  const [devicePosId, setDevicePosId] = useState<string>('Not assigned');
-  const [staffName, setStaffName] = useState<string>('Signed in');
+  const { t } = useTranslation();
+  const { language, setLanguage } = useLanguage();
+  const [devicePosId, setDevicePosId] = useState<string>('');
+  const [staffName, setStaffName] = useState<string>('');
   const [staffEmail, setStaffEmail] = useState<string>('');
 
   const appVersion =
@@ -56,19 +60,19 @@ export default function SettingsScreen() {
         const firstName = parsedUser?.firstName || parsedUser?.name || '';
         const lastName = parsedUser?.lastName || '';
         const fullName = [firstName, lastName].filter(Boolean).join(' ').trim();
-        setDevicePosId(posId || 'Not assigned');
-        setStaffName(fullName || parsedUser?.email || 'Signed in');
+        setDevicePosId(posId || '');
+        setStaffName(fullName || parsedUser?.email || '');
         setStaffEmail(parsedUser?.email || '');
       };
 
       hydrate();
-    }, [])
+    }, [t])
   );
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <Text style={[styles.groupLabel, { color: colors.textSecondary || colors.text }]}>Account</Text>
+        <Text style={[styles.groupLabel, { color: colors.textSecondary || colors.text }]}>{t('account')}</Text>
 
         <View
           style={[
@@ -79,11 +83,11 @@ export default function SettingsScreen() {
             },
           ]}
         >
-          <InfoRow label="Staff" value={staffName} colors={colors} isLast={!staffEmail} />
-          {staffEmail ? <InfoRow label="Email" value={staffEmail} colors={colors} isLast /> : null}
+          <InfoRow label={t('staff')} value={staffName || t('signedIn')} colors={colors} isLast={!staffEmail} />
+          {staffEmail ? <InfoRow label={t('email')} value={staffEmail} colors={colors} isLast /> : null}
         </View>
 
-        <Text style={[styles.groupLabel, { color: colors.textSecondary || colors.text }]}>Device</Text>
+        <Text style={[styles.groupLabel, { color: colors.textSecondary || colors.text }]}>{t('device')}</Text>
 
         <View
           style={[
@@ -94,10 +98,49 @@ export default function SettingsScreen() {
             },
           ]}
         >
-          <InfoRow label="POS ID" value={devicePosId} colors={colors} isLast />
+          <InfoRow label={t('posId')} value={devicePosId || t('notAssigned')} colors={colors} isLast />
         </View>
 
-        <Text style={[styles.groupLabel, { color: colors.textSecondary || colors.text }]}>About</Text>
+        <Text style={[styles.groupLabel, { color: colors.textSecondary || colors.text }]}>{t('currentLanguage')}</Text>
+        <View
+          style={[
+            styles.section,
+            {
+              backgroundColor: colors.surface,
+              borderColor: colors.border,
+            },
+          ]}
+        >
+          <View style={styles.languageRow}>
+            {LANGUAGE_OPTIONS.map((option) => {
+              const active = language === option.code;
+              return (
+                <TouchableOpacity
+                  key={option.code}
+                  onPress={() => void setLanguage(option.code)}
+                  style={[
+                    styles.languagePill,
+                    {
+                      borderColor: active ? colors.primary : colors.border,
+                      backgroundColor: active ? colors.primary : colors.surface,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={{
+                      color: active ? colors.textInverse : colors.text,
+                      fontWeight: '700',
+                    }}
+                  >
+                    {option.flag} {option.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+
+        <Text style={[styles.groupLabel, { color: colors.textSecondary || colors.text }]}>{t('about')}</Text>
 
         <View
           style={[
@@ -108,7 +151,7 @@ export default function SettingsScreen() {
             },
           ]}
         >
-          <InfoRow label="Version" value={appVersion} colors={colors} isLast />
+          <InfoRow label={t('version')} value={appVersion} colors={colors} isLast />
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -135,6 +178,21 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     marginBottom: 14,
     overflow: 'hidden',
+  },
+  languageRow: {
+    flexDirection: 'row',
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    flexWrap: 'wrap',
+  },
+  languagePill: {
+    minHeight: 42,
+    paddingHorizontal: 14,
+    borderRadius: 999,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   row: {
     flexDirection: 'row',

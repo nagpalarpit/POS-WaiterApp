@@ -10,6 +10,7 @@ import {
     getDiscountTypeLabel,
 } from '../../utils/cartCalculations';
 import { formatCurrency } from '../../utils/currency';
+import { useTranslation } from '../../contexts/LanguageContext';
 
 interface CartSummaryProps {
     cart: Cart;
@@ -33,6 +34,7 @@ export const CartSummary: React.FC<CartSummaryProps> = ({
     isOrderNoteOrDiscountPresent = true,
     showCheckout = true,
 }) => {
+    const { t } = useTranslation();
     const insets = useSafeAreaInsets();
     const subtotal = getCartSubtotal(cart);
     const discount = getDiscountAmount(subtotal, cart.discount);
@@ -64,7 +66,7 @@ export const CartSummary: React.FC<CartSummaryProps> = ({
                         }}
                     >
                         <Text style={{ fontSize: 11, color: colors.textSecondary, fontWeight: '600' }}>
-                            Cart Note
+                            {t('cartNote')}
                         </Text>
                         <Text style={{ fontSize: 13, marginTop: 4, color: colors.text, lineHeight: 18 }}>
                             {cart.orderNote}
@@ -86,7 +88,7 @@ export const CartSummary: React.FC<CartSummaryProps> = ({
                         }}
                     >
                         <Text style={{ fontSize: 12, color: colors.success, fontWeight: '600' }}>
-                            ✓ Discount Applied: {cart.discount.discountName || getDiscountTypeLabel(cart.discount.discountType)} ({getDiscountLabel(cart.discount)})
+                            ✓ {t('discountApplied')}: {cart.discount.discountName || getDiscountTypeLabel(cart.discount.discountType)} ({getDiscountLabel(cart.discount)})
                         </Text>
                     </View>
                 ) : null}
@@ -94,7 +96,7 @@ export const CartSummary: React.FC<CartSummaryProps> = ({
                 {/* Pricing Breakdown */}
                 <View style={{ marginBottom: 16, gap: 7 }}>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                        <Text style={{ fontSize: 14, color: colors.textSecondary }}>Subtotal</Text>
+                        <Text style={{ fontSize: 14, color: colors.textSecondary }}>{t('subtotal')}</Text>
                         <Text style={{ fontSize: 14, fontWeight: '600', color: colors.text }}>
                             {formatCurrency(subtotal)}
                         </Text>
@@ -102,7 +104,7 @@ export const CartSummary: React.FC<CartSummaryProps> = ({
 
                     {discount > 0 && (
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                            <Text style={{ fontSize: 14, color: colors.textSecondary }}>Discount</Text>
+                            <Text style={{ fontSize: 14, color: colors.textSecondary }}>{t('discount')}</Text>
                             <Text style={{ fontSize: 14, fontWeight: '600', color: colors.error }}>
                                 {formatCurrency(-discount)}
                             </Text>
@@ -119,7 +121,7 @@ export const CartSummary: React.FC<CartSummaryProps> = ({
                         }}
                     >
                         <Text style={{ fontSize: 16, fontWeight: '700', color: colors.text }}>
-                            Total
+                            {t('total')}
                         </Text>
                         <Text style={{ fontSize: 18, fontWeight: '800', color: colors.primary }}>
                             {formatCurrency(total)}
@@ -146,7 +148,7 @@ export const CartSummary: React.FC<CartSummaryProps> = ({
                         >
                             <MaterialCommunityIcons name="note-edit-outline" size={16} color={colors.text} />
                             <Text style={{ color: colors.text, fontWeight: '600', marginLeft: 6, fontSize: 12 }}>
-                                Add Order Note / Discount
+                                {t('addOrderNoteDiscount')}
                             </Text>
                         </TouchableOpacity>
                     )
@@ -178,7 +180,7 @@ export const CartSummary: React.FC<CartSummaryProps> = ({
                             letterSpacing: 0.3,
                         }}
                     >
-                        Continue to Checkout ({cartQuantity} {cartQuantity === 1 ? 'item' : 'items'})
+                        {t('continueToCheckout')} ({cartQuantity} {cartQuantity === 1 ? t('item') : t('items')})
                     </Text>
                 </TouchableOpacity>
             )}

@@ -4,6 +4,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { MenuCategory, MenuItem } from '../../hooks/useMenuData';
 import { MenuItemCard } from './MenuItemCard';
 import { getMenuItemIdentity } from '../../hooks/useMenuData';
+import { useTranslation } from '../../contexts/LanguageContext';
 
 interface MenuItemsGridProps {
   categories: MenuCategory[];
@@ -23,6 +24,7 @@ export const MenuItemsGrid: React.FC<MenuItemsGridProps> = ({
   searchQuery = '',
   colors,
 }) => {
+  const { t } = useTranslation();
   const { width } = useWindowDimensions();
   const numColumns = width >= 960 ? 4 : width >= 700 ? 3 : 2;
 
@@ -36,12 +38,12 @@ export const MenuItemsGrid: React.FC<MenuItemsGridProps> = ({
           style={{ marginBottom: 12 }}
         />
         <Text style={{ color: colors.text, fontSize: 16, fontWeight: '700', textAlign: 'center', marginBottom: 4 }}>
-          {searchQuery.trim() ? 'No matching items' : 'No Menu Available'}
+          {searchQuery.trim() ? t('noMatchingItems') : t('noMenuAvailable')}
         </Text>
         <Text style={{ color: colors.textSecondary, fontSize: 13, textAlign: 'center' }}>
           {searchQuery.trim()
-            ? `Try another item name or custom ID for "${searchQuery}"`
-            : 'Please check back later or contact support'}
+            ? `${t('tryAnotherItemNameOrCustomId')} for "${searchQuery}"`
+            : t('pleaseCheckBackLaterOrContactSupport')}
         </Text>
       </View>
     );
@@ -55,12 +57,12 @@ export const MenuItemsGrid: React.FC<MenuItemsGridProps> = ({
     <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 44, paddingHorizontal: 14 }}>
       <MaterialCommunityIcons name="food-off" size={36} color={colors.textSecondary} />
       <Text style={{ color: colors.text, fontWeight: '700', marginTop: 12 }}>
-        {normalizedSearch ? 'No matching items' : `No items in ${currentCategory?.name || 'this category'}`}
+        {normalizedSearch ? t('noMatchingItems') : `${t('noItemsInThisCategory')}`}
       </Text>
       <Text style={{ color: colors.textSecondary, marginTop: 6, textAlign: 'center', fontSize: 12 }}>
         {normalizedSearch
-          ? `Try another item name or custom ID for "${searchQuery}"`
-          : 'Items will appear here when available'}
+          ? `${t('tryAnotherItemNameOrCustomId')} for "${searchQuery}"`
+          : t('itemsWillAppearHereWhenAvailable')}
       </Text>
     </View>
   );
@@ -75,7 +77,7 @@ export const MenuItemsGrid: React.FC<MenuItemsGridProps> = ({
       ListHeaderComponent={
         <View style={{ marginBottom: 12 }}>
           <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
-            {menuItems.length} {menuItems.length === 1 ? 'item' : 'items'} in {currentCategory?.name}
+            {menuItems.length} {menuItems.length === 1 ? t('item') : t('items')} in {currentCategory?.name}
           </Text>
         </View>
       }

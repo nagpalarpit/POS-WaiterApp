@@ -15,6 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { STORAGE_KEYS } from '../constants/storageKeys';
 import { useTheme } from '../theme/ThemeProvider';
 import { useAuth } from '../contexts/AuthContext';
+import { useTranslation } from '../contexts/LanguageContext';
 import { fireImpact, fireSuccessNotification } from '../components/auth/AuthPrimitives';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -31,53 +32,54 @@ type OnboardingSlide = {
   statValue: string;
 };
 
-const SLIDES: OnboardingSlide[] = [
-  {
-    key: 'tables',
-    eyebrow: 'Floor Ready',
-    title: 'See open and booked tables at a glance',
-    description:
-      'Jump straight into dine-in service with a live table overview and quick order access.',
-    icon: 'table-furniture',
-    accent: '#10ce9e',
-    statLabel: 'Table status',
-    statValue: 'Live',
-  },
-  {
-    key: 'orders',
-    eyebrow: 'Order Flow',
-    title: 'Handle dine-in, delivery, and pickup from one place',
-    description:
-      'Move between service modes without losing speed, and keep every incoming order visible.',
-    icon: 'silverware-fork-knife',
-    accent: '#604be8',
-    statLabel: 'Service modes',
-    statValue: '3',
-  },
-  {
-    key: 'checkout',
-    eyebrow: 'Ready to Close',
-    title: 'Finish payments with less back-and-forth',
-    description:
-      'Stay focused on service while checkout, split bills, and order details stay within reach.',
-    icon: 'cash-register',
-    accent: '#ff9d00',
-    statLabel: 'Checkout',
-    statValue: 'Faster',
-  },
-];
-
 export default function OnboardingScreen({ navigation }: any) {
   const { colors } = useTheme();
   const { user } = useAuth();
+  const { t } = useTranslation();
   const listRef = useRef<FlatList<OnboardingSlide>>(null);
   const [activeIndex, setActiveIndex] = useState(0);
   const [submitting, setSubmitting] = useState(false);
 
+  const slides = useMemo<OnboardingSlide[]>(
+    () => [
+      {
+        key: 'tables',
+        eyebrow: t('floorReady'),
+        title: t('seeOpenAndBookedTablesAtAGlance'),
+        description: t('jumpStraightIntoDineInServiceWithALiveTableOverviewAndQuickOrderAccess'),
+        icon: 'table-furniture',
+        accent: '#10ce9e',
+        statLabel: t('tableStatus'),
+        statValue: t('live'),
+      },
+      {
+        key: 'orders',
+        eyebrow: t('orderFlow'),
+        title: t('handleDineInDeliveryAndPickupFromOnePlace'),
+        description: t('moveBetweenServiceModesWithoutLosingSpeedAndKeepEveryIncomingOrderVisible'),
+        icon: 'silverware-fork-knife',
+        accent: '#604be8',
+        statLabel: t('serviceModes'),
+        statValue: '3',
+      },
+      {
+        key: 'checkout',
+        eyebrow: t('readyToClose'),
+        title: t('finishPaymentsWithLessBackAndForth'),
+        description: t('stayFocusedOnServiceWhileCheckoutSplitBillsAndOrderDetailsStayWithinReach'),
+        icon: 'cash-register',
+        accent: '#ff9d00',
+        statLabel: t('checkoutLabel'),
+        statValue: t('faster'),
+      },
+    ],
+    [t],
+  );
+
   const userLabel = useMemo(() => {
     const fullName = [user?.firstName, user?.lastName].filter(Boolean).join(' ').trim();
-    return fullName || user?.email || 'there';
-  }, [user?.email, user?.firstName, user?.lastName]);
+    return fullName || user?.email || t('guest');
+  }, [t, user?.email, user?.firstName, user?.lastName]);
 
   const finishOnboarding = async () => {
     if (submitting) {
@@ -104,7 +106,7 @@ export default function OnboardingScreen({ navigation }: any) {
   };
 
   const onNext = () => {
-    if (activeIndex >= SLIDES.length - 1) {
+    if (activeIndex >= slides.length - 1) {
       fireImpact();
       void finishOnboarding();
       return;
@@ -116,7 +118,7 @@ export default function OnboardingScreen({ navigation }: any) {
 
   const onMomentumEnd = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const nextIndex = Math.round(event.nativeEvent.contentOffset.x / SLIDE_WIDTH);
-    setActiveIndex(Math.max(0, Math.min(nextIndex, SLIDES.length - 1)));
+    setActiveIndex(Math.max(0, Math.min(nextIndex, slides.length - 1)));
   };
 
   const renderSlide = ({ item }: { item: OnboardingSlide }) => {
@@ -156,8 +158,10 @@ export default function OnboardingScreen({ navigation }: any) {
 
       <View style={styles.header}>
         <View>
-          <Text style={[styles.welcomeEyebrow, { color: colors.primary }]}>Welcome {userLabel}</Text>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>A quick tour before service starts</Text>
+          <Text style={[styles.welcomeEyebrow, { color: colors.primary }]}>
+            {t('welcome')} {userLabel}
+          </Text>
+          <Text style={[styles.headerTitle, { color: colors.text }]}>{t('aQuickTourBeforeServiceStarts')}</Text>
         </View>
 
         <TouchableOpacity
@@ -165,13 +169,13 @@ export default function OnboardingScreen({ navigation }: any) {
           hitSlop={{ top: 10, left: 10, right: 10, bottom: 10 }}
           disabled={submitting}
         >
-          <Text style={[styles.skipText, { color: colors.textSecondary || colors.text }]}>Skip</Text>
+          <Text style={[styles.skipText, { color: colors.textSecondary || colors.text }]}>{t('skip')}</Text>
         </TouchableOpacity>
       </View>
 
       <FlatList
         ref={listRef}
-        data={SLIDES}
+        data={slides}
         horizontal
         pagingEnabled
         bounces={false}
@@ -183,7 +187,7 @@ export default function OnboardingScreen({ navigation }: any) {
 
       <View style={styles.footer}>
         <View style={styles.pagination}>
-          {SLIDES.map((slide, index) => {
+          {slides.map((slide, index) => {
             const isActive = index === activeIndex;
             return (
               <View
@@ -208,10 +212,10 @@ export default function OnboardingScreen({ navigation }: any) {
             style={[styles.primaryButton, { backgroundColor: colors.primary }]}
           >
             <Text style={[styles.primaryButtonText, { color: colors.textInverse || '#fff' }]}>
-              {activeIndex === SLIDES.length - 1 ? 'Start Taking Orders' : 'Continue'}
+              {activeIndex === slides.length - 1 ? t('startTakingOrdersButton') : t('continueText')}
             </Text>
             <MaterialIcons
-              name={activeIndex === SLIDES.length - 1 ? 'check-circle' : 'arrow-forward'}
+              name={activeIndex === slides.length - 1 ? 'check-circle' : 'arrow-forward'}
               size={18}
               color={colors.textInverse || '#fff'}
             />

@@ -11,6 +11,7 @@ import { DiscountOption, fetchDiscountsForCompany, loadCachedDiscounts } from '.
 import { useToast } from '../components/ToastProvider';
 import AppBottomSheet from './AppBottomSheet';
 import AppBottomSheetTextInput from './AppBottomSheetTextInput';
+import { useTranslation } from '../contexts/LanguageContext';
 
 interface Props {
     visible: boolean;
@@ -23,6 +24,7 @@ interface Props {
 export default function CartNoteModal({ visible, initialNote = '', initialDiscount = null, onClose, onSave }: Props) {
     const { colors } = useTheme();
     const { showToast } = useToast();
+    const { t } = useTranslation();
     const [note, setNote] = useState(initialNote || '');
     const [discounts, setDiscounts] = useState<DiscountOption[]>([]);
     const [discountsLoading, setDiscountsLoading] = useState(false);
@@ -149,7 +151,7 @@ export default function CartNoteModal({ visible, initialNote = '', initialDiscou
         }
 
         if (discountChanged && !pinVerified) {
-            showToast('error', 'Please enter PIN to apply discount.');
+            showToast('error', t('enterPinToApplyDiscount'));
             return false;
         }
 
@@ -157,13 +159,13 @@ export default function CartNoteModal({ visible, initialNote = '', initialDiscou
         if (selectedDiscount.discountType === 'CUSTOM') {
             const parsed = parseFloat(customDiscountValue || '0');
             if (!Number.isFinite(parsed) || parsed <= 0) {
-                showToast('error', 'Enter a valid custom discount percentage.');
-                return false;
-            }
-            if (parsed > 100) {
-                showToast('error', 'Custom discount cannot exceed 100%.');
-                return false;
-            }
+            showToast('error', t('enterValidCustomDiscountPercentage'));
+            return false;
+        }
+        if (parsed > 100) {
+            showToast('error', t('customDiscountCannotExceed100'));
+            return false;
+        }
             discountValue = parsed;
         }
 
@@ -190,7 +192,7 @@ export default function CartNoteModal({ visible, initialNote = '', initialDiscou
                     },
                 ]}
             >
-                <Text style={[styles.secondaryButtonText, { color: colors.textSecondary || colors.text }]}>Cancel</Text>
+                <Text style={[styles.secondaryButtonText, { color: colors.textSecondary || colors.text }]}>{t('cancel')}</Text>
             </TouchableOpacity>
             <TouchableOpacity
                 onPress={() => {
@@ -207,7 +209,7 @@ export default function CartNoteModal({ visible, initialNote = '', initialDiscou
                     },
                 ]}
             >
-                <Text style={[styles.primaryButtonText, { color: colors.textInverse || '#fff' }]}>Save Changes</Text>
+                <Text style={[styles.primaryButtonText, { color: colors.textInverse || '#fff' }]}>{t('saveChanges')}</Text>
             </TouchableOpacity>
         </View>
     );
@@ -216,17 +218,17 @@ export default function CartNoteModal({ visible, initialNote = '', initialDiscou
         <AppBottomSheet
             visible={visible}
             onClose={onClose}
-            title="Notes & Discounts"
-            subtitle="Add an order note or apply a discount."
+            title={t('notesAndDiscounts')}
+            subtitle={t('addOrderNoteOrApplyDiscount')}
             snapPoints={['70%']}
             footer={footer}
         >
             <View style={styles.formSection}>
-                <Text style={[styles.label, { color: colors.textSecondary || colors.text }]}>Order Note</Text>
+                <Text style={[styles.label, { color: colors.textSecondary || colors.text }]}>{t('orderNote')}</Text>
                 <AppBottomSheetTextInput
                     value={note}
                     onChangeText={setNote}
-                    placeholder="Add a note for this order..."
+                    placeholder={t('addNoteForThisOrder')}
                     placeholderTextColor={colors.textSecondary || colors.text}
                     style={[
                         styles.textArea,
@@ -241,13 +243,13 @@ export default function CartNoteModal({ visible, initialNote = '', initialDiscou
             </View>
 
             <View style={styles.formSection}>
-                <Text style={[styles.label, { color: colors.textSecondary || colors.text }]}>Discount</Text>
+                <Text style={[styles.label, { color: colors.textSecondary || colors.text }]}>{t('discount')}</Text>
 
                 {discountsLoading ? (
-                    <Text style={{ color: colors.textSecondary, fontSize: 12 }}>Loading discounts...</Text>
+                    <Text style={{ color: colors.textSecondary, fontSize: 12 }}>{t('loading')}</Text>
                 ) : discounts.length === 0 ? (
                     <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
-                        No discounts available for this company.
+                        {t('noDiscountsAvailable')}
                     </Text>
                 ) : (
                     <View style={styles.discountGrid}>
@@ -263,13 +265,13 @@ export default function CartNoteModal({ visible, initialNote = '', initialDiscou
                             ]}
                         >
                             <Text style={[styles.discountChipText, { color: !selectedDiscountId ? colors.primary : colors.text }]}>
-                                No Discount
+                                {t('noDiscount')}
                             </Text>
                         </TouchableOpacity>
                         {discounts.map((discount, index) => {
                             const discountId = getDiscountKey(discount, index);
                             const selected = selectedDiscountId === discountId;
-                            const label = discount.discountName || discount.name || 'Discount';
+                            const label = discount.discountName || discount.name || t('discount');
                             return (
                                 <TouchableOpacity
                                     key={`${discountId}`}
@@ -295,13 +297,13 @@ export default function CartNoteModal({ visible, initialNote = '', initialDiscou
                 {selectedDiscount?.discountType === 'CUSTOM' && (
                     <View style={styles.customDiscountSection}>
                         <Text style={{ color: colors.textSecondary, fontSize: 11, marginBottom: 6 }}>
-                            Custom Discount (%)
+                            {t('discount')} (%)
                         </Text>
                         <AppBottomSheetTextInput
                             value={customDiscountValue}
                             onChangeText={setCustomDiscountValue}
                             editable={pinVerified || discountChanged}
-                            placeholder="Enter custom percentage"
+                            placeholder={t('enterCustomPercentage')}
                             placeholderTextColor={colors.textSecondary || colors.text}
                             keyboardType="decimal-pad"
                             style={[

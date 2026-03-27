@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { StyleSheet, View, Text, TouchableOpacity } from 'react-native';
 import { useTheme } from '../theme/ThemeProvider';
 import AppBottomSheet from './AppBottomSheet';
+import { useTranslation } from '../contexts/LanguageContext';
 
 type Props = {
   visible: boolean;
@@ -9,11 +10,9 @@ type Props = {
   onSelect: (label: string) => void;
 };
 
-const DEFAULT_LABELS = ['Starter', 'Main Course', 'Dessert', 'Drinks', 'Gange'];
-
-const buildAvailableLabels = (existingLabels: string[] = []) => {
+const buildAvailableLabels = (existingLabels: string[] = [], defaultLabels: string[] = []) => {
   const normalized = existingLabels.map((label) => label.toLowerCase());
-  let labels = DEFAULT_LABELS.filter(
+  let labels = defaultLabels.filter(
     (label) => !normalized.includes(label.toLowerCase())
   );
 
@@ -34,21 +33,26 @@ const buildAvailableLabels = (existingLabels: string[] = []) => {
 
 export default function GroupModal({ visible, existingLabels = [], onSelect }: Props) {
   const { colors } = useTheme();
+  const { t } = useTranslation();
+  const defaultLabels = useMemo(
+    () => [t('starter'), t('mainCourse'), t('dessert'), t('drinks'), t('gange')],
+    [t],
+  );
   const labels = useMemo(
-    () => buildAvailableLabels(existingLabels),
-    [existingLabels]
+    () => buildAvailableLabels(existingLabels, defaultLabels),
+    [defaultLabels, existingLabels]
   );
 
   const handleClose = () => {
-    onSelect('Main Course');
+    onSelect(t('mainCourse'));
   };
 
   return (
     <AppBottomSheet
       visible={visible}
       onClose={handleClose}
-      title="Select Group Label"
-      subtitle="Choose the course label for this section."
+      title={t('selectGroupLabel')}
+      subtitle={t('chooseTheCourseLabelForThisSection')}
       snapPoints={['58%']}
     >
       <View style={styles.grid}>

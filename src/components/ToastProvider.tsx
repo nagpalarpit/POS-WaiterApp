@@ -1,6 +1,5 @@
 import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
-import { Text, StyleSheet, View, TouchableOpacity } from 'react-native';
-import { Portal } from '@gorhom/portal';
+import { Text, StyleSheet, View, TouchableOpacity, Modal } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeProvider';
 
@@ -42,36 +41,39 @@ export const ToastProvider = ({ children }: { children: React.ReactNode }) => {
   return (
     <ToastContext.Provider value={{ showToast }}>
       {children}
-      {visible ? (
-        <Portal name="app-toast-overlay">
-          <View style={styles.portalRoot}>
-            <View style={styles.overlay}>
-              <View style={[styles.card, { backgroundColor: colors.surface || '#fff' }]}>
-                <Text style={[styles.header, { color: getToastColor(type, colors) }]}>
-                  {headerLabel}
+      <Modal
+        visible={visible}
+        transparent
+        animationType="fade"
+        onRequestClose={closeModal}
+      >
+        <View style={styles.portalRoot}>
+          <View style={styles.overlay}>
+            <View style={[styles.card, { backgroundColor: colors.surface || '#fff' }]}>
+              <Text style={[styles.header, { color: getToastColor(type, colors) }]}>
+                {headerLabel}
+              </Text>
+              <Text style={[styles.message, { color: colors.text }]}>
+                {message}
+              </Text>
+              <TouchableOpacity
+                onPress={closeModal}
+                style={[
+                  styles.button,
+                  {
+                    backgroundColor: colors.primary,
+                    marginBottom: Math.max(insets.bottom, 12),
+                  },
+                ]}
+              >
+                <Text style={[styles.buttonText, { color: colors.textInverse || '#fff' }]}>
+                  OK
                 </Text>
-                <Text style={[styles.message, { color: colors.text }]}>
-                  {message}
-                </Text>
-                <TouchableOpacity
-                  onPress={closeModal}
-                  style={[
-                    styles.button,
-                    {
-                      backgroundColor: colors.primary,
-                      marginBottom: Math.max(insets.bottom, 12),
-                    },
-                  ]}
-                >
-                  <Text style={[styles.buttonText, { color: colors.textInverse || '#fff' }]}>
-                    OK
-                  </Text>
-                </TouchableOpacity>
-              </View>
+              </TouchableOpacity>
             </View>
           </View>
-        </Portal>
-      ) : null}
+        </View>
+      </Modal>
     </ToastContext.Provider>
   );
 };
@@ -79,7 +81,7 @@ export const ToastProvider = ({ children }: { children: React.ReactNode }) => {
 export const useToast = (): ToastContextValue => {
   const ctx = useContext(ToastContext);
   if (!ctx) {
-    return { showToast: () => {} };
+    return { showToast: () => { } };
   }
   return ctx;
 };
@@ -87,8 +89,8 @@ export const useToast = (): ToastContextValue => {
 const styles = StyleSheet.create({
   portalRoot: {
     ...StyleSheet.absoluteFillObject,
-    zIndex: 9999,
-    elevation: 9999,
+    zIndex: 99999,
+    elevation: 99999,
   },
   overlay: {
     flex: 1,

@@ -17,6 +17,7 @@ class POSIdService {
   async setPosId(id: string): Promise<void> {
     this.posId = id;
     await AsyncStorage.setItem(STORAGE_KEYS.posId, id);
+    console.log('POS ID set:', id);
   }
 
   /**
@@ -50,6 +51,7 @@ class POSIdService {
   async clearPosId(): Promise<void> {
     this.posId = null;
     await AsyncStorage.removeItem(STORAGE_KEYS.posId);
+    console.log('POS ID cleared');
   }
 }
 

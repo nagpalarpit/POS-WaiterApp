@@ -10,6 +10,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeProvider';
 import { formatCurrency } from '../utils/currency';
 import AppBottomSheet from './AppBottomSheet';
+import { useTranslation } from '../contexts/LanguageContext';
 
 interface MenuItemVariant {
     id: number;
@@ -51,6 +52,7 @@ export default function ItemDetailsModal({
     onConfirm,
 }: ItemDetailsModalProps) {
     const { colors } = useTheme();
+    const { t } = useTranslation();
 
     const [selectedVariant, setSelectedVariant] = useState<MenuItemVariant | null>(null);
     const [selectedAttribute, setSelectedAttribute] = useState<MenuItemVariantAttribute | null>(null);
@@ -61,9 +63,9 @@ export default function ItemDetailsModal({
             ? item.menuItemVariants
             : Array.isArray(item?.variants)
                 ? item.variants
-                : item?.menuItemVariant
-                    ? [item.menuItemVariant]
-                    : [];
+                    : item?.menuItemVariant
+                        ? [item.menuItemVariant]
+                        : [];
 
         const topLevelAttributes = Array.isArray(item?.menuItemVariantAttributes)
             ? item.menuItemVariantAttributes
@@ -78,7 +80,7 @@ export default function ItemDetailsModal({
                     ? [
                         {
                             id: item?.id ?? 1,
-                            name: item?.name ?? 'Default',
+                            name: item?.name ?? t('default'),
                             price: 0,
                             menuItemVariantAttributes: topLevelAttributes,
                         },
@@ -109,7 +111,7 @@ export default function ItemDetailsModal({
                             name:
                                 attribute?.name ??
                                 attribute?.menuItemVariantAttribute?.name ??
-                                `Option ${attributeIndex + 1}`,
+                                `${t('option')} ${attributeIndex + 1}`,
                             price: parseFloat(
                                 (
                                     attribute?.price ??
@@ -125,7 +127,7 @@ export default function ItemDetailsModal({
                                 name:
                                     value?.name ??
                                     value?.menuItemVariantAttributeValue?.name ??
-                                    `Value ${valueIndex + 1}`,
+                                    `${t('value')} ${valueIndex + 1}`,
                                 price: parseFloat(
                                     (
                                         value?.price ??
@@ -142,7 +144,7 @@ export default function ItemDetailsModal({
                 return {
                     ...variant,
                     id: variant?.id ?? variant?.menuItemVariantId ?? variantIndex + 1,
-                    name: variant?.name ?? variant?.menuItemVariant?.name ?? `Variant ${variantIndex + 1}`,
+                    name: variant?.name ?? variant?.menuItemVariant?.name ?? `${t('variant')} ${variantIndex + 1}`,
                     price: parseFloat(
                         (
                             variant?.price ??
@@ -266,7 +268,7 @@ export default function ItemDetailsModal({
     const footer = (
         <View>
             <View style={styles.footerSummary}>
-                <Text style={[styles.footerLabel, { color: colors.textSecondary || colors.text }]}>Total Price</Text>
+                <Text style={[styles.footerLabel, { color: colors.textSecondary || colors.text }]}>{t('totalPrice')}</Text>
                 <Text style={[styles.footerTotal, { color: colors.primary }]}>
                     {formatCurrency(calculateTotal())}
                 </Text>
@@ -277,7 +279,7 @@ export default function ItemDetailsModal({
                 style={[styles.footerButton, { backgroundColor: colors.primary }]}
             >
                 <Text style={[styles.footerButtonText, { color: colors.textInverse || '#fff' }]}>
-                    Add to Cart
+                    {t('addToCart')}
                 </Text>
             </TouchableOpacity>
         </View>
@@ -288,7 +290,7 @@ export default function ItemDetailsModal({
             visible={visible}
             onClose={onClose}
             title={item.name}
-            subtitle={category?.name ? `Category: ${category.name}` : 'Customize this item.'}
+            subtitle={category?.name ? `${t('categoryLabel')}: ${category.name}` : t('customizeThisItem')}
             snapPoints={['92%']}
             footer={footer}
         >
@@ -298,14 +300,14 @@ export default function ItemDetailsModal({
                     >
                         {/* Item Price */}
                         <Text style={{ fontSize: 16, color: colors.textSecondary, marginBottom: 16 }}>
-                            Base Price: {formatCurrency(item.price || 0)}
+                            {t('basePrice')}: {formatCurrency(item.price || 0)}
                         </Text>
 
                         {/* Variants */}
                         {hasMultipleVariants() && (
                             <View style={{ marginBottom: 20 }}>
                                 <Text style={{ fontSize: 16, fontWeight: '600', color: colors.text, marginBottom: 10 }}>
-                                    Select Variant
+                                    {t('selectVariant')}
                                 </Text>
                                 <FlatList
                                     data={normalizedVariants}
@@ -354,7 +356,9 @@ export default function ItemDetailsModal({
                                     <View key={`attribute-${attribute.id}-${attributeIndex}`} style={{ marginBottom: 20 }}>
                                         <Text style={{ fontSize: 16, fontWeight: '600', color: colors.text, marginBottom: 10 }}>
                                             {attribute.name}
-                                            {attribute.selectionTypeId === 0 ? ' (Required)' : ' (Optional - Multiple)'}
+                                        {attribute.selectionTypeId === 0
+                                            ? ` (${t('required')})`
+                                            : ` (${t('optionalMultiple')})`}
                                         </Text>
 
                                         {attribute.menuItemVariantAttributeValues &&

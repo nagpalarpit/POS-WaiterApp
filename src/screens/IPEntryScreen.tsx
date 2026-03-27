@@ -25,6 +25,7 @@ import {
 import { STORAGE_KEYS } from '../constants/storageKeys';
 import PrimaryButton from '../components/PrimaryButton';
 import { useTheme } from '../theme/ThemeProvider';
+import { useTranslation } from '../contexts/LanguageContext';
 import serverConnection from '../services/serverConnection';
 import { setLocalBaseUrl } from '../services/localApi';
 import { useToast } from '../components/ToastProvider';
@@ -34,6 +35,7 @@ export default function IPEntryScreen() {
   const navigation = useNavigation();
   const isFocused = useIsFocused();
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const { showToast } = useToast();
   const { refreshLocalServerStatus } = useConnection();
 
@@ -84,13 +86,13 @@ export default function IPEntryScreen() {
 
     if (!trimmedIp) {
       fireErrorNotification();
-      showToast('error', 'Please enter server IP');
+      showToast('error', t('pleaseEnterServerIp'));
       return;
     }
 
     if (trimmedPort && !/^\d+$/.test(trimmedPort)) {
       fireErrorNotification();
-      showToast('error', 'Port must contain only numbers');
+      showToast('error', t('portMustContainOnlyNumbers'));
       return;
     }
 
@@ -99,13 +101,13 @@ export default function IPEntryScreen() {
 
     fireImpact();
     setLoading(true);
-    setDebugInfo(`Testing ${host}`);
+    setDebugInfo(`${t('testingConnection')} ${host}`);
 
     try {
       const success = await serverConnection.setServerUrl(host);
 
       if (success) {
-        setDebugInfo('Connected successfully. Local server is ready.');
+        setDebugInfo(t('connectedSuccessfullyClosing'));
         await setLocalBaseUrl(host);
         await AsyncStorage.setItem(STORAGE_KEYS.legacyBaseUrl, host);
         await refreshLocalServerStatus();
@@ -122,16 +124,16 @@ export default function IPEntryScreen() {
       }
 
       const lastError = serverConnection.getLastError();
-      setDebugInfo(lastError ? `Connection failed: ${lastError}` : 'Connection failed.');
+      setDebugInfo(lastError ? `${t('connectionFailed')} ${lastError}` : t('connectionFailed'));
       fireErrorNotification();
       showToast(
         'error',
-        'Unable to reach the POS server. Check the IP address and port, then try again.'
+        t('unableToReachTheServerCheckIpAndPortAndTryAgain')
       );
     } catch (err: any) {
-      setDebugInfo(err?.message ? `Connection failed: ${err.message}` : 'Connection failed.');
+      setDebugInfo(err?.message ? `${t('connectionFailed')} ${err.message}` : t('connectionFailed'));
       fireErrorNotification();
-      showToast('error', err?.message || 'Unable to reach server');
+      showToast('error', err?.message || t('unableToReachServer'));
     } finally {
       setLoading(false);
     }
@@ -141,7 +143,7 @@ export default function IPEntryScreen() {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: colors.surface }}>
         <View style={styles.loadingState}>
-          <Text style={{ color: colors.text }}>Loading connection settings...</Text>
+          <Text style={{ color: colors.text }}>{t('loadingConnectionSettings')}</Text>
         </View>
       </SafeAreaView>
     );
@@ -165,9 +167,9 @@ export default function IPEntryScreen() {
               </View>
             </View>
 
-            <Text style={[styles.title, { color: colors.text }]}>Connect this device</Text>
+            <Text style={[styles.title, { color: colors.text }]}>{t('connectThisDevice')}</Text>
             <Text style={[styles.subtitle, { color: colors.textSecondary || colors.text }]}>
-              Enter the local POS server details before staff sign in.
+              {t('connectTheDeviceToTheLocalPosServiceBeforeLoggingIn')}
             </Text>
           </View>
 
@@ -185,7 +187,7 @@ export default function IPEntryScreen() {
                   },
             ]}
           >
-            <Text style={[styles.label, { color: colors.textSecondary || colors.text }]}>Server IP Address</Text>
+            <Text style={[styles.label, { color: colors.textSecondary || colors.text }]}>{t('serverIpAddress')}</Text>
             <View
               style={[
                 styles.inputWrap,
@@ -212,7 +214,7 @@ export default function IPEntryScreen() {
             </View>
 
             <Text style={[styles.label, styles.labelSpacing, { color: colors.textSecondary || colors.text }]}>
-              Port (optional)
+              {t('portOptional')}
             </Text>
             <View
               style={[
@@ -239,7 +241,7 @@ export default function IPEntryScreen() {
             </View>
 
             <PrimaryButton
-              title={loading ? 'Connecting...' : 'Connect to Local Server'}
+              title={loading ? t('connecting') : t('connectToLocalPos')}
               onPress={testConnection}
               loading={loading}
               className="mt-4"

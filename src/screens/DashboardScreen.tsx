@@ -6,6 +6,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Image } from 'expo-image';
 import { STORAGE_KEYS } from '../constants/storageKeys';
 import { useTheme } from '../theme/ThemeProvider';
+import { useTranslation } from '../contexts/LanguageContext';
 import { SERVER_BASE_URL } from '../config/urls';
 import { getOrderStatusLabel } from '../utils/orderUtils';
 import { formatCurrency } from '../utils/currency';
@@ -31,6 +32,7 @@ interface DashboardScreenProps {
  */
 export default function DashboardScreen({ navigation }: DashboardScreenProps) {
   const { colors } = useTheme();
+  const { t, language } = useTranslation();
 
   // Use custom hooks for complex logic
   const ordersData = useOrdersData();
@@ -40,8 +42,8 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
 
   const getOrderDisplayLabel = (order: Order | any) => {
     const tableNo = order?.orderDetails?.tableNo;
-    if (tableNo) return `Table ${tableNo}`;
-    return order?.customOrderId || order?.id || order?._id || 'Order';
+    if (tableNo) return `${t('table')} ${tableNo}`;
+    return order?.customOrderId || order?.id || order?._id || t('order');
   };
 
   // Local state
@@ -345,7 +347,7 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
    */
   useLayoutEffect(() => {
     navigation.setOptions({
-      headerTitle: 'Dashboard',
+      headerTitle: t('dashboard'),
       headerStyle: { backgroundColor: colors.background },
       headerTintColor: colors.text,
       headerTitleStyle: { fontWeight: '700' },
@@ -384,21 +386,21 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
 
     const statusBadges = [
       {
-        label: 'Available',
+        label: t('available'),
         count: tableStats.availableTablesCount,
         bgColor: colors.success + '20',
         borderColor: colors.success,
         textColor: colors.success,
       },
       {
-        label: 'Booked',
+        label: t('booked'),
         count: tableStats.bookedTablesCount,
         bgColor: colors.error + '20',
         borderColor: colors.error,
         textColor: colors.error,
       },
       {
-        label: 'Semi-Paid',
+        label: t('semiPaid'),
         count: tableStats.semiPaidTablesCount,
         bgColor: colors.warning + '20',
         borderColor: colors.warning,
@@ -460,7 +462,7 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
           }}
         >
           <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
-            Table areas not available
+            {t('tableAreasNotAvailable')}
           </Text>
         </View>
       );
@@ -502,7 +504,7 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
                 }}
                 numberOfLines={1}
               >
-                {area?.name || 'Area'}
+                {area?.name || t('area')}
               </Text>
               {bookedCount > 0 && (
                 <View
@@ -540,9 +542,9 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
   const renderEmptyState = () => (
     <View className="flex-1 justify-center items-center py-8">
       <Text className="text-gray-400 text-center">
-        {activeTab === DELIVERY_TYPE.DINE_IN && 'No dine-in orders'}
-        {activeTab === DELIVERY_TYPE.DELIVERY && 'No delivery orders'}
-        {activeTab === DELIVERY_TYPE.PICKUP && 'No pickup orders'}
+        {activeTab === DELIVERY_TYPE.DINE_IN && t('noDineInOrders')}
+        {activeTab === DELIVERY_TYPE.DELIVERY && t('noDeliveryOrders')}
+        {activeTab === DELIVERY_TYPE.PICKUP && t('noPickupOrders')}
       </Text>
     </View>
   );
@@ -585,7 +587,7 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
               if (table.order) {
                 if (isOrderLocked(table.order)) {
                   const label = getOrderDisplayLabel(table.order);
-                  showToast('error', `${label} is being handled on another device. Please try later.`);
+                  showToast('error', `${label} ${t('handledOnAnotherDevice')} ${t('pleaseTryLater')}`);
                   return;
                 }
                 lockOrder(table.order);
@@ -594,7 +596,7 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
               }
 
               if (isTableLocked(table.tableNo)) {
-                showToast('error', `Table ${table.tableNo} is currently selected on another device.`);
+                showToast('error', `${t('table')} ${table.tableNo} ${t('selectedOnAnotherDevice')}`);
                 return;
               }
 
@@ -633,7 +635,7 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
                 marginBottom: 6,
               }}
             >
-              Table
+              {t('table')}
             </Text>
             <Text
               style={{ color: colors.text, fontSize: 22, fontWeight: '800' }}
@@ -694,14 +696,14 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
                 className="text-xs font-semibold"
                 style={{ color: colors.textSecondary }}
               >
-                {getOrderStatusLabel(order)}
+                {getOrderStatusLabel(order, language)}
               </Text>
             </View>
           </View>
 
           {serviceTimeLabel ? (
             <Text className="text-xs mt-3" style={{ color: colors.textSecondary }}>
-              {orderDetails?.orderDeliveryTypeId === DELIVERY_TYPE.DELIVERY ? 'Delivery Time' : 'Pickup Time'}: {' '}
+              {orderDetails?.orderDeliveryTypeId === DELIVERY_TYPE.DELIVERY ? t('deliveryTime') : t('pickupTime')}: {' '}
               <Text style={{ color: colors.text, fontWeight: '700' }}>
                 {serviceTimeLabel}
               </Text>
@@ -710,7 +712,7 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
 
           {orderDetails?.orderDeliveryTypeId === DELIVERY_TYPE.PICKUP && familyName ? (
             <Text className="text-xs mt-1" style={{ color: colors.textSecondary }}>
-              Family Name:{' '}
+              {t('familyName')}: {' '}
               <Text style={{ color: colors.text, fontWeight: '700' }}>
                 {familyName}
               </Text>
@@ -719,7 +721,7 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
 
           <View className="mt-3 flex-row justify-between items-center">
             <Text className="text-sm" style={{ color: colors.textSecondary }}>
-              Total Amount
+              {t('totalAmount')}
             </Text>
             <Text
               style={{ color: colors.success, fontSize: 18, fontWeight: '700' }}
@@ -814,7 +816,7 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
                   fontWeight: '700',
                 }}
               >
-                Tables
+                {t('tables')}
               </Text>
               <Text
                 style={{
@@ -868,7 +870,7 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
                       fontWeight: '700',
                     }}
                   >
-                    Delivery
+                    {t('delivery')}
                   </Text>
                 </View>
                 <Text
@@ -924,7 +926,7 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
                       fontWeight: '700',
                     }}
                   >
-                    Pickup
+                    {t('pickup')}
                   </Text>
                 </View>
                 <Text
