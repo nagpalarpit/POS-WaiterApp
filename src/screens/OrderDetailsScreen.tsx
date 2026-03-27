@@ -1,4 +1,4 @@
-﻿import React, {
+import React, {
   useMemo,
   useState,
   useEffect,
@@ -111,7 +111,6 @@ const sanitizePersistedOrderDetails = (orderInfo: any) => {
     ...orderInfo,
   };
 
-  delete sanitized.localOrderId;
   delete sanitized._id;
   delete sanitized.id;
 
@@ -514,7 +513,7 @@ const formatTimestamp = (timestamp?: string) => {
   if (!timestamp) return "N/A";
   const date = new Date(timestamp);
   if (Number.isNaN(date.getTime())) return "N/A";
-  return `${date.toLocaleDateString()} • ${date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+  return `${date.toLocaleDateString()} � ${date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
 };
 
 export default function OrderDetailsScreen({ navigation, route }: any) {
@@ -1626,8 +1625,17 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
         const mainOrderInvoiceNumber =
           (await commonFunctionService.generateInvoice(companyId)) ||
           invoiceNumber;
+        const remoteMainOrderId =
+          toNumber(
+            order?.id ??
+              orderDetails?.id ??
+              order?.orderId ??
+              orderDetails?.orderId,
+            0,
+          ) || undefined;
         const finalizedMainOrderInfo: any = {
           ...orderDetails,
+          companyId,
           orderItem: mergedOrderItems,
           orderSubTotal: round2(mainOrderSubTotal),
           orderTotal: round2(mainOrderTotal),
@@ -1663,6 +1671,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
             splitOrder?._id || splitOrder?.id || details?.localOrderId;
 
           return {
+            companyId,
             currency: details?.currency || currency,
             paymentMethod,
             amount: toNumber(details?.orderTotal, 0),
@@ -1672,6 +1681,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
             orderInfo: {
               orderStatusId: ORDER_STATUS.DELIVERED,
               ...details,
+              companyId: toNumber(details?.companyId, 0) || toNumber(splitOrder?.companyId, 0) || companyId,
               updatedAt: now,
               localOrderId: splitLocalOrderId,
               parentLocalOrderId:
@@ -1683,7 +1693,8 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
         });
 
         const mainBulkSettleObj = {
-          id: localOrderId,
+          id: remoteMainOrderId,
+          companyId,
           currency,
           paymentMethod: 3,
           amount: round2(mainOrderTotal),
@@ -1692,6 +1703,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
           deliveryCharge: round2(finalOrderDeliveryCharge),
           orderInfo: {
             ...finalizedMainOrderInfo,
+            companyId,
             localOrderId,
             customOrderId: order?.customOrderId || orderDetails?.customOrderId,
             paymentMethod: 3,
@@ -1710,6 +1722,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
           deliveryCharge: round2(finalOrderDeliveryCharge),
           orderInfo: {
             ...finalizedMainOrderInfo,
+            companyId,
             localOrderId,
             customOrderId: order?.customOrderId || orderDetails?.customOrderId,
             paymentMethod: selectedPaymentMethod,
@@ -1886,20 +1899,28 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
                   delete updatedOrderDetails.parentLocalOrderId;
                 }
 
-                const updatedSettleInfo = {
-                  ...(localOrderRecord?.settleInfo || {}),
-                  splitLog: true,
-                  orderInfo: {
-                    ...(localOrderRecord?.settleInfo?.orderInfo || {}),
-                    ...updatedOrderDetails,
-                    isSynced: true,
-                    parentLocalOrderId:
-                      localOrderRecord?.parentLocalOrderId || undefined,
-                    customOrderId:
-                      localOrderRecord?.customOrderId ||
-                      updatedOrderDetails?.customOrderId,
-                    },
-                  };
+                const isSplitChildOrder = !!localOrderRecord?.parentLocalOrderId;
+                const updatedSettleOrderInfo = {
+                  ...(localOrderRecord?.settleInfo?.orderInfo || {}),
+                  ...updatedOrderDetails,
+                  isSynced: true,
+                  localOrderId: currentLocalId,
+                  parentLocalOrderId:
+                    localOrderRecord?.parentLocalOrderId || undefined,
+                  customOrderId:
+                    localOrderRecord?.customOrderId ||
+                    updatedOrderDetails?.customOrderId,
+                };
+
+                const updatedSettleInfo = isSplitChildOrder
+                  ? {
+                      orderInfo: updatedSettleOrderInfo,
+                    }
+                  : {
+                      ...(localOrderRecord?.settleInfo || {}),
+                      splitLog: true,
+                      orderInfo: updatedSettleOrderInfo,
+                    };
 
                 const localOrderUpdatePayload: any = {
                   orderStatusId: ORDER_STATUS.DELIVERED,
@@ -2409,7 +2430,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
                             marginTop: 2,
                           }}
                         >
-                          • {valueQuantity} x {name}
+                          � {valueQuantity} x {name}
                           {valuePrice > 0
                             ? ` (+${formatCurrency(valuePrice)})`
                             : ""}
@@ -3171,3 +3192,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 });
+
+
+

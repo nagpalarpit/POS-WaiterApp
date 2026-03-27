@@ -360,6 +360,7 @@ class OrderService {
       this.removeNullishDeep({
         ...this.pickDefinedFields(settlePayload, [
           'id',
+          'companyId',
           'currency',
           'paymentMethod',
           'amount',
@@ -373,6 +374,19 @@ class OrderService {
           'isTscOffline',
         ]),
       }) || {};
+
+    const resolvedCompanyId =
+      sanitizedRemotePayload.companyId ??
+      settlePayload?.orderInfo?.companyId ??
+      settlePayload?.orderInfo?.company?.id ??
+      settlePayload?.orderInfo?.user?.companyId ??
+      settlePayload?.orderInfo?.user?.company?.id ??
+      settlePayload?.orderInfo?.tableArea?.companyId ??
+      settlePayload?.orderInfo?.tableArea?.company?.id;
+
+    if (resolvedCompanyId !== undefined && resolvedCompanyId !== null) {
+      sanitizedRemotePayload.companyId = resolvedCompanyId;
+    }
 
     const remoteOrderInfo = this.buildRemoteSettleOrderInfo(
       settlePayload?.orderInfo || {},
@@ -842,6 +856,7 @@ class OrderService {
       const remoteItems = Array.isArray(sanitizedItems)
         ? sanitizedItems.map((item: any) => this.buildRemoteSettlePayload(item))
         : [];
+      console.log("waiter settleBulkOrder payload:", JSON.stringify(remoteItems));
       const res = await api.post(API_ENDPOINTS.order.SETTLE_BULK, remoteItems);
       return res?.data ?? res;
     } catch (error) {
