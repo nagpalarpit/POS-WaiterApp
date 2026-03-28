@@ -399,6 +399,75 @@ class OrderService {
     return sanitizedRemotePayload;
   }
 
+  private buildRemoteBulkSettleOrderInfo(orderInfo: any, settlePayload: any): any {
+    const normalizedOrderInfo = this.buildEditPaymentSettleOrderInfo(orderInfo);
+    const paymentMethod = settlePayload?.paymentMethod;
+    const amount = Number(settlePayload?.amount ?? 0) || 0;
+
+    delete normalizedOrderInfo.id;
+    delete normalizedOrderInfo._id;
+    delete normalizedOrderInfo.isPaid;
+    delete normalizedOrderInfo.orderEditInOffline;
+    delete normalizedOrderInfo.canceledOrderPayment;
+    delete normalizedOrderInfo.customerId;
+    delete normalizedOrderInfo.customerAddressId;
+    delete normalizedOrderInfo.customer;
+    delete normalizedOrderInfo.userEmail;
+    delete normalizedOrderInfo.userFirstName;
+    delete normalizedOrderInfo.userLastName;
+    delete normalizedOrderInfo.userMobile;
+    delete normalizedOrderInfo.addresses;
+    delete normalizedOrderInfo.isCallerId;
+    delete normalizedOrderInfo.customerCompanyName;
+    delete normalizedOrderInfo.steuerId;
+    delete normalizedOrderInfo.isDebitor;
+    delete normalizedOrderInfo.isTscOffline;
+
+    normalizedOrderInfo.deliveryCharge =
+      settlePayload?.deliveryCharge ?? normalizedOrderInfo.deliveryCharge ?? 0;
+    normalizedOrderInfo.paymentMethod = paymentMethod ?? 0;
+    normalizedOrderInfo.orderPaymentSummary = {
+      paymentProcessorId: paymentMethod ?? 0,
+    };
+    normalizedOrderInfo.orderPaymentDetails = [
+      {
+        paymentProcessorId: paymentMethod ?? 0,
+        paymentTotal: amount,
+      },
+    ];
+
+    return normalizedOrderInfo;
+  }
+
+  private buildRemoteBulkSettlePayload(settlePayload: any): any {
+    const normalized: any = {
+      currency: settlePayload?.currency,
+      paymentMethod: settlePayload?.paymentMethod,
+      amount: settlePayload?.amount,
+      moneyBack: settlePayload?.moneyBack ?? 0,
+      tip: settlePayload?.tip ?? 0,
+      deliveryCharge: settlePayload?.deliveryCharge ?? 0,
+    };
+
+    delete normalized.companyId;
+    delete normalized.isEditPayment;
+    delete normalized.print;
+    delete normalized.splitLog;
+    delete normalized.isOrderPaid;
+    delete normalized.isTscOffline;
+
+    const remoteOrderInfo = this.buildRemoteBulkSettleOrderInfo(
+      settlePayload?.orderInfo || {},
+      settlePayload,
+    );
+
+    if (remoteOrderInfo && Object.keys(remoteOrderInfo).length > 0) {
+      normalized.orderInfo = remoteOrderInfo;
+    }
+
+    return normalized;
+  }
+
   private async resolveOrderIdCandidates(
     orderId: string,
     orderInfo?: any,
@@ -854,7 +923,9 @@ class OrderService {
     try {
       const sanitizedItems = this.removeNullishDeep(items);
       const remoteItems = Array.isArray(sanitizedItems)
-        ? sanitizedItems.map((item: any) => this.buildRemoteSettlePayload(item))
+        ? sanitizedItems.map((item: any) =>
+            this.buildRemoteBulkSettlePayload(item),
+          )
         : [];
       console.log("waiter settleBulkOrder payload:", JSON.stringify(remoteItems));
       const res = await api.post(API_ENDPOINTS.order.SETTLE_BULK, remoteItems);
