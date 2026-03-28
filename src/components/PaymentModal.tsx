@@ -209,18 +209,21 @@ const getPaymentLabel = (
   }
 };
 
-const getGiftCardLabel = (giftCard: GiftCard, t: (key: string) => string): string => {
-  if (!giftCard) return t('giftCard');
+const getGiftCardLabel = (
+  giftCard: GiftCard,
+  t: (key: string) => string,
+): string => {
+  if (!giftCard) return t("giftCard");
   const code =
     giftCard.couponCode ||
     giftCard.giftCardCode ||
     giftCard.cardCode ||
     giftCard.code ||
     "";
-  if (!code) return t('giftCard');
+  if (!code) return t("giftCard");
   const remainingBalance = toNumber((giftCard as any).remainingBalance, 0);
   if (remainingBalance > 0) {
-    return `${code} (${formatCurrency(remainingBalance)} ${t('remaining')})`;
+    return `${code} (${formatCurrency(remainingBalance)} ${t("remaining")})`;
   }
   return code;
 };
@@ -249,13 +252,13 @@ export default function PaymentScreen(props: PaymentScreenProps) {
   const insets = useSafeAreaInsets();
   const closeHandledRef = useRef(false);
   const primaryTabs = [
-    { id: 0, label: t('cash') },
-    { id: 1, label: t('card') },
-    { id: 2, label: t('split') },
-    { id: 99, label: t('other') },
+    { id: 0, label: t("cash") },
+    { id: 1, label: t("card") },
+    { id: 2, label: t("split") },
+    { id: 99, label: t("other") },
   ];
   const otherMethods = [
-    { id: 5, label: t('debitorPayment') },
+    { id: 5, label: t("debitorPayment") },
     { id: 6, label: "Lieferando" },
     { id: 7, label: "Uber" },
     { id: 8, label: "Wolt" },
@@ -300,12 +303,14 @@ export default function PaymentScreen(props: PaymentScreenProps) {
   const [currentOrderDeliveryTypeId, setCurrentOrderDeliveryTypeId] = useState(
     () => Math.max(0, Math.floor(toNumber(orderDeliveryTypeId, 0))),
   );
-  const [currentSelectedAddressDeliveryCharge, setCurrentSelectedAddressDeliveryCharge] =
-    useState<number | null>(() =>
-      selectedAddressDeliveryCharge == null
-        ? null
-        : round2(Math.max(toNumber(selectedAddressDeliveryCharge, 0), 0)),
-    );
+  const [
+    currentSelectedAddressDeliveryCharge,
+    setCurrentSelectedAddressDeliveryCharge,
+  ] = useState<number | null>(() =>
+    selectedAddressDeliveryCharge == null
+      ? null
+      : round2(Math.max(toNumber(selectedAddressDeliveryCharge, 0), 0)),
+  );
   const [currentSplitItems, setCurrentSplitItems] =
     useState<SplitSelectableItem[]>(splitItems);
   const [currentAllowSplitOption, setCurrentAllowSplitOption] =
@@ -327,13 +332,13 @@ export default function PaymentScreen(props: PaymentScreenProps) {
 
   useLayoutEffect(() => {
     if (navigation?.setOptions) {
-      navigation.setOptions({ headerTitle: title || t('payment') });
+      navigation.setOptions({ headerTitle: title || t("payment") });
     }
   }, [navigation, title, t]);
 
   useEffect(() => {
     if (!getCurrentFlowHandlers()?.onSelect) {
-      showToast("error", t('paymentSessionExpired'));
+      showToast("error", t("paymentSessionExpired"));
       if (navigation?.goBack) {
         navigation.goBack();
       }
@@ -352,15 +357,21 @@ export default function PaymentScreen(props: PaymentScreenProps) {
   }, [orderTotal]);
 
   useEffect(() => {
-    setCurrentOrderSubTotal(round2(toNumber(orderSubTotal, toNumber(orderTotal, 0))));
+    setCurrentOrderSubTotal(
+      round2(toNumber(orderSubTotal, toNumber(orderTotal, 0))),
+    );
   }, [orderSubTotal, orderTotal]);
 
   useEffect(() => {
-    setCurrentOrderDiscountTotal(round2(Math.max(toNumber(orderDiscountTotal, 0), 0)));
+    setCurrentOrderDiscountTotal(
+      round2(Math.max(toNumber(orderDiscountTotal, 0), 0)),
+    );
   }, [orderDiscountTotal]);
 
   useEffect(() => {
-    setCurrentOrderDeliveryCharge(round2(Math.max(toNumber(orderDeliveryCharge, 0), 0)));
+    setCurrentOrderDeliveryCharge(
+      round2(Math.max(toNumber(orderDeliveryCharge, 0), 0)),
+    );
   }, [orderDeliveryCharge]);
 
   useEffect(() => {
@@ -403,7 +414,9 @@ export default function PaymentScreen(props: PaymentScreenProps) {
   const resolvedOrderDeliveryCharge = round2(
     Math.max(toNumber(currentOrderDeliveryCharge, 0), 0),
   );
-  const deliveryChargeNum = round2(clamp(toAmount(deliveryChargeValue), 0, 999999));
+  const deliveryChargeNum = round2(
+    clamp(toAmount(deliveryChargeValue), 0, 999999),
+  );
   const resolvedOrderSubTotal = round2(
     Math.max(
       toNumber(currentOrderSubTotal, 0),
@@ -430,7 +443,11 @@ export default function PaymentScreen(props: PaymentScreenProps) {
   );
 
   const splitDiscountTotal = useMemo(() => {
-    if (!isSplitMode || resolvedOrderDiscountTotal <= 0 || resolvedOrderSubTotal <= 0) {
+    if (
+      !isSplitMode ||
+      resolvedOrderDiscountTotal <= 0 ||
+      resolvedOrderSubTotal <= 0
+    ) {
       return 0;
     }
     const splitRatio = clamp(splitItemTotal / resolvedOrderSubTotal, 0, 1);
@@ -468,13 +485,20 @@ export default function PaymentScreen(props: PaymentScreenProps) {
   const baseTotal = round2(Math.max(displaySubTotal - displayDiscount, 0));
   const tipNum = round2(clamp(toAmount(tipValue), 0, 999999));
   const giftCardTotal = useMemo(
-    () => round2(getGiftCardDiscount(activeGiftCard, baseTotal + displayDeliveryCharge + tipNum)),
+    () =>
+      round2(
+        getGiftCardDiscount(
+          activeGiftCard,
+          baseTotal + displayDeliveryCharge + tipNum,
+        ),
+      ),
     [activeGiftCard, baseTotal, displayDeliveryCharge, tipNum],
   );
   const due = round2(
     Math.max(baseTotal + displayDeliveryCharge + tipNum - giftCardTotal, 0),
   );
-  const showPrintPreview = !!getCurrentFlowHandlers()?.onPrintPreview && !hidePrintPreview;
+  const showPrintPreview =
+    !!getCurrentFlowHandlers()?.onPrintPreview && !hidePrintPreview;
   const isSplitInvalid = isSplitMode && splitItemTotal <= 0;
   const row1Count = 2 + (showPrintPreview ? 1 : 0);
   const isOtherPaymentMode = showOtherMethods || activeTab === 99;
@@ -496,7 +520,7 @@ export default function PaymentScreen(props: PaymentScreenProps) {
         return;
       }
       if (currentSplitItems.length === 0) {
-        showToast("error", t('noItemsAvailableForSplit'));
+        showToast("error", t("noItemsAvailableForSplit"));
         return;
       }
       setShowOtherMethods(false);
@@ -569,28 +593,19 @@ export default function PaymentScreen(props: PaymentScreenProps) {
     );
     setCurrentOrderDiscountTotal(
       Math.max(
-        toNumber(
-          resetPayment?.orderDiscountTotal,
-          currentOrderDiscountTotal,
-        ),
+        toNumber(resetPayment?.orderDiscountTotal, currentOrderDiscountTotal),
         0,
       ),
     );
     setCurrentOrderDeliveryCharge(
       Math.max(
-        toNumber(
-          resetPayment?.orderDeliveryCharge,
-          currentOrderDeliveryCharge,
-        ),
+        toNumber(resetPayment?.orderDeliveryCharge, currentOrderDeliveryCharge),
         0,
       ),
     );
     setDeliveryChargeValue(
       `${Math.max(
-        toNumber(
-          resetPayment?.orderDeliveryCharge,
-          currentOrderDeliveryCharge,
-        ),
+        toNumber(resetPayment?.orderDeliveryCharge, currentOrderDeliveryCharge),
         0,
       )}`,
     );
@@ -616,7 +631,7 @@ export default function PaymentScreen(props: PaymentScreenProps) {
         : currentOrderDeliveryTypeId === 1 &&
             resolvedSettingsDeliveryCharge != null
           ? resolvedSettingsDeliveryCharge
-        : resolvedOrderDeliveryCharge;
+          : resolvedOrderDeliveryCharge;
     setDeliveryChargeValue(
       preferredDeliveryCharge > 0 ? `${preferredDeliveryCharge}` : "",
     );
@@ -754,12 +769,12 @@ export default function PaymentScreen(props: PaymentScreenProps) {
   const handleConfirm = async (print = false, isCorporate = false) => {
     if (isProcessing) return;
     if (isSplitInvalid) {
-      showToast("error", t('selectAtLeastOneItemToSplit'));
+      showToast("error", t("selectAtLeastOneItemToSplit"));
       return;
     }
     const paymentMethod = resolvePaymentMethod();
     if (paymentMethod == null) {
-      showToast("error", t('selectPaymentMethod'));
+      showToast("error", t("selectPaymentMethod"));
       return;
     }
 
@@ -783,7 +798,7 @@ export default function PaymentScreen(props: PaymentScreenProps) {
       }
     } catch (error) {
       console.log("Payment failed:", error);
-      showToast("error", t('unableToProcessPayment'));
+      showToast("error", t("unableToProcessPayment"));
     } finally {
       setIsProcessing(false);
     }
@@ -797,7 +812,7 @@ export default function PaymentScreen(props: PaymentScreenProps) {
       await getCurrentFlowHandlers()?.onPrintPreview?.(option);
     } catch (error) {
       console.error("Print preview failed:", error);
-      showToast("error", t('unableToGeneratePrintPreview'));
+      showToast("error", t("unableToGeneratePrintPreview"));
     } finally {
       setIsProcessing(false);
     }
@@ -805,12 +820,12 @@ export default function PaymentScreen(props: PaymentScreenProps) {
 
   const addGiftCard = async (forSplit: boolean) => {
     if (!companyId) {
-      showToast("error", t('companyDetailsMissingForGiftCard'));
+      showToast("error", t("companyDetailsMissingForGiftCard"));
       return;
     }
     const code = (forSplit ? splitGiftCode : giftCode).trim();
     if (!code) {
-      showToast("error", t('enterGiftCardCode'));
+      showToast("error", t("enterGiftCardCode"));
       return;
     }
 
@@ -823,8 +838,14 @@ export default function PaymentScreen(props: PaymentScreenProps) {
       const rawData = (response as any)?.data ?? response;
       const list = Array.isArray(rawData) ? rawData : rawData ? [rawData] : [];
       const gift = list.find(Boolean) || null;
+
       if (!gift) {
-        showToast("error", t('invalidGiftCardCode'));
+        showToast("error", t("invalidGiftCardCode"));
+        return;
+      }
+
+      if (gift.remainingBalance <= 0 || gift.remainingBalance == 0.0) {
+        showToast("error", t("giftCardZeroBalance"));
         return;
       }
 
@@ -832,11 +853,14 @@ export default function PaymentScreen(props: PaymentScreenProps) {
       const expiry = toStartOfDay(gift?.expiryDate ?? gift?.expiryDateTime);
       const today = toStartOfDay(new Date());
       if (start && today && start > today) {
-        showToast("error", t('giftCardValidFrom', { date: formatDate(start) }));
+        showToast("error", t("giftCardValidFrom", { date: formatDate(start) }));
         return;
       }
       if (expiry && today && expiry < today) {
-        showToast("error", t('giftCardExpiredOn', { date: formatDate(expiry) }));
+        showToast(
+          "error",
+          t("giftCardExpiredOn", { date: formatDate(expiry) }),
+        );
         return;
       }
 
@@ -847,10 +871,10 @@ export default function PaymentScreen(props: PaymentScreenProps) {
         setGiftCard(gift);
         setGiftCode("");
       }
-      showToast("success", t('giftCardApplied'));
+      showToast("success", t("giftCardApplied"));
     } catch (error) {
       console.error("Gift card lookup failed:", error);
-      showToast("error", t('unableToApplyGiftCard'));
+      showToast("error", t("unableToApplyGiftCard"));
     } finally {
       setIsApplyingGiftCard(false);
     }
@@ -893,13 +917,15 @@ export default function PaymentScreen(props: PaymentScreenProps) {
               <View>
                 <View style={styles.sectionHeaderRow}>
                   <Text style={{ color: colors.textSecondary }}>
-                    {t('otherPayments')}
+                    {t("otherPayments")}
                   </Text>
                   <TouchableOpacity
                     onPress={handleOtherBack}
                     style={styles.linkBtn}
                   >
-                    <Text style={{ color: colors.textSecondary }}>{t('back')}</Text>
+                    <Text style={{ color: colors.textSecondary }}>
+                      {t("back")}
+                    </Text>
                   </TouchableOpacity>
                 </View>
                 <View style={styles.methodWrap}>
@@ -937,13 +963,13 @@ export default function PaymentScreen(props: PaymentScreenProps) {
               <View>
                 <View style={styles.sectionHeaderRow}>
                   <Text style={{ color: colors.textSecondary }}>
-                    {t('splitItemsPaySelectedQuantityOnly')}
+                    {t("splitItemsPaySelectedQuantityOnly")}
                   </Text>
                 </View>
                 <View style={styles.splitHeaderRow}>
                   {[
-                    { id: 0, label: t('cash') },
-                    { id: 1, label: t('card') },
+                    { id: 0, label: t("cash") },
+                    { id: 1, label: t("card") },
                   ].map((method) => {
                     const selected = splitPaymentMethod === method.id;
                     return (
@@ -964,9 +990,7 @@ export default function PaymentScreen(props: PaymentScreenProps) {
                       >
                         <Text
                           style={{
-                            color: selected
-                              ? colors.textInverse
-                              : colors.text,
+                            color: selected ? colors.textInverse : colors.text,
                           }}
                         >
                           {method.label}
@@ -978,10 +1002,8 @@ export default function PaymentScreen(props: PaymentScreenProps) {
               </View>
             ) : (
               <View>
-                <Text
-                  style={{ color: colors.textSecondary, marginBottom: 8 }}
-                >
-                  {t('paymentMethods')}
+                <Text style={{ color: colors.textSecondary, marginBottom: 8 }}>
+                  {t("paymentMethods")}
                 </Text>
                 <ScrollView
                   horizontal
@@ -1027,11 +1049,11 @@ export default function PaymentScreen(props: PaymentScreenProps) {
               {!isSplitMode && !showOtherMethods && activeTab === 0 && (
                 <View>
                   <Text style={{ color: colors.textSecondary }}>
-                    {t('cashProvided')}
+                    {t("cashProvided")}
                   </Text>
                   <TextInput
                     keyboardType="numeric"
-                    placeholder={t('enterCashAmount')}
+                    placeholder={t("enterCashAmount")}
                     placeholderTextColor={colors.textSecondary}
                     value={cashProvided}
                     onChangeText={setCashProvided}
@@ -1042,7 +1064,7 @@ export default function PaymentScreen(props: PaymentScreenProps) {
                   />
 
                   <Text style={{ color: colors.textSecondary, marginTop: 8 }}>
-                    {t('cashToReturn')}
+                    {t("cashToReturn")}
                   </Text>
                   <View style={[styles.input, { justifyContent: "center" }]}>
                     <Text style={{ color: colors.text }}>
@@ -1057,7 +1079,7 @@ export default function PaymentScreen(props: PaymentScreenProps) {
               {!isSplitMode && !showOtherMethods && activeTab === 1 && (
                 <View>
                   <Text style={{ color: colors.textSecondary }}>
-                    {t('cardPaymentSelected')}
+                    {t("cardPaymentSelected")}
                   </Text>
                 </View>
               )}
@@ -1065,10 +1087,8 @@ export default function PaymentScreen(props: PaymentScreenProps) {
               {isSplitMode ? (
                 <View>
                   {currentSplitItems.length == 0 ? (
-                    <Text
-                      style={{ color: colors.textSecondary, marginTop: 8 }}
-                    >
-                      {t('noItemsAvailableForSplit')}
+                    <Text style={{ color: colors.textSecondary, marginTop: 8 }}>
+                      {t("noItemsAvailableForSplit")}
                     </Text>
                   ) : (
                     currentSplitItems.map((item, index) => {
@@ -1077,7 +1097,9 @@ export default function PaymentScreen(props: PaymentScreenProps) {
                         Math.floor(splitSelections[index] || 0),
                       );
                       const optionsSummary = getItemOptionsSummary(item as any);
-                      const voucherDetailLines = getVoucherDetailLines(item as any);
+                      const voucherDetailLines = getVoucherDetailLines(
+                        item as any,
+                      );
                       return (
                         <View
                           key={item.key || `${index}`}
@@ -1121,9 +1143,12 @@ export default function PaymentScreen(props: PaymentScreenProps) {
                                       marginLeft: line.indent,
                                       fontSize: line.isSection ? 10 : 12,
                                       fontWeight:
-                                        line.isSection || line.isItem ? "600" : "400",
-                                      textTransform:
-                                        line.isSection ? "uppercase" : "none",
+                                        line.isSection || line.isItem
+                                          ? "600"
+                                          : "400",
+                                      textTransform: line.isSection
+                                        ? "uppercase"
+                                        : "none",
                                       letterSpacing: line.isSection ? 0.6 : 0,
                                     }}
                                   >
@@ -1137,7 +1162,8 @@ export default function PaymentScreen(props: PaymentScreenProps) {
                               <View style={{ marginTop: 2, marginBottom: 4 }}>
                                 {item.attributeValues.map(
                                   (attributeValue: any, valueIndex: number) => {
-                                    const name = getAttributeValueName(attributeValue);
+                                    const name =
+                                      getAttributeValueName(attributeValue);
                                     const valueQuantity =
                                       getAttributeValueQuantity(attributeValue);
                                     const valuePrice =
@@ -1232,10 +1258,10 @@ export default function PaymentScreen(props: PaymentScreenProps) {
                     ]}
                   >
                     <Text style={{ color: colors.textSecondary }}>
-                      {t('selected')}: {formatCurrency(splitItemTotal)}
+                      {t("selected")}: {formatCurrency(splitItemTotal)}
                     </Text>
                     <Text style={{ color: colors.text, fontWeight: "700" }}>
-                      {t('remaining')}: {formatCurrency(splitRemainingAmount)}
+                      {t("remaining")}: {formatCurrency(splitRemainingAmount)}
                     </Text>
                   </View>
                 </View>
@@ -1243,11 +1269,11 @@ export default function PaymentScreen(props: PaymentScreenProps) {
 
               <View style={{ marginTop: 12 }}>
                 <Text style={{ color: colors.textSecondary }}>
-                  {t('addTipOptional')}
+                  {t("addTipOptional")}
                 </Text>
                 <TextInput
                   keyboardType="numeric"
-                  placeholder={t('enterTipAmount')}
+                  placeholder={t("enterTipAmount")}
                   placeholderTextColor={colors.textSecondary}
                   value={tipValue}
                   onChangeText={setTipValue}
@@ -1270,7 +1296,7 @@ export default function PaymentScreen(props: PaymentScreenProps) {
                     }}
                   >
                     <Text style={{ color: colors.textSecondary }}>
-                      {t('deliveryCharge')}
+                      {t("deliveryCharge")}
                     </Text>
                     {!isSplitMode ? (
                       <TouchableOpacity
@@ -1293,8 +1319,8 @@ export default function PaymentScreen(props: PaymentScreenProps) {
                           }}
                         >
                           {isAddressDeliveryChargeLocked
-                            ? t('pinToChange')
-                            : t('change')}
+                            ? t("pinToChange")
+                            : t("change")}
                         </Text>
                       </TouchableOpacity>
                     ) : null}
@@ -1322,16 +1348,16 @@ export default function PaymentScreen(props: PaymentScreenProps) {
                     }}
                   >
                     {isSplitMode && splitRemainingAmount > 0
-                      ? t('deliveryChargeAppliedOnlyWhenFinalSplitSettled')
+                      ? t("deliveryChargeAppliedOnlyWhenFinalSplitSettled")
                       : isAddressDeliveryChargeLocked
                         ? lockedDeliveryChargeSource === "address"
-                          ? t('deliveryChargeInstructionSelectedAddress')
-                          : t('deliveryChargeInstructionSettings')
+                          ? t("deliveryChargeInstructionSelectedAddress")
+                          : t("deliveryChargeInstructionSettings")
                         : currentSelectedAddressDeliveryCharge != null
-                          ? t('deliveryChargeUnlockedAddress')
+                          ? t("deliveryChargeUnlockedAddress")
                           : resolvedSettingsDeliveryCharge != null
-                            ? t('deliveryChargeUnlockedSettings')
-                            : t('deliveryChargeNoAddress')}
+                            ? t("deliveryChargeUnlockedSettings")
+                            : t("deliveryChargeNoAddress")}
                   </Text>
                 </View>
               ) : null}
@@ -1339,7 +1365,7 @@ export default function PaymentScreen(props: PaymentScreenProps) {
               {showGiftCardSection ? (
                 <View style={{ marginTop: 12 }}>
                   <Text style={{ color: colors.textSecondary }}>
-                    {t('giftCard')}
+                    {t("giftCard")}
                   </Text>
                   {activeGiftCard ? (
                     <View style={styles.giftCardRow}>
@@ -1353,9 +1379,7 @@ export default function PaymentScreen(props: PaymentScreenProps) {
                           },
                         ]}
                       >
-                        <Text
-                          style={{ color: colors.text, fontWeight: "700" }}
-                        >
+                        <Text style={{ color: colors.text, fontWeight: "700" }}>
                           {getGiftCardLabel(activeGiftCard, t)}
                         </Text>
                         <Text
@@ -1364,7 +1388,7 @@ export default function PaymentScreen(props: PaymentScreenProps) {
                             marginTop: 2,
                           }}
                         >
-                          {t('selected')}: {formatCurrency(giftCardTotal)}
+                          {t("selected")}: {formatCurrency(giftCardTotal)}
                         </Text>
                       </View>
                       <TouchableOpacity
@@ -1375,14 +1399,14 @@ export default function PaymentScreen(props: PaymentScreenProps) {
                         ]}
                       >
                         <Text style={{ color: colors.textSecondary }}>
-                          {t('remove')}
+                          {t("remove")}
                         </Text>
                       </TouchableOpacity>
                     </View>
                   ) : (
                     <View style={styles.giftCardInputRow}>
                       <TextInput
-                        placeholder={t('giftCardCode')}
+                        placeholder={t("giftCardCode")}
                         placeholderTextColor={colors.textSecondary}
                         value={isSplitMode ? splitGiftCode : giftCode}
                         onChangeText={
@@ -1414,9 +1438,9 @@ export default function PaymentScreen(props: PaymentScreenProps) {
                           {
                             backgroundColor:
                               isApplyingGiftCard ||
-                                !(isSplitMode
-                                  ? splitGiftCode.trim()
-                                  : giftCode.trim())
+                              !(isSplitMode
+                                ? splitGiftCode.trim()
+                                : giftCode.trim())
                                 ? colors.border
                                 : colors.primary,
                           },
@@ -1426,7 +1450,7 @@ export default function PaymentScreen(props: PaymentScreenProps) {
                           <ActivityIndicator color={colors.textInverse} />
                         ) : (
                           <Text style={{ color: colors.textInverse }}>
-                            {t('add')}
+                            {t("add")}
                           </Text>
                         )}
                       </TouchableOpacity>
@@ -1448,14 +1472,18 @@ export default function PaymentScreen(props: PaymentScreenProps) {
               ]}
             >
               <View style={styles.summaryRow}>
-                <Text style={{ color: colors.textSecondary }}>{t('subtotal')}</Text>
+                <Text style={{ color: colors.textSecondary }}>
+                  {t("subtotal")}
+                </Text>
                 <Text style={{ color: colors.text, fontWeight: "700" }}>
                   {formatCurrency(displaySubTotal)}
                 </Text>
               </View>
               {displayDiscount > 0 ? (
                 <View style={styles.summaryRow}>
-                  <Text style={{ color: colors.textSecondary }}>{t('discount')}</Text>
+                  <Text style={{ color: colors.textSecondary }}>
+                    {t("discount")}
+                  </Text>
                   <Text style={{ color: colors.error, fontWeight: "700" }}>
                     -{formatCurrency(displayDiscount)}
                   </Text>
@@ -1464,7 +1492,7 @@ export default function PaymentScreen(props: PaymentScreenProps) {
               {displayDeliveryCharge > 0 ? (
                 <View style={styles.summaryRow}>
                   <Text style={{ color: colors.textSecondary }}>
-                    {t('deliveryCharge')}
+                    {t("deliveryCharge")}
                   </Text>
                   <Text style={{ color: colors.text, fontWeight: "700" }}>
                     {formatCurrency(displayDeliveryCharge)}
@@ -1473,7 +1501,9 @@ export default function PaymentScreen(props: PaymentScreenProps) {
               ) : null}
               {tipNum > 0 ? (
                 <View style={styles.summaryRow}>
-                  <Text style={{ color: colors.textSecondary }}>{t('tip')}</Text>
+                  <Text style={{ color: colors.textSecondary }}>
+                    {t("tip")}
+                  </Text>
                   <Text style={{ color: colors.text, fontWeight: "700" }}>
                     {formatCurrency(tipNum)}
                   </Text>
@@ -1482,7 +1512,7 @@ export default function PaymentScreen(props: PaymentScreenProps) {
               {giftCardTotal > 0 ? (
                 <View style={styles.summaryRow}>
                   <Text style={{ color: colors.textSecondary }}>
-                    {t('giftCard')}
+                    {t("giftCard")}
                   </Text>
                   <Text style={{ color: colors.error, fontWeight: "700" }}>
                     -{formatCurrency(giftCardTotal)}
@@ -1500,7 +1530,7 @@ export default function PaymentScreen(props: PaymentScreenProps) {
                 ]}
               >
                 <Text style={{ color: colors.text, fontWeight: "800" }}>
-                  {t('orderTotal')}
+                  {t("orderTotal")}
                 </Text>
                 <Text
                   style={{
@@ -1545,7 +1575,7 @@ export default function PaymentScreen(props: PaymentScreenProps) {
                   <Text
                     style={{ color: colors.textSecondary, fontWeight: "700" }}
                   >
-                    {t('back')}
+                    {t("back")}
                   </Text>
                 </TouchableOpacity>
               ) : (
@@ -1565,7 +1595,7 @@ export default function PaymentScreen(props: PaymentScreenProps) {
                   <Text
                     style={{ color: colors.textSecondary, fontWeight: "700" }}
                   >
-                    {t('cancel')}
+                    {t("cancel")}
                   </Text>
                 </TouchableOpacity>
               )}
@@ -1589,7 +1619,7 @@ export default function PaymentScreen(props: PaymentScreenProps) {
                     <ActivityIndicator color={colors.textInverse} />
                   ) : (
                     <Text style={{ color: colors.text, fontWeight: "700" }}>
-                      {t('printPreview')}
+                      {t("printPreview")}
                     </Text>
                   )}
                 </TouchableOpacity>
@@ -1616,7 +1646,7 @@ export default function PaymentScreen(props: PaymentScreenProps) {
                   <Text
                     style={{ color: colors.textInverse, fontWeight: "700" }}
                   >
-                    {t('pay')}
+                    {t("pay")}
                   </Text>
                 )}
               </TouchableOpacity>
@@ -1647,7 +1677,7 @@ export default function PaymentScreen(props: PaymentScreenProps) {
                   <Text
                     style={{ color: colors.textInverse, fontWeight: "700" }}
                   >
-                    {t('payAndPrint')}
+                    {t("payAndPrint")}
                   </Text>
                 )}
               </TouchableOpacity>
@@ -1665,8 +1695,8 @@ export default function PaymentScreen(props: PaymentScreenProps) {
                         isSplitInvalid || isProcessing
                           ? colors.border
                           : colors.success ||
-                          colors.secondary ||
-                          colors.primary,
+                            colors.secondary ||
+                            colors.primary,
                     },
                   ]}
                 >
@@ -1678,7 +1708,7 @@ export default function PaymentScreen(props: PaymentScreenProps) {
                       ellipsizeMode="tail"
                       style={{ color: colors.textInverse, fontWeight: "700" }}
                     >
-                      {t('operatingExpense')}
+                      {t("operatingExpense")}
                     </Text>
                   )}
                 </TouchableOpacity>
@@ -1695,8 +1725,8 @@ export default function PaymentScreen(props: PaymentScreenProps) {
       <AppBottomSheet
         visible={deliveryChargeEditorVisible}
         onClose={() => setDeliveryChargeEditorVisible(false)}
-        title={t('deliveryCharge')}
-        subtitle={`${t('change')} ${t('deliveryCharge')}`}
+        title={t("deliveryCharge")}
+        subtitle={`${t("change")} ${t("deliveryCharge")}`}
         snapPoints={["40%"]}
         scrollable={false}
         footer={
@@ -1713,7 +1743,7 @@ export default function PaymentScreen(props: PaymentScreenProps) {
               ]}
             >
               <Text style={{ color: colors.textSecondary, fontWeight: "700" }}>
-                {t('cancel')}
+                {t("cancel")}
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -1727,7 +1757,7 @@ export default function PaymentScreen(props: PaymentScreenProps) {
               ]}
             >
               <Text style={{ color: colors.textInverse, fontWeight: "700" }}>
-                {t('save')}
+                {t("save")}
               </Text>
             </TouchableOpacity>
           </View>
@@ -1735,11 +1765,11 @@ export default function PaymentScreen(props: PaymentScreenProps) {
       >
         <View>
           <Text style={{ color: colors.textSecondary, marginBottom: 8 }}>
-            {t('deliveryCharge')}
+            {t("deliveryCharge")}
           </Text>
           <AppBottomSheetTextInput
             keyboardType="numeric"
-            placeholder={t('enterDeliveryCharge')}
+            placeholder={t("enterDeliveryCharge")}
             placeholderTextColor={colors.textSecondary}
             value={deliveryChargeDraft}
             onChangeText={(value) =>
