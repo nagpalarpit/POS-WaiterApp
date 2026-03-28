@@ -34,7 +34,6 @@ import {
   clearPaymentFlowHandlers,
   getPaymentFlowHandlers,
 } from "../services/paymentFlowStore";
-import PinModal from "./PinModal";
 import AppBottomSheet from "./AppBottomSheet";
 import AppBottomSheetTextInput from "./AppBottomSheetTextInput";
 import { useSettings } from "../hooks/useSettings";
@@ -281,12 +280,8 @@ export default function PaymentScreen(props: PaymentScreenProps) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSplitMode, setIsSplitMode] = useState(false);
   const [showOtherMethods, setShowOtherMethods] = useState(false);
-  const [pinModalVisible, setPinModalVisible] = useState(false);
   const [deliveryChargeEditorVisible, setDeliveryChargeEditorVisible] =
     useState(false);
-  const [deliveryChargePinVerified, setDeliveryChargePinVerified] = useState(
-    () => selectedAddressDeliveryCharge == null,
-  );
   const [splitPaymentMethod, setSplitPaymentMethod] = useState(0);
   const [currentOrderTotal, setCurrentOrderTotal] = useState(() =>
     round2(toNumber(orderTotal, 0)),
@@ -302,6 +297,9 @@ export default function PaymentScreen(props: PaymentScreenProps) {
   );
   const [currentOrderDeliveryTypeId, setCurrentOrderDeliveryTypeId] = useState(
     () => Math.max(0, Math.floor(toNumber(orderDeliveryTypeId, 0))),
+  );
+  const [customDeliveryCharge, setCustomDeliveryCharge] = useState<number | null>(
+    null,
   );
   const [
     currentSelectedAddressDeliveryCharge,
@@ -381,12 +379,15 @@ export default function PaymentScreen(props: PaymentScreenProps) {
   }, [orderDeliveryTypeId]);
 
   useEffect(() => {
+    setCustomDeliveryCharge(null);
+  }, [orderDeliveryCharge, orderDeliveryTypeId, selectedAddressDeliveryCharge]);
+
+  useEffect(() => {
     const normalizedSelectedCharge =
       selectedAddressDeliveryCharge == null
         ? null
         : round2(Math.max(toNumber(selectedAddressDeliveryCharge, 0), 0));
     setCurrentSelectedAddressDeliveryCharge(normalizedSelectedCharge);
-    setDeliveryChargePinVerified(normalizedSelectedCharge == null);
   }, [selectedAddressDeliveryCharge]);
 
   useEffect(() => {
@@ -472,11 +473,6 @@ export default function PaymentScreen(props: PaymentScreenProps) {
       : resolvedSettingsDeliveryCharge != null
         ? "settings"
         : null;
-  const isAddressDeliveryChargeLocked =
-    showDeliveryChargeField &&
-    !isSplitMode &&
-    lockedDeliveryChargeSource != null &&
-    !deliveryChargePinVerified;
   const displayDeliveryCharge = showDeliveryChargeField
     ? isSplitMode && splitRemainingAmount > 0
       ? 0
@@ -605,6 +601,7 @@ export default function PaymentScreen(props: PaymentScreenProps) {
         0,
       ),
     );
+    setCustomDeliveryCharge(null);
     setDeliveryChargeValue(
       `${Math.max(
         toNumber(resetPayment?.orderDeliveryCharge, currentOrderDeliveryCharge),
@@ -628,6 +625,9 @@ export default function PaymentScreen(props: PaymentScreenProps) {
   useEffect(() => {
     const preferredDeliveryCharge =
       currentOrderDeliveryTypeId === 1 &&
+      customDeliveryCharge != null
+        ? customDeliveryCharge
+        : currentOrderDeliveryTypeId === 1 &&
       currentSelectedAddressDeliveryCharge != null
         ? currentSelectedAddressDeliveryCharge
         : currentOrderDeliveryTypeId === 1 &&
@@ -638,23 +638,15 @@ export default function PaymentScreen(props: PaymentScreenProps) {
       preferredDeliveryCharge > 0 ? `${preferredDeliveryCharge}` : "",
     );
   }, [
+    customDeliveryCharge,
     resolvedOrderDeliveryCharge,
     currentOrderDeliveryTypeId,
     currentSelectedAddressDeliveryCharge,
     resolvedSettingsDeliveryCharge,
   ]);
 
-  useEffect(() => {
-    setDeliveryChargePinVerified(lockedDeliveryChargeSource == null);
-  }, [lockedDeliveryChargeSource]);
-
   const openDeliveryChargeEditor = () => {
     if (!showDeliveryChargeField || isSplitMode) {
-      return;
-    }
-
-    if (isAddressDeliveryChargeLocked) {
-      setPinModalVisible(true);
       return;
     }
 
@@ -670,28 +662,12 @@ export default function PaymentScreen(props: PaymentScreenProps) {
     setDeliveryChargeEditorVisible(true);
   };
 
-  const handleDeliveryChargePinVerified = () => {
-    setDeliveryChargePinVerified(true);
-    setPinModalVisible(false);
-    setDeliveryChargeDraft(
-      deliveryChargeValue ||
-        `${Math.max(
-          toNumber(currentSelectedAddressDeliveryCharge, 0),
-          toNumber(resolvedSettingsDeliveryCharge, 0),
-          toNumber(currentOrderDeliveryCharge, 0),
-          0,
-        )}`,
-    );
-    requestAnimationFrame(() => {
-      setDeliveryChargeEditorVisible(true);
-    });
-  };
-
   const handleSaveDeliveryCharge = () => {
     const nextDeliveryCharge = round2(
       clamp(toAmount(deliveryChargeDraft), 0, 999999),
     );
     setCurrentOrderDeliveryCharge(nextDeliveryCharge);
+    setCustomDeliveryCharge(nextDeliveryCharge);
     setDeliveryChargeValue(
       nextDeliveryCharge > 0 ? `${nextDeliveryCharge}` : "",
     );
@@ -1320,9 +1296,7 @@ export default function PaymentScreen(props: PaymentScreenProps) {
                             fontSize: 12,
                           }}
                         >
-                          {isAddressDeliveryChargeLocked
-                            ? t("pinToChange")
-                            : t("change")}
+                          {t("change")}
                         </Text>
                       </TouchableOpacity>
                     ) : null}
@@ -1351,11 +1325,7 @@ export default function PaymentScreen(props: PaymentScreenProps) {
                   >
                     {isSplitMode && splitRemainingAmount > 0
                       ? t("deliveryChargeAppliedOnlyWhenFinalSplitSettled")
-                      : isAddressDeliveryChargeLocked
-                        ? lockedDeliveryChargeSource === "address"
-                          ? t("deliveryChargeInstructionSelectedAddress")
-                          : t("deliveryChargeInstructionSettings")
-                        : currentSelectedAddressDeliveryCharge != null
+                      : currentSelectedAddressDeliveryCharge != null
                           ? t("deliveryChargeUnlockedAddress")
                           : resolvedSettingsDeliveryCharge != null
                             ? t("deliveryChargeUnlockedSettings")
@@ -1719,11 +1689,6 @@ export default function PaymentScreen(props: PaymentScreenProps) {
           </View>
         </View>
       </View>
-      <PinModal
-        visible={pinModalVisible}
-        onClose={() => setPinModalVisible(false)}
-        onVerified={handleDeliveryChargePinVerified}
-      />
       <AppBottomSheet
         visible={deliveryChargeEditorVisible}
         onClose={() => setDeliveryChargeEditorVisible(false)}
