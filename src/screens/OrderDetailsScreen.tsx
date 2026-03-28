@@ -928,11 +928,17 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
 
   const onEdit = () => {
     editingRef.current = true;
-    lockOrder(order);
+    const editableOrder = {
+      ...order,
+      orderDetails: displayedOrderDetails,
+      customOrderId:
+        displayedOrderDetails?.customOrderId || order?.customOrderId,
+    };
+    lockOrder(editableOrder);
     navigation.navigate("Menu", {
       tableNo: displayedOrderDetails?.tableNo,
       deliveryType: displayedOrderDetails?.orderDeliveryTypeId ?? 0,
-      existingOrder: order,
+      existingOrder: editableOrder,
       tableArea: displayedOrderDetails?.tableArea ?? null,
     });
   };
