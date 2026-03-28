@@ -498,7 +498,9 @@ export default function PaymentScreen(props: PaymentScreenProps) {
     Math.max(baseTotal + displayDeliveryCharge + tipNum - giftCardTotal, 0),
   );
   const showPrintPreview =
-    !!getCurrentFlowHandlers()?.onPrintPreview && !hidePrintPreview;
+    !!getCurrentFlowHandlers()?.onPrintPreview &&
+    !hidePrintPreview &&
+    !isSplitMode;
   const isSplitInvalid = isSplitMode && splitItemTotal <= 0;
   const row1Count = 2 + (showPrintPreview ? 1 : 0);
   const isOtherPaymentMode = showOtherMethods || activeTab === 99;
