@@ -389,6 +389,16 @@ export const onOrderSync = (listener: (event: OrderSyncEvent) => void) => {
   };
 };
 
+export const isLocalOrderSyncEvent = (event?: OrderSyncEvent | null): boolean => {
+  if (!event?.posId) return false;
+  return event.posId === deviceId;
+};
+
+export const isRemoteOrderSyncEvent = (event?: OrderSyncEvent | null): boolean => {
+  if (!event?.posId) return false;
+  return event.posId !== deviceId;
+};
+
 export const emitOrderSync = async (
   eventType: string,
   orderInfo: any,

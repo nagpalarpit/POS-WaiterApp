@@ -611,12 +611,12 @@ export default function PaymentScreen(props: PaymentScreenProps) {
   useEffect(() => {
     const preferredDeliveryCharge =
       currentOrderDeliveryTypeId === 1 &&
-      currentSelectedAddressDeliveryCharge != null
+        currentSelectedAddressDeliveryCharge != null
         ? currentSelectedAddressDeliveryCharge
         : currentOrderDeliveryTypeId === 1 &&
-            resolvedSettingsDeliveryCharge != null
+          resolvedSettingsDeliveryCharge != null
           ? resolvedSettingsDeliveryCharge
-        : resolvedOrderDeliveryCharge;
+          : resolvedOrderDeliveryCharge;
     setDeliveryChargeValue(
       preferredDeliveryCharge > 0 ? `${preferredDeliveryCharge}` : "",
     );
@@ -643,12 +643,12 @@ export default function PaymentScreen(props: PaymentScreenProps) {
 
     setDeliveryChargeDraft(
       deliveryChargeValue ||
-        `${Math.max(
-          toNumber(currentSelectedAddressDeliveryCharge, 0),
-          toNumber(resolvedSettingsDeliveryCharge, 0),
-          toNumber(currentOrderDeliveryCharge, 0),
-          0,
-        )}`,
+      `${Math.max(
+        toNumber(currentSelectedAddressDeliveryCharge, 0),
+        toNumber(resolvedSettingsDeliveryCharge, 0),
+        toNumber(currentOrderDeliveryCharge, 0),
+        0,
+      )}`,
     );
     setDeliveryChargeEditorVisible(true);
   };
@@ -658,12 +658,12 @@ export default function PaymentScreen(props: PaymentScreenProps) {
     setPinModalVisible(false);
     setDeliveryChargeDraft(
       deliveryChargeValue ||
-        `${Math.max(
-          toNumber(currentSelectedAddressDeliveryCharge, 0),
-          toNumber(resolvedSettingsDeliveryCharge, 0),
-          toNumber(currentOrderDeliveryCharge, 0),
-          0,
-        )}`,
+      `${Math.max(
+        toNumber(currentSelectedAddressDeliveryCharge, 0),
+        toNumber(resolvedSettingsDeliveryCharge, 0),
+        toNumber(currentOrderDeliveryCharge, 0),
+        0,
+      )}`,
     );
     requestAnimationFrame(() => {
       setDeliveryChargeEditorVisible(true);
@@ -1133,7 +1133,7 @@ export default function PaymentScreen(props: PaymentScreenProps) {
                               </View>
                             )}
                             {Array.isArray(item.attributeValues) &&
-                            item.attributeValues.length > 0 ? (
+                              item.attributeValues.length > 0 ? (
                               <View style={{ marginTop: 2, marginBottom: 4 }}>
                                 {item.attributeValues.map(
                                   (attributeValue: any, valueIndex: number) => {
