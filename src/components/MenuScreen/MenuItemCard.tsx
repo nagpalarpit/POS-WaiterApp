@@ -116,9 +116,9 @@ export const MenuItemCard: React.FC<MenuItemCardProps> = ({
           }}
         >
           <MaterialCommunityIcons name="plus" size={16} color={colors.textInverse || '#fff'} />
-          <Text style={{ color: colors.textInverse || '#fff', fontWeight: '700', marginLeft: 4, fontSize: 12 }}>
+          {/* <Text style={{ color: colors.textInverse || '#fff', fontWeight: '700', marginLeft: 4, fontSize: 12 }}>
             {t('addToCart')}
-          </Text>
+          </Text> */}
         </TouchableOpacity>
       </View>
     </TouchableOpacity>
