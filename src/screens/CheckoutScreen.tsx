@@ -600,7 +600,10 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['bottom']}>
+    <SafeAreaView
+      style={{ flex: 1, backgroundColor: colors.background }}
+      edges={['bottom']}
+    >
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={{

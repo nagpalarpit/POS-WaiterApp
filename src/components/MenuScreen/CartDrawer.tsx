@@ -95,22 +95,45 @@ export default function CartScreen({ navigation, route }: any) {
 
     const [decreasePinChecked, setDecreasePinChecked] = useState(false);
     const [pinModalVisible, setPinModalVisible] = useState(false);
+    const navigationLockRef = useRef(false);
+    const navigationUnlockTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const pendingDecreaseRef = useRef<
         { type: 'update' | 'remove'; cartId: string; quantity?: number } | null
     >(null);
     const goBackSafely = useCallback(() => {
-        if (navigation.canGoBack?.()) {
-            navigation.goBack();
+        if (navigationLockRef.current) {
             return;
         }
 
-        navigation.navigate('Menu', {
-            tableNo,
-            deliveryType,
-            tableArea,
-            existingOrder,
-        });
+        navigationLockRef.current = true;
+        if (navigationUnlockTimerRef.current) {
+            clearTimeout(navigationUnlockTimerRef.current);
+        }
+
+        if (navigation.canGoBack?.()) {
+            navigation.goBack();
+        } else {
+            navigation.navigate('Menu', {
+                tableNo,
+                deliveryType,
+                tableArea,
+                existingOrder,
+            });
+        }
+
+        navigationUnlockTimerRef.current = setTimeout(() => {
+            navigationLockRef.current = false;
+            navigationUnlockTimerRef.current = null;
+        }, 500);
     }, [navigation, tableNo, deliveryType, tableArea, existingOrder]);
+
+    useEffect(() => {
+        return () => {
+            if (navigationUnlockTimerRef.current) {
+                clearTimeout(navigationUnlockTimerRef.current);
+            }
+        };
+    }, []);
 
     useLayoutEffect(() => {
         navigation.setOptions({

@@ -926,7 +926,10 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
 
   if (menuData.loading) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
+      <SafeAreaView
+        style={{ flex: 1, backgroundColor: colors.background }}
+        edges={['bottom']}
+      >
         <View className="flex-1 justify-center items-center">
           <ActivityIndicator size="large" color={colors.primary} />
         </View>
@@ -935,7 +938,10 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['bottom']}>
+    <SafeAreaView
+      style={{ flex: 1, backgroundColor: colors.background }}
+      edges={['bottom']}
+    >
       <View
         style={{
           paddingHorizontal: 14,

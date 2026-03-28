@@ -721,7 +721,10 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
 
   if (!order) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
+      <SafeAreaView
+        style={{ flex: 1, backgroundColor: colors.background }}
+        edges={['bottom']}
+      >
         <View
           style={{ flex: 1, justifyContent: "center", alignItems: "center" }}
         >
