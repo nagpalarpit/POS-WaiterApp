@@ -36,6 +36,110 @@ const toNumber = (value: unknown, fallback = 0): number => {
   return fallback;
 };
 
+const resolveCanceledCartItems = (
+  items: CartItem[] = [],
+  removedSeed: CartItem[] = [],
+): CartItem[] => {
+  const removed: CartItem[] = [...removedSeed];
+
+  const pushRemoved = (item: CartItem, qty: number) => {
+    if (qty <= 0) return;
+    const existingIndex = removed.findIndex(
+      (entry) => entry.cartId === item.cartId,
+    );
+    if (existingIndex > -1) {
+      removed[existingIndex].quantity += qty;
+      return;
+    }
+    removed.push({
+      ...item,
+      quantity: qty,
+      isOld: false,
+      oldQuantity: undefined,
+    });
+  };
+
+  items.forEach((item) => {
+    const isOld = item.isOld === true;
+    const oldQty =
+      item.oldQuantity != null ? toNumber(item.oldQuantity, 0) : null;
+    const currentQty = toNumber(item.quantity, 0);
+
+    if (isOld && oldQty == null) {
+      return;
+    }
+
+    if (oldQty != null) {
+      const delta = currentQty - oldQty;
+      if (delta < 0) {
+        pushRemoved(item, Math.abs(delta));
+      }
+    }
+  });
+
+  return removed;
+};
+
+const mergeCanceledOrderItems = (items: any[] = []) => {
+  const mergedItems: Record<string, any> = {};
+
+  items.forEach((item: any) => {
+    if (!item) return;
+    const key =
+      item.cartId ||
+      item.itemId ||
+      item.menuItemId ||
+      item._id;
+    if (!key) return;
+
+    if (mergedItems[key]) {
+      mergedItems[key].quantity += toNumber(item.quantity, 0);
+    } else {
+      mergedItems[key] = { ...item };
+    }
+  });
+
+  return Object.values(mergedItems);
+};
+
+const getCanceledPayment = (items: any[] = []) => {
+  let canceledOrderPayment = 0;
+
+  items.forEach((rawItem: any) => {
+    if (!rawItem) return;
+
+    const item = {
+      ...rawItem,
+      itemPrice: toNumber(rawItem?.unitPrice ?? rawItem?.itemPrice, 0),
+      quantity: toNumber(rawItem?.quantity, 0),
+      variantPrice: toNumber(rawItem?.orderItemVariant?.unitPrice, 0),
+      attributeValues:
+        rawItem?.orderItemVariant?.orderItemVariantAttributes?.[0]?.orderItemVariantAttributeValues?.map(
+          (value: any) => ({
+            ...value,
+            attributeValuePrice: toNumber(value?.unitPrice ?? value?.attributeValuePrice, 0),
+            quantity: toNumber(value?.quantity, 1),
+          }),
+        ) || [],
+    };
+
+    let total = item.itemPrice + (item.variantPrice || 0);
+
+    total =
+      item.attributeValues?.reduce(
+        (accumulator: number, currentValue: any) =>
+          accumulator +
+          toNumber(currentValue?.attributeValuePrice, 0) *
+            toNumber(currentValue?.quantity, 1),
+        total,
+      ) || total;
+
+    canceledOrderPayment += total * item.quantity;
+  });
+
+  return canceledOrderPayment;
+};
+
 /**
  * Convert delivery type to order type string
  */
@@ -227,6 +331,31 @@ export const useOrderSubmit = (
           existingDetails?.orderStatusId ??
           existingOrder?.orderStatusId ??
           ORDER_STATUS_PENDING;
+        const canceledCartItems = resolveCanceledCartItems(
+          cart.items,
+          Array.isArray(cart.removedItems) ? cart.removedItems : [],
+        );
+        const nextCanceledObj = canceledCartItems.length
+          ? prepareOrderItems(companyId, canceledCartItems)
+          : [];
+        const canceledObj =
+          nextCanceledObj.length > 0 || Array.isArray(existingDetails?.canceledObj)
+            ? mergeCanceledOrderItems([
+                ...(Array.isArray(existingDetails?.canceledObj)
+                  ? existingDetails.canceledObj
+                  : []),
+                ...nextCanceledObj,
+              ])
+            : undefined;
+        const canceledCount = Array.isArray(canceledObj)
+          ? canceledObj.reduce(
+              (acc: number, val: any) => acc + toNumber(val?.quantity, 0),
+              0,
+            )
+          : undefined;
+        const canceledOrderPayment = Array.isArray(canceledObj)
+          ? getCanceledPayment(canceledObj)
+          : undefined;
 
         const orderDetails: any = {
           ...existingDetails,
@@ -276,6 +405,11 @@ export const useOrderSubmit = (
               : null,
           updatedAt: now,
         };
+        if (canceledObj !== undefined) {
+          orderDetails.canceledObj = canceledObj;
+          orderDetails.canceledCount = canceledCount;
+          orderDetails.canceledOrderPayment = canceledOrderPayment;
+        }
         if (existingDetails?.isSplitOrder) {
           orderDetails.isSplitOrder = true;
         }

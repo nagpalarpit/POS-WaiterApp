@@ -2236,6 +2236,8 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
         paidAt: now,
         isCorporate,
         isFinalBillPrint: !!option.print,
+        canceledObj: orderDetails?.canceledObj ?? undefined,
+        canceledCount: orderDetails?.canceledCount ?? undefined,
         canceledOrderPayment: orderDetails?.canceledOrderPayment ?? 0,
         orderEditInOffline: true,
         invoiceNumber,
