@@ -447,17 +447,23 @@ class OrderService {
   }
 
   private buildRemoteBulkSettlePayload(settlePayload: any): any {
+    const isFinalBulkSettle =
+      settlePayload?.isEditPayment !== undefined ||
+      settlePayload?.isOrderPaid !== undefined;
     const normalized: any = {
       id: settlePayload?.id,
       currency: settlePayload?.currency,
       paymentMethod: settlePayload?.paymentMethod,
       amount: settlePayload?.amount,
-      moneyBack: settlePayload?.moneyBack ?? 0,
       tip: settlePayload?.tip ?? 0,
       deliveryCharge: settlePayload?.deliveryCharge ?? 0,
       isEditPayment: settlePayload?.isEditPayment,
       isOrderPaid: settlePayload?.isOrderPaid,
     };
+
+    if (!isFinalBulkSettle) {
+      normalized.moneyBack = settlePayload?.moneyBack ?? 0;
+    }
 
     delete normalized.id;
     delete normalized.companyId;
@@ -930,7 +936,7 @@ class OrderService {
    */
   async settleBulkOrder(items: any[]) {
     try {
-      const sanitizedItems = this.removeNullishDeep(items);
+      const sanitizedItems = this.stripUndefinedDeep(items);
       const remoteItems = Array.isArray(sanitizedItems)
         ? sanitizedItems.map((item: any) =>
             this.buildRemoteBulkSettlePayload(item),
