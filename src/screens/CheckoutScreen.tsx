@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useRef, useLayoutEffect, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useLayoutEffect, useMemo, useCallback } from 'react';
 import {
   Alert,
+  BackHandler,
   View,
   Text,
   TouchableOpacity,
@@ -11,6 +12,7 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../theme/ThemeProvider';
 import { useTranslation } from '../contexts/LanguageContext';
 import { useOrderSubmit } from '../hooks/useOrderSubmit';
@@ -120,6 +122,20 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
 
   const placeAnim = useRef(new Animated.Value(1)).current;
   const toastNavTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const goBackSafely = useCallback(() => {
+    if (navigation.canGoBack?.()) {
+      navigation.goBack();
+      return;
+    }
+
+    navigation.navigate('Menu', {
+      tableNo,
+      deliveryType,
+      tableArea,
+      existingOrder,
+      serviceTiming: currentServiceTiming ?? serviceTiming ?? null,
+    });
+  }, [navigation, tableNo, deliveryType, tableArea, existingOrder, currentServiceTiming, serviceTiming]);
 
   useEffect(() => {
     setCheckoutCart((route.params?.cart || { items: [], orderNote: '', discount: null }) as Cart);
@@ -149,6 +165,48 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
       if (toastNavTimer.current) clearTimeout(toastNavTimer.current);
     };
   }, []);
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerLeft: ({ tintColor }: any) => (
+        <TouchableOpacity
+          onPress={goBackSafely}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          style={{
+            width: 36,
+            height: 36,
+            borderRadius: 10,
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginLeft: 2,
+            backgroundColor: colors.surfaceHover || 'transparent',
+          }}
+        >
+          <MaterialCommunityIcons
+            name="arrow-left"
+            size={20}
+            color={tintColor || colors.text}
+          />
+        </TouchableOpacity>
+      ),
+    });
+  }, [navigation, colors.surfaceHover, colors.text, goBackSafely]);
+
+  useFocusEffect(
+    useCallback(() => {
+      const onHardwareBackPress = () => {
+        goBackSafely();
+        return true;
+      };
+
+      const subscription = BackHandler.addEventListener(
+        'hardwareBackPress',
+        onHardwareBackPress,
+      );
+
+      return () => subscription.remove();
+    }, [goBackSafely]),
+  );
 
   const shouldRequireDecreasePin = (cartId: string, nextQty?: number) => {
     if (!existingOrder) return false;
