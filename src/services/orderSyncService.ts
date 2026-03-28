@@ -20,6 +20,13 @@ type LockInfo = {
   updatedAt: number;
 };
 
+type PersistedActiveLock = {
+  eventType: 'TABLE_LOCK' | 'ORDER_LOCK' | 'PAY_LOCK';
+  tableNo?: number | null;
+  orderNumber?: string | number | null;
+  updatedAt: number;
+};
+
 const LOCK_TTL_MS = 5 * 60 * 1000; // 5 minutes
 const PRINT_TTL_MS = 5 * 60 * 1000;
 
@@ -29,6 +36,7 @@ const listeners = new Set<(event: OrderSyncEvent) => void>();
 let connectionListenersAttached = false;
 const pendingPrintRequests = new Map<string, number>();
 const handledPrintResults = new Map<string, number>();
+const ACTIVE_LOCK_STORAGE_KEY = STORAGE_KEYS.activeOrderSyncLock;
 
 const deviceId = (() => {
   const ts = Date.now();
@@ -64,6 +72,90 @@ const pruneLocks = () => {
 const resetLockState = () => {
   tableLocks.clear();
   orderLocks.clear();
+};
+
+const extractLockSnapshot = (orderInfo: any): PersistedActiveLock | null => {
+  const tableNo = orderInfo?.tableNo ?? null;
+  const orderNumber =
+    orderInfo?.orderNumber ??
+    orderInfo?.customOrderId ??
+    orderInfo?._id ??
+    orderInfo?.orderId ??
+    null;
+
+  if (tableNo == null && orderNumber == null) {
+    return null;
+  }
+
+  return {
+    eventType: 'TABLE_LOCK',
+    tableNo,
+    orderNumber,
+    updatedAt: Date.now(),
+  };
+};
+
+const persistActiveLockSnapshot = async (
+  eventType: string,
+  orderInfo: any,
+): Promise<void> => {
+  try {
+    if (eventType === 'TABLE_LOCK' || eventType === 'ORDER_LOCK' || eventType === 'PAY_LOCK') {
+      const snapshot = extractLockSnapshot(orderInfo);
+      if (snapshot) {
+        snapshot.eventType = eventType as PersistedActiveLock['eventType'];
+        await AsyncStorage.setItem(ACTIVE_LOCK_STORAGE_KEY, JSON.stringify(snapshot));
+      }
+      return;
+    }
+
+    if (
+      eventType === 'UNLOCK' ||
+      eventType === 'ORDER_PLACED' ||
+      eventType === 'ORDER_UPDATED' ||
+      eventType === 'ORDER_PAID' ||
+      eventType === 'ORDER_CANCELLED'
+    ) {
+      await AsyncStorage.removeItem(ACTIVE_LOCK_STORAGE_KEY);
+    }
+  } catch (error) {
+    console.log('Failed to persist active lock snapshot:', error);
+  }
+};
+
+const readActiveLockSnapshot = async (): Promise<PersistedActiveLock | null> => {
+  try {
+    const raw = await AsyncStorage.getItem(ACTIVE_LOCK_STORAGE_KEY);
+    if (!raw) return null;
+
+    const parsed = JSON.parse(raw) as PersistedActiveLock;
+    if (!parsed) return null;
+
+    const tableNo = parsed.tableNo != null ? Number(parsed.tableNo) : null;
+    const orderNumber = parsed.orderNumber != null ? String(parsed.orderNumber) : null;
+
+    if (tableNo == null && orderNumber == null) {
+      return null;
+    }
+
+    return {
+      eventType: parsed.eventType,
+      tableNo,
+      orderNumber,
+      updatedAt: Number(parsed.updatedAt) || Date.now(),
+    };
+  } catch (error) {
+    console.log('Failed to read active lock snapshot:', error);
+    return null;
+  }
+};
+
+const clearActiveLockSnapshot = async (): Promise<void> => {
+  try {
+    await AsyncStorage.removeItem(ACTIVE_LOCK_STORAGE_KEY);
+  } catch (error) {
+    console.log('Failed to clear active lock snapshot:', error);
+  }
 };
 
 const prunePrintRequests = () => {
@@ -313,6 +405,7 @@ export const emitOrderSync = async (
     posId: deviceId,
   };
 
+  await persistActiveLockSnapshot(eventType, orderInfo);
   applyLocks(eventType, orderInfo, deviceId);
   socket.emit('pos-order-sync', payload);
 };
@@ -481,6 +574,33 @@ export const unlockOrder = async (order: any) => {
       order?.id,
   };
   await emitOrderSync('UNLOCK', payload);
+};
+
+export const releasePersistedActiveLock = async (): Promise<boolean> => {
+  const snapshot = await readActiveLockSnapshot();
+  if (!snapshot) return false;
+
+  const socket = getSocket();
+  if (!socket || !socket.connected) {
+    return false;
+  }
+
+  const payload: Record<string, any> = {};
+  if (snapshot.tableNo != null) {
+    payload.tableNo = snapshot.tableNo;
+  }
+  if (snapshot.orderNumber != null) {
+    payload.orderNumber = snapshot.orderNumber;
+  }
+
+  if (!Object.keys(payload).length) {
+    await clearActiveLockSnapshot();
+    return false;
+  }
+
+  await emitOrderSync('UNLOCK', payload);
+  await clearActiveLockSnapshot();
+  return true;
 };
 
 export const lockPayment = async (order: any) => lockOrder(order, 'PAY_LOCK');
