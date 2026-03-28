@@ -860,6 +860,7 @@ class OrderService {
       );
 
       // POST to remote settle endpoint
+      console.log("waiter settleOrder payload:", JSON.stringify(remoteSettlePayload));
       const res = await api.post(API_ENDPOINTS.order.SETTLE, remoteSettlePayload);
 
       console.log("res===>", res);
