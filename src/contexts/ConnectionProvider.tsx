@@ -13,6 +13,7 @@ import {
   pauseLocalSocketReconnect,
   resumeLocalSocketReconnect,
 } from '../services/socket';
+import { initOrderSync, releasePersistedActiveLock } from '../services/orderSyncService';
 
 type ConnectionContextValue = {
   isInternetReachable: boolean;
@@ -136,7 +137,9 @@ export function ConnectionProvider({ children }: { children: React.ReactNode }) 
       try {
         const connected = await connectLocalSocket();
         if (connected) {
+          initOrderSync();
           void syncPosIdFromLocalServer();
+          void releasePersistedActiveLock();
         }
         setIsLocalServerReachable(connected);
         setLastLocalCheck(Date.now());
@@ -191,6 +194,12 @@ export function ConnectionProvider({ children }: { children: React.ReactNode }) 
     const appStateSubscription = AppState.addEventListener('change', (nextState) => {
       if (nextState === 'active') {
         void refreshInternetStatus();
+        void releasePersistedActiveLock();
+        return;
+      }
+
+      if (nextState === 'background' || nextState === 'inactive') {
+        void releasePersistedActiveLock();
       }
     });
 
@@ -211,6 +220,7 @@ export function ConnectionProvider({ children }: { children: React.ReactNode }) 
       pendingCheckRef.current = null;
       setIsCheckingLocal(false);
       if (connected) {
+        initOrderSync();
         void syncPosIdFromLocalServer();
       }
     });

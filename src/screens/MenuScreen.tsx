@@ -38,7 +38,14 @@ import {
   getDiscountAmount,
 } from '../utils/cartCalculations';
 import cartService from '../services/cartService';
-import { lockOrder, lockTable, unlockOrder, unlockTable } from '../services/orderSyncService';
+import {
+  isOrderLocked,
+  isTableLocked,
+  lockOrder,
+  lockTable,
+  unlockOrder,
+  unlockTable,
+} from '../services/orderSyncService';
 import { useToast } from '../components/ToastProvider';
 import { OrderServiceTiming } from '../types/orderFlow';
 import { useTranslation } from '../contexts/LanguageContext';
@@ -338,6 +345,23 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
 
   useEffect(() => {
     if (!existingOrder) return;
+    if (isOrderLocked(existingOrder)) {
+      const blockedOrderLabel =
+        existingOrder?.customOrderId ||
+        existingOrder?.orderDetails?.customOrderId ||
+        existingOrder?.orderDetails?.orderNumber ||
+        existingOrder?._id ||
+        existingOrder?.id ||
+        t('order');
+      showToast(
+        'error',
+        `${blockedOrderLabel} ${t('handledOnAnotherDevice')} ${t('pleaseTryLater')}`,
+      );
+      if (navigation.canGoBack?.()) {
+        navigation.goBack();
+      }
+      return;
+    }
     const hydrateCart = async () => {
       try {
         const orderCart = await cartService.setCartFromOrder(existingOrder);
@@ -361,13 +385,20 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
       }
     };
     hydrateCart();
-  }, [existingOrder, cartData.setCart, tableNo, deliveryType]);
+  }, [existingOrder, cartData.setCart, tableNo, deliveryType, navigation, showToast, t]);
 
   useEffect(() => {
     if (existingOrder) return;
     if (!tableNo) return;
+    if (isTableLocked(tableNo)) {
+      showToast('error', `${t('table')} ${tableNo} ${t('selectedOnAnotherDevice')}`);
+      if (navigation.canGoBack?.()) {
+        navigation.goBack();
+      }
+      return;
+    }
     lockTable(tableNo);
-  }, [existingOrder, tableNo]);
+  }, [existingOrder, tableNo, navigation, showToast, t]);
 
   useEffect(() => {
     if (!existingOrder && !tableNo) return;
