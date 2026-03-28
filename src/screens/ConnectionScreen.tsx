@@ -233,7 +233,7 @@ export default function ConnectionScreen({
           <AppBottomSheetTextInput
             value={ip}
             onChangeText={setIp}
-            placeholder="e.g., 192.168.1.100"
+            placeholder={t('serverIpPlaceholder')}
             placeholderTextColor={colors.textSecondary || colors.text}
             autoCapitalize="none"
             autoCorrect={false}
@@ -264,7 +264,7 @@ export default function ConnectionScreen({
           <AppBottomSheetTextInput
             value={port}
             onChangeText={setPort}
-            placeholder="e.g., 4000"
+            placeholder={t('portPlaceholder')}
             placeholderTextColor={colors.textSecondary || colors.text}
             keyboardType="numeric"
             editable={!loading}

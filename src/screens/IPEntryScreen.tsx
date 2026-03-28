@@ -203,7 +203,7 @@ export default function IPEntryScreen() {
               <TextInput
                 value={ip}
                 onChangeText={setIp}
-                placeholder="e.g., 192.168.1.100"
+                placeholder={t('serverIpPlaceholder')}
                 placeholderTextColor={colors.textSecondary || colors.text}
                 keyboardType={Platform.OS === 'ios' ? 'url' : 'default'}
                 style={[styles.input, { color: colors.text }]}
@@ -231,7 +231,7 @@ export default function IPEntryScreen() {
               <TextInput
                 value={port}
                 onChangeText={setPort}
-                placeholder="e.g., 4000"
+                placeholder={t('portPlaceholder')}
                 placeholderTextColor={colors.textSecondary || colors.text}
                 keyboardType="numeric"
                 style={[styles.input, { color: colors.text }]}

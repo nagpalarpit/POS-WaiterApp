@@ -697,15 +697,16 @@ const getStatusTone = (statusLabel: string, colors: any) => {
   };
 };
 
-const formatTimestamp = (timestamp?: string) => {
-  if (!timestamp) return "N/A";
+const formatTimestamp = (timestamp?: string, fallback = "") => {
+  if (!timestamp) return fallback;
   const date = new Date(timestamp);
-  if (Number.isNaN(date.getTime())) return "N/A";
+  if (Number.isNaN(date.getTime())) return fallback;
   return `${date.toLocaleDateString()} � ${date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
 };
 
 export default function OrderDetailsScreen({ navigation, route }: any) {
   const { colors } = useTheme();
+  const { t, language } = useTranslation();
   const insets = useSafeAreaInsets();
   const [activeSection, setActiveSection] = useState<
     "items" | "notes" | "payment"
@@ -724,7 +725,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
         <View
           style={{ flex: 1, justifyContent: "center", alignItems: "center" }}
         >
-          <Text style={{ color: colors.textSecondary }}>No order provided</Text>
+          <Text style={{ color: colors.textSecondary }}>{t("noOrderProvided")}</Text>
         </View>
       </SafeAreaView>
     );
@@ -818,7 +819,6 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
   const [pendingSettle, setPendingSettle] = useState(false);
   const pendingSettleRef = useRef(false);
   const { settings } = useSettings();
-  const { t, language } = useTranslation();
   const PAYMENT_METHOD_LABELS: Record<number, string> = {
     0: t("cash"),
     1: t("card"),
@@ -2816,6 +2816,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
               >
                 {formatTimestamp(
                   order.createdAt || displayedOrderDetails?.createdAt,
+                  t("notAvailable"),
                 )}
               </Text>
             </View>

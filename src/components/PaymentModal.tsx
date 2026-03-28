@@ -209,18 +209,18 @@ const getPaymentLabel = (
   }
 };
 
-const getGiftCardLabel = (giftCard: GiftCard): string => {
-  if (!giftCard) return "Gift Card";
+const getGiftCardLabel = (giftCard: GiftCard, t: (key: string) => string): string => {
+  if (!giftCard) return t('giftCard');
   const code =
     giftCard.couponCode ||
     giftCard.giftCardCode ||
     giftCard.cardCode ||
     giftCard.code ||
     "";
-  if (!code) return "Gift Card";
+  if (!code) return t('giftCard');
   const remainingBalance = toNumber((giftCard as any).remainingBalance, 0);
   if (remainingBalance > 0) {
-    return `${code} (${formatCurrency(remainingBalance)} left)`;
+    return `${code} (${formatCurrency(remainingBalance)} ${t('remaining')})`;
   }
   return code;
 };
@@ -1356,7 +1356,7 @@ export default function PaymentScreen(props: PaymentScreenProps) {
                         <Text
                           style={{ color: colors.text, fontWeight: "700" }}
                         >
-                          {getGiftCardLabel(activeGiftCard)}
+                          {getGiftCardLabel(activeGiftCard, t)}
                         </Text>
                         <Text
                           style={{

@@ -1449,11 +1449,11 @@ export default function CustomerDrawer({
                   >
                     {pin.minimumOrderValue != null
                       ? `${t('min')} ${pin.minimumOrderValue}`
-                      : `${t('min')} n/a`}
+                      : `${t('min')} ${t('notAvailable')}`}
                     {'  '}
                     {pin.deliveryCharge != null
                       ? `${t('charge')} ${pin.deliveryCharge}`
-                      : `${t('charge')} n/a`}
+                      : `${t('charge')} ${t('notAvailable')}`}
                   </Text>
                 ) : null}
               </TouchableOpacity>

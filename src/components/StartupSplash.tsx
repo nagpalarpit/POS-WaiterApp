@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeProvider';
+import { useTranslation } from '../contexts/LanguageContext';
 
 type StartupSplashProps = {
   visible: boolean;
@@ -16,6 +17,7 @@ type StartupSplashProps = {
 
 export default function StartupSplash({ visible }: StartupSplashProps) {
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const pulse = useRef(new Animated.Value(0)).current;
   const float = useRef(new Animated.Value(0)).current;
   const contentOpacity = useRef(new Animated.Value(0)).current;
@@ -175,12 +177,12 @@ export default function StartupSplash({ visible }: StartupSplashProps) {
 
         <View style={[styles.pill, { backgroundColor: `${colors.primary}12`, borderColor: `${colors.primary}22` }]}>
           <MaterialCommunityIcons name="silverware-fork-knife" size={14} color={colors.primary} />
-          <Text style={[styles.pillText, { color: colors.primary }]}>POS Waiter Experience</Text>
+          <Text style={[styles.pillText, { color: colors.primary }]}>{t('waiterExperience')}</Text>
         </View>
 
-        <Text style={[styles.title, { color: colors.text }]}>Fast tables. Clean handoff.</Text>
+        <Text style={[styles.title, { color: colors.text }]}>{t('fastTablesCleanHandoff')}</Text>
         <Text style={[styles.subtitle, { color: colors.textSecondary || colors.text }]}>
-          Preparing your restaurant dashboard and live order sync.
+          {t('preparingRestaurantDashboardAndLiveOrderSync')}
         </Text>
 
         <View style={styles.dots}>
