@@ -100,6 +100,9 @@ const buildOrderSyncInfo = (
       orderInfo?.id,
   }));
 
+  delete normalized.isPaid;
+  delete normalized.orderEditInOffline;
+
   return normalized;
 };
 
@@ -1693,6 +1696,12 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
           };
         });
 
+        const bulkMainOrderInfo = {
+          ...finalizedMainOrderInfo,
+        };
+        delete bulkMainOrderInfo.isPaid;
+        delete bulkMainOrderInfo.orderEditInOffline;
+
         const mainBulkSettleObj = {
           id: remoteMainOrderId,
           companyId,
@@ -1703,7 +1712,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
           tip: round2(finalOrderTip),
           deliveryCharge: round2(finalOrderDeliveryCharge),
           orderInfo: {
-            ...finalizedMainOrderInfo,
+            ...bulkMainOrderInfo,
             companyId,
             localOrderId,
             customOrderId: order?.customOrderId || orderDetails?.customOrderId,
@@ -1722,7 +1731,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
           tip: round2(finalOrderTip),
           deliveryCharge: round2(finalOrderDeliveryCharge),
           orderInfo: {
-            ...finalizedMainOrderInfo,
+            ...bulkMainOrderInfo,
             companyId,
             localOrderId,
             customOrderId: order?.customOrderId || orderDetails?.customOrderId,
@@ -1741,7 +1750,6 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
 
         bulkOrdersObj.push({
           ...mainBulkSettleObj,
-          isOrderPaid: isPaid,
         });
 
         await orderService.updateOrder(`${localOrderId}`, {
