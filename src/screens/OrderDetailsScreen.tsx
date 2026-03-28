@@ -1957,6 +1957,10 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
         });
 
         try {
+          console.log(
+            "settleBulkOrder payload:",
+            JSON.stringify(bulkOrdersObj),
+          );
           const bulkSettleRes: any =
             await orderService.settleBulkOrder(bulkOrdersObj);
           const bulkSettleRows = Array.isArray(bulkSettleRes?.data)
