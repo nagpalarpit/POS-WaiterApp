@@ -670,7 +670,7 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
           onPress={() => {
             if (isOrderLocked(order)) {
               const label = getOrderDisplayLabel(order);
-              showToast('error', `${label} is being handled on another device. Please try later.`);
+              showToast('error', `${label} ${t('handledOnAnotherDevice')} ${t('pleaseTryLater')}`);
               return;
             }
             lockOrder(order);

@@ -40,7 +40,7 @@ const buildScheduledDateTime = (hours: number, minutes: number) => {
   return formatOrderDateTime(scheduledDate);
 };
 
-const formatPreviewTime = (dateTime?: string | null, asapLabel = 'ASAP', scheduledLabel = 'Scheduled') => {
+const formatPreviewTime = (dateTime?: string | null, asapLabel = '', scheduledLabel = '') => {
   if (!dateTime) return asapLabel;
   const normalized = String(dateTime).replace(' ', 'T');
   const date = new Date(normalized);
@@ -274,7 +274,7 @@ export default function OrderTimeModal({
             },
           ]}
         >
-          <Text style={{ color: colors.primary, fontWeight: '800' }}>ASAP</Text>
+          <Text style={{ color: colors.primary, fontWeight: '800' }}>{t('asap')}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -289,7 +289,7 @@ export default function OrderTimeModal({
           ]}
         >
           <Text style={{ color: colors.textSecondary || colors.text, fontWeight: '700' }}>
-            Reset
+            {t('reset')}
           </Text>
         </TouchableOpacity>
       </View>
@@ -297,7 +297,7 @@ export default function OrderTimeModal({
       {!isManualTime ? (
         <View style={styles.formSection}>
           <Text style={[styles.label, { color: colors.textSecondary || colors.text }]}>
-            Time
+            {t('time')}
           </Text>
           <View
             style={[
@@ -351,7 +351,9 @@ export default function OrderTimeModal({
       ) : (
         <View style={styles.manualGrid}>
           <View style={[styles.formSection, styles.manualCell]}>
-            <Text style={[styles.label, { color: colors.textSecondary || colors.text }]}>Hour</Text>
+            <Text style={[styles.label, { color: colors.textSecondary || colors.text }]}>
+              {t('hour')}
+            </Text>
             <View
               style={[
                 styles.inputWrap,
@@ -376,7 +378,9 @@ export default function OrderTimeModal({
           </View>
 
           <View style={[styles.formSection, styles.manualCell]}>
-            <Text style={[styles.label, { color: colors.textSecondary || colors.text }]}>Minutes</Text>
+            <Text style={[styles.label, { color: colors.textSecondary || colors.text }]}>
+              {t('minutes')}
+            </Text>
             <View
               style={[
                 styles.inputWrap,

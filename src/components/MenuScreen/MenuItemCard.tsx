@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, Image } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { MenuItem, getMenuItemIdentity } from '../../hooks/useMenuData';
 import { formatCurrency } from '../../utils/currency';
+import { useTranslation } from '../../contexts/LanguageContext';
 
 interface MenuItemCardProps {
   item: MenuItem;
@@ -22,6 +23,7 @@ export const MenuItemCard: React.FC<MenuItemCardProps> = ({
   onAddToCart,
   colors,
 }) => {
+  const { t } = useTranslation();
   const hasVariants =
     Array.isArray(item.menuItemVariants) && item.menuItemVariants.length > 0;
   const hasDescription = !!item.description?.trim();
@@ -73,14 +75,14 @@ export const MenuItemCard: React.FC<MenuItemCardProps> = ({
           </Text>
         ) : (
           <Text style={{ color: colors.textSecondary, fontSize: 11, marginTop: 4, minHeight: 30 }}>
-            Freshly prepared and served hot.
+            {t('defaultItemDescription')}
           </Text>
         )}
       </View>
 
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 }}>
         <View>
-          <Text style={{ fontSize: 11, color: colors.textSecondary }}>Price</Text>
+          <Text style={{ fontSize: 11, color: colors.textSecondary }}>{t('price')}</Text>
           <Text style={{ color: colors.primary, fontSize: 17, fontWeight: '800', marginTop: 1 }}>
             {formatCurrency(item.price)}
           </Text>
@@ -115,7 +117,7 @@ export const MenuItemCard: React.FC<MenuItemCardProps> = ({
         >
           <MaterialCommunityIcons name="plus" size={16} color={colors.textInverse || '#fff'} />
           <Text style={{ color: colors.textInverse || '#fff', fontWeight: '700', marginLeft: 4, fontSize: 12 }}>
-            Add
+            {t('addToCart')}
           </Text>
         </TouchableOpacity>
       </View>

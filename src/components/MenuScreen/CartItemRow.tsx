@@ -81,7 +81,7 @@ export const CartItemRow: React.FC<CartItemRowProps> = ({
       {/* Variant price */}
       {item.variantName && item.variantPrice ? (
         <Text className="text-xs" style={{ color: colors.textSecondary, marginBottom: 4 }}>
-          + Variant: {formatCurrency(item.variantPrice)}
+          + {t('variant')}: {formatCurrency(item.variantPrice)}
         </Text>
       ) : null}
 
