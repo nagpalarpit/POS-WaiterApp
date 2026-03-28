@@ -271,6 +271,7 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
             height: 36,
             borderRadius: 18,
             overflow: 'hidden',
+            marginRight: 4,
             backgroundColor: colors.surfaceHover,
           }}
         >
@@ -769,7 +770,10 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
 
   if (ordersData.loading) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
+      <SafeAreaView
+        style={{ flex: 1, backgroundColor: colors.background }}
+        edges={['bottom']}
+      >
         <View className="flex-1 justify-center items-center">
           <ActivityIndicator size="large" color={colors.primary} />
         </View>
@@ -778,7 +782,10 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['bottom']}>
+    <SafeAreaView
+      style={{ flex: 1, backgroundColor: colors.background }}
+      edges={['bottom']}
+    >
       <ScrollView
         style={{ flex: 1, backgroundColor: colors.background }}
         contentInsetAdjustmentBehavior="automatic"

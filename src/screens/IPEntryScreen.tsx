@@ -141,7 +141,10 @@ export default function IPEntryScreen() {
 
   if (!initialized) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: colors.surface }}>
+      <SafeAreaView
+        style={{ flex: 1, backgroundColor: colors.surface }}
+        edges={['top', 'bottom']}
+      >
         <View style={styles.loadingState}>
           <Text style={{ color: colors.text }}>{t('loadingConnectionSettings')}</Text>
         </View>
@@ -150,7 +153,10 @@ export default function IPEntryScreen() {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.surface }}>
+    <SafeAreaView
+      style={{ flex: 1, backgroundColor: colors.surface }}
+      edges={['top', 'bottom']}
+    >
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={{ flex: 1 }}

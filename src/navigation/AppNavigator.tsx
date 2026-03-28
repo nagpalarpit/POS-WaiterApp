@@ -136,7 +136,6 @@ function MainStack({ initialRouteName }: MainStackProps) {
         headerTintColor: colors.text,
         headerShadowVisible: false,
         contentStyle: { backgroundColor: colors.background },
-        statusBarTranslucent: true,
       }}
       initialRouteName={initialRouteName}
     >

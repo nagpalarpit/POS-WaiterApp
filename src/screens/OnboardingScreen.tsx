@@ -152,7 +152,10 @@ export default function OnboardingScreen({ navigation }: any) {
   };
 
   return (
-    <SafeAreaView style={[styles.screen, { backgroundColor: colors.background }]}>
+    <SafeAreaView
+      style={[styles.screen, { backgroundColor: colors.background }]}
+      edges={['top', 'bottom']}
+    >
       <View style={[styles.backgroundOrb, styles.backgroundTop, { backgroundColor: `${colors.primary}10` }]} />
       <View style={[styles.backgroundOrb, styles.backgroundBottom, { backgroundColor: `${colors.secondary}10` }]} />
 
