@@ -499,11 +499,17 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
             <MaterialIcons name="chevron-left" size={24} color={colors.text} />
             {tableNo ? (
-              <Text>{t('table')} {tableNo}</Text>
+              <Text style={{ color: colors.text, fontWeight: '500' }}>
+                {t('table')} {tableNo}
+              </Text>
             ) : deliveryType === 1 ? (
-              <Text>{t('delivery')}</Text>
+              <Text style={{ color: colors.text, fontWeight: '500' }}>
+                {t('delivery')}
+              </Text>
             ) : (
-              <Text>{t('pickup')}</Text>
+              <Text style={{ color: colors.text, fontWeight: '500' }}>
+                {t('pickup')}
+              </Text>
             )}
           </View>
         </TouchableOpacity>

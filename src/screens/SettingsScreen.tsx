@@ -4,6 +4,7 @@ import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-nati
 import { useFocusEffect } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeProvider';
+import { ThemeName } from '../theme/theme';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import posIdService from '../services/posIdService';
 import { STORAGE_KEYS } from '../constants/storageKeys';
@@ -39,12 +40,21 @@ function InfoRow({ label, value, isLast = false, colors }: InfoRowProps) {
 }
 
 export default function SettingsScreen() {
-  const { colors } = useTheme();
+  const { name: themeName, colors, setTheme } = useTheme();
   const { t } = useTranslation();
   const { language, setLanguage } = useLanguage();
   const [devicePosId, setDevicePosId] = useState<string>('');
   const [staffName, setStaffName] = useState<string>('');
   const [staffEmail, setStaffEmail] = useState<string>('');
+
+  const themeOptions: Array<{
+    code: ThemeName;
+    label: string;
+  }> = [
+      { code: 'light', label: t('light') },
+      // { code: 'dark', label: t('dark') },
+      { code: 'dim', label: t('dim') },
+    ];
 
   const appVersion =
     (Constants as any)?.expoConfig?.version ||
@@ -99,6 +109,45 @@ export default function SettingsScreen() {
           ]}
         >
           <InfoRow label={t('posId')} value={devicePosId || t('notAssigned')} colors={colors} isLast />
+        </View>
+
+        <Text style={[styles.groupLabel, { color: colors.textSecondary || colors.text }]}>{t('theme')}</Text>
+        <View
+          style={[
+            styles.section,
+            {
+              backgroundColor: colors.surface,
+              borderColor: colors.border,
+            },
+          ]}
+        >
+          <View style={styles.languageRow}>
+            {themeOptions.map((option) => {
+              const active = themeName === option.code;
+              return (
+                <TouchableOpacity
+                  key={option.code}
+                  onPress={() => void setTheme(option.code)}
+                  style={[
+                    styles.languagePill,
+                    {
+                      borderColor: active ? colors.primary : colors.border,
+                      backgroundColor: active ? colors.primary : colors.surface,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={{
+                      color: active ? colors.textInverse : colors.text,
+                      fontWeight: '700',
+                    }}
+                  >
+                    {option.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
         </View>
 
         <Text style={[styles.groupLabel, { color: colors.textSecondary || colors.text }]}>{t('currentLanguage')}</Text>
