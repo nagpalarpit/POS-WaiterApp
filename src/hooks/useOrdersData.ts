@@ -36,6 +36,7 @@ export const useOrdersData = () => {
   const [deliveryOrders, setDeliveryOrders] = useState<Order[]>([]);
   const [pickupOrders, setPickupOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
+  const [syncRefreshToken, setSyncRefreshToken] = useState(0);
 
   const toNumber = (value: unknown, fallback = 0): number => {
     if (typeof value === 'number') return Number.isFinite(value) ? value : fallback;
@@ -136,10 +137,22 @@ export const useOrdersData = () => {
     const unsubscribe = onOrderSync((event) => {
       const type = (event?.eventType || 'ORDER_SYNC').toUpperCase();
       if (type.endsWith('LOCK') || type === 'UNLOCK') return;
-      fetchOrders();
+      setSyncRefreshToken((current) => current + 1);
     });
     return () => { unsubscribe(); };
   }, []);
+
+  useEffect(() => {
+    if (syncRefreshToken > 0) {
+      const timeoutId = setTimeout(() => {
+        void fetchOrders();
+      }, 300);
+
+      void fetchOrders();
+
+      return () => clearTimeout(timeoutId);
+    }
+  }, [syncRefreshToken]);
 
   return {
     allOrders,
