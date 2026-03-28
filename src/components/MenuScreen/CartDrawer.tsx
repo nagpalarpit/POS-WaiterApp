@@ -1,5 +1,6 @@
-import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
+    BackHandler,
     View,
     Text,
     TouchableOpacity,
@@ -7,7 +8,7 @@ import {
     KeyboardAvoidingView,
     Platform,
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/ThemeProvider';
 import { useMenuCart } from '../../hooks/useMenuCart';
@@ -19,6 +20,7 @@ import { CartSummary } from './CartSummary';
 import ItemNoteModal from '../ItemNoteModal';
 import CartNoteModal from '../CartNoteModal';
 import PinModal from '../PinModal';
+import { useFocusEffect } from '@react-navigation/native';
 import {
     getCartSubtotal,
     getDiscountAmount,
@@ -96,9 +98,39 @@ export default function CartScreen({ navigation, route }: any) {
     const pendingDecreaseRef = useRef<
         { type: 'update' | 'remove'; cartId: string; quantity?: number } | null
     >(null);
+    const goBackSafely = useCallback(() => {
+        if (navigation.canGoBack?.()) {
+            navigation.goBack();
+            return;
+        }
+
+        navigation.navigate('Menu', {
+            tableNo,
+            deliveryType,
+            tableArea,
+            existingOrder,
+        });
+    }, [navigation, tableNo, deliveryType, tableArea, existingOrder]);
 
     useLayoutEffect(() => {
         navigation.setOptions({
+            headerLeft: ({ tintColor }: any) => (
+                <TouchableOpacity
+                    onPress={goBackSafely}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    style={{
+                        width: 36,
+                        height: 36,
+                        borderRadius: 10,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        marginLeft: 2,
+                        backgroundColor: colors.surfaceHover || 'transparent',
+                    }}
+                >
+                    <MaterialIcons name="arrow-back-ios" size={18} color={tintColor || colors.text} />
+                </TouchableOpacity>
+            ),
             headerTitle: () => (
                 <View
                     style={{
@@ -140,7 +172,23 @@ export default function CartScreen({ navigation, route }: any) {
                 </View>
             ),
         });
-    }, [navigation, colors, cartData.cartQuantity, total]);
+    }, [navigation, colors, cartData.cartQuantity, total, goBackSafely, tableNo, deliveryType, tableArea, existingOrder]);
+
+    useFocusEffect(
+        useCallback(() => {
+            const onHardwareBackPress = () => {
+                goBackSafely();
+                return true;
+            };
+
+            const subscription = BackHandler.addEventListener(
+                'hardwareBackPress',
+                onHardwareBackPress,
+            );
+
+            return () => subscription.remove();
+        }, [goBackSafely]),
+    );
 
     const shouldRequireDecreasePin = (cartId: string, nextQty?: number) => {
         if (!existingOrder) return false;

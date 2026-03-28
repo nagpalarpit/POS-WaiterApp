@@ -86,6 +86,190 @@ const normalizeGiftCardLogs = (value: any) => {
   if (value === null) return null;
   return Array.isArray(value) ? value : [value];
 };
+const mergeSnapshotObject = (primary: any, fallback: any) => ({
+  ...(fallback && typeof fallback === "object" ? fallback : {}),
+  ...(primary && typeof primary === "object" ? primary : {}),
+});
+const mergeUserAccessSnapshot = (...accessLists: any[]) => {
+  const mergedByIndex: Record<number, any> = {};
+
+  accessLists.forEach((accessList) => {
+    if (!Array.isArray(accessList)) {
+      return;
+    }
+
+    accessList.forEach((entry: any, index: number) => {
+      mergedByIndex[index] = mergeSnapshotObject(entry, mergedByIndex[index] || {});
+
+      if (mergedByIndex[index].userAccessTypeId === undefined) {
+        mergedByIndex[index].userAccessTypeId = null;
+      }
+    });
+  });
+
+  return Object.keys(mergedByIndex)
+    .map((key) => Number(key))
+    .sort((a, b) => a - b)
+    .map((key) => mergedByIndex[key]);
+};
+const enrichBulkSettleOrderInfo = (
+  orderInfo: any,
+  sourceOrder: any,
+  sourceOrderDetails: any,
+  sourceUserData: any,
+  sourceSettings: any,
+  options: { includeFinalSettlementFields?: boolean } = {},
+) => {
+  if (!orderInfo || typeof orderInfo !== "object") {
+    return orderInfo;
+  }
+
+  const enriched = orderInfo;
+  const userSources = [sourceUserData, sourceOrder?.user, sourceOrderDetails?.user].filter(
+    (item) => item && typeof item === "object",
+  );
+  const userCompanySources = [
+    sourceUserData?.company,
+    sourceOrder?.user?.company,
+    sourceOrderDetails?.user?.company,
+  ].filter((item) => item && typeof item === "object");
+  const tableAreaSources = [
+    sourceOrder?.tableArea,
+    sourceOrderDetails?.tableArea,
+  ].filter((item) => item && typeof item === "object");
+  const tableAreaCompanySources = [
+    sourceOrder?.tableArea?.company,
+    sourceOrderDetails?.tableArea?.company,
+  ].filter((item) => item && typeof item === "object");
+  const companySources = [
+    sourceUserData?.company,
+    sourceOrder?.company,
+    sourceOrderDetails?.company,
+  ].filter((item) => item && typeof item === "object");
+
+  if (userSources.length > 0 || enriched.user) {
+    const mergedUser = userSources.reduce(
+      (acc, candidate) => mergeSnapshotObject(candidate, acc),
+      {},
+    );
+    enriched.user = mergeSnapshotObject(enriched.user, mergedUser);
+    if (enriched.user.imagePath === undefined) enriched.user.imagePath = null;
+    if (enriched.user.designation === undefined) enriched.user.designation = null;
+    if (enriched.user.steuerId === undefined) enriched.user.steuerId = null;
+    if (enriched.user.customerCompanyName === undefined) {
+      enriched.user.customerCompanyName = null;
+    }
+    if (enriched.user.role === undefined) enriched.user.role = null;
+    enriched.user.company = mergeSnapshotObject(
+      enriched.user.company,
+      mergeSnapshotObject(
+        sourceSettings?.company,
+        userCompanySources.reduce(
+          (acc, candidate) => mergeSnapshotObject(candidate, acc),
+          {},
+        ),
+      ),
+    );
+    if (enriched.user.company.middleName === undefined) {
+      enriched.user.company.middleName = null;
+    }
+    enriched.user.userAccess = mergeUserAccessSnapshot(
+      sourceUserData?.userAccess,
+      sourceOrder?.user?.userAccess,
+      sourceOrderDetails?.user?.userAccess,
+      enriched.user.userAccess,
+    );
+  }
+
+  if (tableAreaSources.length > 0 || enriched.tableArea) {
+    enriched.tableArea = mergeSnapshotObject(
+      enriched.tableArea,
+      tableAreaSources.reduce(
+        (acc, candidate) => mergeSnapshotObject(candidate, acc),
+        {},
+      ),
+    );
+    enriched.tableArea.company = mergeSnapshotObject(
+      enriched.tableArea.company,
+      mergeSnapshotObject(
+        sourceSettings?.company,
+        tableAreaCompanySources.reduce(
+          (acc, candidate) => mergeSnapshotObject(candidate, acc),
+          {},
+        ),
+      ),
+    );
+    if (enriched.tableArea.freeTables === undefined) {
+      enriched.tableArea.freeTables = "[]";
+    }
+    if (enriched.tableArea.company.middleName === undefined) {
+      enriched.tableArea.company.middleName = null;
+    }
+  }
+
+  enriched.company = mergeSnapshotObject(
+    enriched.company,
+    mergeSnapshotObject(
+      sourceSettings?.company,
+      companySources.reduce(
+        (acc, candidate) => mergeSnapshotObject(candidate, acc),
+        {},
+      ),
+    ),
+  );
+  if (enriched.company.middleName === undefined) {
+    enriched.company.middleName = null;
+  }
+  if (enriched.company.vat === undefined) {
+    enriched.company.vat =
+      sourceSettings?.vat ??
+      sourceSettings?.company?.vat ??
+      sourceOrderDetails?.company?.vat ??
+      sourceOrder?.company?.vat ??
+      sourceUserData?.company?.vat ??
+      undefined;
+  }
+
+  if (enriched.printObj === undefined) {
+    enriched.printObj = sourceOrderDetails?.printObj ?? sourceOrder?.printObj;
+  }
+
+  if (options.includeFinalSettlementFields) {
+    if (enriched.atgPinsPayloads === undefined) {
+      enriched.atgPinsPayloads =
+        sourceOrderDetails?.atgPinsPayloads ??
+        sourceOrder?.atgPinsPayloads ??
+        [];
+    }
+
+    if (enriched.reason === undefined) {
+      enriched.reason = sourceOrderDetails?.reason ?? sourceOrder?.reason ?? "";
+    }
+
+    if (enriched.isDeleted === undefined) {
+      enriched.isDeleted =
+        sourceOrderDetails?.isDeleted ?? sourceOrder?.isDeleted ?? false;
+    }
+
+    if (enriched.isCorporate === undefined) {
+      enriched.isCorporate =
+        sourceOrderDetails?.isCorporate ?? sourceOrder?.isCorporate ?? false;
+    }
+
+    if (enriched.canceledOrderPayment === undefined) {
+      enriched.canceledOrderPayment =
+        sourceOrderDetails?.canceledOrderPayment ??
+        sourceOrder?.canceledOrderPayment ??
+        0;
+    }
+  }
+
+  if (enriched.tip === undefined) {
+    enriched.tip = sourceOrderDetails?.tip ?? sourceOrder?.tip ?? 0;
+  }
+
+  return enriched;
+};
 const buildOrderSyncInfo = (
   orderInfo: any,
   orderNumber?: string | number | null,
@@ -1366,6 +1550,14 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
             giftCardTotal > 0 && Math.abs(selectedTotal - giftCardTotal) < 0.01;
         }
 
+        enrichBulkSettleOrderInfo(
+          splitOrderInfo,
+          order,
+          orderDetails,
+          userData,
+          settings,
+        );
+
         const splitSettlePayload: any = {
           currency,
           paymentMethod: selectedPaymentMethod,
@@ -1629,17 +1821,8 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
         const mainOrderInvoiceNumber =
           (await commonFunctionService.generateInvoice(companyId)) ||
           invoiceNumber;
-        const remoteMainOrderId =
-          toNumber(
-            order?.id ??
-              orderDetails?.id ??
-              order?.orderId ??
-              orderDetails?.orderId,
-            0,
-          ) || undefined;
         const finalizedMainOrderInfo: any = {
           ...orderDetails,
-          companyId,
           orderItem: mergedOrderItems,
           orderSubTotal: round2(mainOrderSubTotal),
           orderTotal: round2(mainOrderTotal),
@@ -1664,6 +1847,15 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
           },
         };
 
+        enrichBulkSettleOrderInfo(
+          finalizedMainOrderInfo,
+          order,
+          orderDetails,
+          userData,
+          settings,
+          { includeFinalSettlementFields: true },
+        );
+
         const bulkOrdersObj: any[] = splitOrders.map((splitOrder: any) => {
           const details = splitOrder?.orderDetails || {};
           const paymentMethod = toNumber(
@@ -1673,19 +1865,10 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
           );
           const splitLocalOrderId =
             splitOrder?._id || splitOrder?.id || details?.localOrderId;
-
-          return {
-            companyId,
-            currency: details?.currency || currency,
-            paymentMethod,
-            amount: toNumber(details?.orderTotal, 0),
-            moneyBack: 0,
-            tip: toNumber(details?.tip, 0),
-            deliveryCharge: toNumber(details?.deliveryCharge, 0),
-            orderInfo: {
+          const splitOrderInfo = enrichBulkSettleOrderInfo(
+            {
               orderStatusId: ORDER_STATUS.DELIVERED,
               ...details,
-              companyId: toNumber(details?.companyId, 0) || toNumber(splitOrder?.companyId, 0) || companyId,
               updatedAt: now,
               localOrderId: splitLocalOrderId,
               parentLocalOrderId:
@@ -1693,6 +1876,20 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
               customOrderId:
                 splitOrder?.customOrderId || details?.customOrderId,
             },
+            order,
+            orderDetails,
+            userData,
+            settings,
+          );
+
+          return {
+            currency: details?.currency || currency,
+            paymentMethod,
+            amount: toNumber(details?.orderTotal, 0),
+            moneyBack: 0,
+            tip: toNumber(details?.tip, 0),
+            deliveryCharge: toNumber(details?.deliveryCharge, 0),
+            orderInfo: splitOrderInfo,
           };
         });
 
@@ -1703,17 +1900,13 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
         delete bulkMainOrderInfo.orderEditInOffline;
 
         const mainBulkSettleObj = {
-          id: remoteMainOrderId,
-          companyId,
           currency,
           paymentMethod: 3,
           amount: round2(mainOrderTotal),
-          moneyBack: 0,
           tip: round2(finalOrderTip),
           deliveryCharge: round2(finalOrderDeliveryCharge),
           orderInfo: {
             ...bulkMainOrderInfo,
-            companyId,
             localOrderId,
             customOrderId: order?.customOrderId || orderDetails?.customOrderId,
             paymentMethod: 3,
@@ -1721,6 +1914,8 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
               paymentProcessorId: 3,
             },
           },
+          isEditPayment: false,
+          isOrderPaid,
         };
 
         const mainLocalSettleInfo = {
@@ -2463,7 +2658,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
                   fontSize: 12,
                 }}
               >
-                Note: {it.orderItemNote}
+                {t('note')}: {it.orderItemNote}
               </Text>
             ) : null}
           </View>
