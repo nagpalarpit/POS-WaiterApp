@@ -18,12 +18,7 @@ type LanguageContextValue = {
 const LanguageContext = createContext<LanguageContextValue | null>(null);
 
 const getInitialLanguage = (): AppLanguage => {
-  try {
-    const locale = Intl.DateTimeFormat().resolvedOptions().locale;
-    return normalizeLanguage(locale);
-  } catch (_) {
-    return DEFAULT_LANGUAGE;
-  }
+  return DEFAULT_LANGUAGE;
 };
 
 export function LanguageProvider({ children }: { children: React.ReactNode }) {
