@@ -86,6 +86,148 @@ const normalizeGiftCardLogs = (value: any) => {
   if (value === null) return null;
   return Array.isArray(value) ? value : [value];
 };
+const mergeSnapshotObject = (primary: any, fallback: any) => ({
+  ...(fallback && typeof fallback === "object" ? fallback : {}),
+  ...(primary && typeof primary === "object" ? primary : {}),
+});
+const mergeUserAccessSnapshot = (...accessLists: any[]) => {
+  const mergedByIndex: Record<number, any> = {};
+
+  accessLists.forEach((accessList) => {
+    if (!Array.isArray(accessList)) {
+      return;
+    }
+
+    accessList.forEach((entry: any, index: number) => {
+      mergedByIndex[index] = mergeSnapshotObject(entry, mergedByIndex[index] || {});
+
+      if (mergedByIndex[index].userAccessTypeId === undefined) {
+        mergedByIndex[index].userAccessTypeId = null;
+      }
+    });
+  });
+
+  return Object.keys(mergedByIndex)
+    .map((key) => Number(key))
+    .sort((a, b) => a - b)
+    .map((key) => mergedByIndex[key]);
+};
+const enrichBulkSettleOrderInfo = (
+  orderInfo: any,
+  sourceOrder: any,
+  sourceOrderDetails: any,
+  sourceUserData: any,
+) => {
+  if (!orderInfo || typeof orderInfo !== "object") {
+    return orderInfo;
+  }
+
+  const enriched = orderInfo;
+  const userSources = [sourceUserData, sourceOrder?.user, sourceOrderDetails?.user].filter(
+    (item) => item && typeof item === "object",
+  );
+  const userCompanySources = [
+    sourceUserData?.company,
+    sourceOrder?.user?.company,
+    sourceOrderDetails?.user?.company,
+  ].filter((item) => item && typeof item === "object");
+  const tableAreaSources = [
+    sourceOrder?.tableArea,
+    sourceOrderDetails?.tableArea,
+  ].filter((item) => item && typeof item === "object");
+  const tableAreaCompanySources = [
+    sourceOrder?.tableArea?.company,
+    sourceOrderDetails?.tableArea?.company,
+  ].filter((item) => item && typeof item === "object");
+  const companySources = [
+    sourceUserData?.company,
+    sourceOrder?.company,
+    sourceOrderDetails?.company,
+  ].filter((item) => item && typeof item === "object");
+
+  if (userSources.length > 0 || enriched.user) {
+    const mergedUser = userSources.reduce(
+      (acc, candidate) => mergeSnapshotObject(candidate, acc),
+      {},
+    );
+    enriched.user = mergeSnapshotObject(enriched.user, mergedUser);
+    enriched.user.company = mergeSnapshotObject(
+      enriched.user.company,
+      userCompanySources.reduce(
+        (acc, candidate) => mergeSnapshotObject(candidate, acc),
+        {},
+      ),
+    );
+    enriched.user.userAccess = mergeUserAccessSnapshot(
+      sourceUserData?.userAccess,
+      sourceOrder?.user?.userAccess,
+      sourceOrderDetails?.user?.userAccess,
+      enriched.user.userAccess,
+    );
+  }
+
+  if (tableAreaSources.length > 0 || enriched.tableArea) {
+    enriched.tableArea = mergeSnapshotObject(
+      enriched.tableArea,
+      tableAreaSources.reduce(
+        (acc, candidate) => mergeSnapshotObject(candidate, acc),
+        {},
+      ),
+    );
+    enriched.tableArea.company = mergeSnapshotObject(
+      enriched.tableArea.company,
+      tableAreaCompanySources.reduce(
+        (acc, candidate) => mergeSnapshotObject(candidate, acc),
+        {},
+      ),
+    );
+  }
+
+  enriched.company = mergeSnapshotObject(
+    enriched.company,
+    companySources.reduce(
+      (acc, candidate) => mergeSnapshotObject(candidate, acc),
+      {},
+    ),
+  );
+
+  if (enriched.printObj === undefined) {
+    enriched.printObj = sourceOrderDetails?.printObj ?? sourceOrder?.printObj ?? undefined;
+  }
+
+  if (enriched.atgPinsPayloads === undefined) {
+    enriched.atgPinsPayloads =
+      sourceOrderDetails?.atgPinsPayloads ??
+      sourceOrder?.atgPinsPayloads ??
+      [];
+  }
+
+  if (enriched.reason === undefined) {
+    enriched.reason = sourceOrderDetails?.reason ?? sourceOrder?.reason ?? "";
+  }
+
+  if (enriched.isDeleted === undefined) {
+    enriched.isDeleted = sourceOrderDetails?.isDeleted ?? sourceOrder?.isDeleted ?? false;
+  }
+
+  if (enriched.isCorporate === undefined) {
+    enriched.isCorporate =
+      sourceOrderDetails?.isCorporate ?? sourceOrder?.isCorporate ?? false;
+  }
+
+  if (enriched.canceledOrderPayment === undefined) {
+    enriched.canceledOrderPayment =
+      sourceOrderDetails?.canceledOrderPayment ??
+      sourceOrder?.canceledOrderPayment ??
+      0;
+  }
+
+  if (enriched.tip === undefined) {
+    enriched.tip = sourceOrderDetails?.tip ?? sourceOrder?.tip ?? 0;
+  }
+
+  return enriched;
+};
 const buildOrderSyncInfo = (
   orderInfo: any,
   orderNumber?: string | number | null,
@@ -1366,6 +1508,13 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
             giftCardTotal > 0 && Math.abs(selectedTotal - giftCardTotal) < 0.01;
         }
 
+        enrichBulkSettleOrderInfo(
+          splitOrderInfo,
+          order,
+          orderDetails,
+          userData,
+        );
+
         const splitSettlePayload: any = {
           currency,
           paymentMethod: selectedPaymentMethod,
@@ -1664,6 +1813,13 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
           },
         };
 
+        enrichBulkSettleOrderInfo(
+          finalizedMainOrderInfo,
+          order,
+          orderDetails,
+          userData,
+        );
+
         const bulkOrdersObj: any[] = splitOrders.map((splitOrder: any) => {
           const details = splitOrder?.orderDetails || {};
           const paymentMethod = toNumber(
@@ -1721,6 +1877,8 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
               paymentProcessorId: 3,
             },
           },
+          isEditPayment: false,
+          isOrderPaid: false,
         };
 
         const mainLocalSettleInfo = {
@@ -2459,7 +2617,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
                   fontSize: 12,
                 }}
               >
-                Note: {it.orderItemNote}
+                {t('note')}: {it.orderItemNote}
               </Text>
             ) : null}
           </View>

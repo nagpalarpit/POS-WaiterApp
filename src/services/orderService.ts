@@ -196,7 +196,6 @@ class OrderService {
     delete merged.id;
     delete merged._id;
     delete merged.paymentMethod;
-    delete merged.tip;
     delete merged.deliveryCharge;
     delete merged.orderPaymentSummary;
     delete merged.orderPaymentDetails;
@@ -403,12 +402,14 @@ class OrderService {
     const normalizedOrderInfo = this.buildEditPaymentSettleOrderInfo(orderInfo);
     const paymentMethod = settlePayload?.paymentMethod;
     const amount = Number(settlePayload?.amount ?? 0) || 0;
+    const hasBulkSettleFlags =
+      Object.prototype.hasOwnProperty.call(settlePayload || {}, 'isEditPayment') ||
+      Object.prototype.hasOwnProperty.call(settlePayload || {}, 'isOrderPaid');
 
     delete normalizedOrderInfo.id;
     delete normalizedOrderInfo._id;
     delete normalizedOrderInfo.isPaid;
     delete normalizedOrderInfo.orderEditInOffline;
-    delete normalizedOrderInfo.canceledOrderPayment;
     delete normalizedOrderInfo.customerId;
     delete normalizedOrderInfo.customerAddressId;
     delete normalizedOrderInfo.customer;
@@ -425,35 +426,43 @@ class OrderService {
 
     normalizedOrderInfo.deliveryCharge =
       settlePayload?.deliveryCharge ?? normalizedOrderInfo.deliveryCharge ?? 0;
-    normalizedOrderInfo.paymentMethod = paymentMethod ?? 0;
     normalizedOrderInfo.orderPaymentSummary = {
       paymentProcessorId: paymentMethod ?? 0,
     };
-    normalizedOrderInfo.orderPaymentDetails = [
-      {
-        paymentProcessorId: paymentMethod ?? 0,
-        paymentTotal: amount,
-      },
-    ];
+
+    if (hasBulkSettleFlags) {
+      delete normalizedOrderInfo.paymentMethod;
+      delete normalizedOrderInfo.orderPaymentDetails;
+    } else {
+      normalizedOrderInfo.paymentMethod = paymentMethod ?? 0;
+      normalizedOrderInfo.orderPaymentDetails = [
+        {
+          paymentProcessorId: paymentMethod ?? 0,
+          paymentTotal: amount,
+        },
+      ];
+    }
 
     return normalizedOrderInfo;
   }
 
   private buildRemoteBulkSettlePayload(settlePayload: any): any {
     const normalized: any = {
+      id: settlePayload?.id,
       currency: settlePayload?.currency,
       paymentMethod: settlePayload?.paymentMethod,
       amount: settlePayload?.amount,
       moneyBack: settlePayload?.moneyBack ?? 0,
       tip: settlePayload?.tip ?? 0,
       deliveryCharge: settlePayload?.deliveryCharge ?? 0,
+      isEditPayment: settlePayload?.isEditPayment,
+      isOrderPaid: settlePayload?.isOrderPaid,
     };
 
+    delete normalized.id;
     delete normalized.companyId;
-    delete normalized.isEditPayment;
     delete normalized.print;
     delete normalized.splitLog;
-    delete normalized.isOrderPaid;
     delete normalized.isTscOffline;
 
     const remoteOrderInfo = this.buildRemoteBulkSettleOrderInfo(

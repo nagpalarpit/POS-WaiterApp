@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { CartItem, AttributeValue } from '../../services/cartService';
+import { useTranslation } from '../../contexts/LanguageContext';
 import {
   getAttributeValueName,
   getAttributeValuePrice,
@@ -32,6 +33,7 @@ export const CartItemRow: React.FC<CartItemRowProps> = ({
   onRemoveItem,
   colors,
 }) => {
+  const { t } = useTranslation();
   const quantity = getCartItemQuantity(item);
   const itemUnitTotal = getItemUnitTotal(item);
   const itemLineTotal = getItemLineTotal(item);
@@ -110,14 +112,14 @@ export const CartItemRow: React.FC<CartItemRowProps> = ({
       {/* Item note */}
       {item.orderItemNote ? (
         <Text className="text-xs italic" style={{ color: colors.textSecondary, marginBottom: 4 }}>
-          Note: {item.orderItemNote}
+          {t('note')}: {item.orderItemNote}
         </Text>
       ) : null}
 
       {/* Note Action */}
       <TouchableOpacity onPress={() => onOpenNoteModal(item)} style={{ marginTop: 8 }}>
         <Text className="text-xs font-semibold" style={{ color: colors.primary }}>
-          {item.orderItemNote ? 'Edit Item Note' : 'Add Item Note'}
+          {item.orderItemNote ? t('editItemNote') : t('addNoteForThisItem')}
         </Text>
       </TouchableOpacity>
 

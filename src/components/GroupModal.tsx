@@ -35,8 +35,8 @@ export default function GroupModal({ visible, existingLabels = [], onSelect }: P
   const { colors } = useTheme();
   const { t } = useTranslation();
   const defaultLabels = useMemo(
-    () => [t('starter'), t('mainCourse'), t('dessert'), t('drinks'), t('gange')],
-    [t],
+    () => ['Starter', 'Main Course', 'Dessert', 'Drinks', 'Gange'],
+    [],
   );
   const labels = useMemo(
     () => buildAvailableLabels(existingLabels, defaultLabels),
@@ -44,7 +44,7 @@ export default function GroupModal({ visible, existingLabels = [], onSelect }: P
   );
 
   const handleClose = () => {
-    onSelect(t('mainCourse'));
+    onSelect('Main Course');
   };
 
   return (

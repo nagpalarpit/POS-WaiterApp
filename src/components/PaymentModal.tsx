@@ -177,22 +177,37 @@ const normalizeNullableAmount = (value: unknown): number | null => {
   return round2(Math.max(toNumber(value, 0), 0));
 };
 
-const PAYMENT_METHOD_LABELS: Record<number, string> = {
-  0: "Cash",
-  1: "Card",
-  2: "Cash + Card",
-  3: "Split Payment",
-  4: "Gift Card",
-  5: "Debitor",
-  6: "Lieferando",
-  7: "Uber",
-  8: "Wolt",
-  9: "Bolt",
-  10: "Schlemmerblock",
+const getPaymentLabel = (
+  method: number,
+  t: (key: string) => string,
+): string => {
+  switch (method) {
+    case 0:
+      return t("cash");
+    case 1:
+      return t("card");
+    case 2:
+      return t("cashAndCard");
+    case 3:
+      return t("splitPayment");
+    case 4:
+      return t("giftCard");
+    case 5:
+      return t("debitorPayment");
+    case 6:
+      return "Lieferando";
+    case 7:
+      return "Uber";
+    case 8:
+      return "Wolt";
+    case 9:
+      return "Bolt";
+    case 10:
+      return "Schlemmerblock";
+    default:
+      return t("payment");
+  }
 };
-
-const getPaymentLabel = (method: number): string =>
-  PAYMENT_METHOD_LABELS[method] || "Payment";
 
 const getGiftCardLabel = (giftCard: GiftCard): string => {
   if (!giftCard) return "Gift Card";
@@ -679,7 +694,7 @@ export default function PaymentScreen(props: PaymentScreenProps) {
     const paymentMethod = resolvePaymentMethod();
     return {
       id: paymentMethod,
-      label: getPaymentLabel(paymentMethod),
+      label: getPaymentLabel(paymentMethod, t),
       paymentMethod,
       tip: tipNum,
       deliveryCharge: displayDeliveryCharge,
@@ -782,7 +797,7 @@ export default function PaymentScreen(props: PaymentScreenProps) {
       await getCurrentFlowHandlers()?.onPrintPreview?.(option);
     } catch (error) {
       console.error("Print preview failed:", error);
-      showToast("error", "Unable to generate print preview");
+      showToast("error", t('unableToGeneratePrintPreview'));
     } finally {
       setIsProcessing(false);
     }
@@ -790,12 +805,12 @@ export default function PaymentScreen(props: PaymentScreenProps) {
 
   const addGiftCard = async (forSplit: boolean) => {
     if (!companyId) {
-      showToast("error", "Company details missing for gift card.");
+      showToast("error", t('companyDetailsMissingForGiftCard'));
       return;
     }
     const code = (forSplit ? splitGiftCode : giftCode).trim();
     if (!code) {
-      showToast("error", "Enter a gift card code.");
+      showToast("error", t('enterGiftCardCode'));
       return;
     }
 
@@ -809,7 +824,7 @@ export default function PaymentScreen(props: PaymentScreenProps) {
       const list = Array.isArray(rawData) ? rawData : rawData ? [rawData] : [];
       const gift = list.find(Boolean) || null;
       if (!gift) {
-        showToast("error", "Invalid gift card code.");
+        showToast("error", t('invalidGiftCardCode'));
         return;
       }
 
@@ -817,11 +832,11 @@ export default function PaymentScreen(props: PaymentScreenProps) {
       const expiry = toStartOfDay(gift?.expiryDate ?? gift?.expiryDateTime);
       const today = toStartOfDay(new Date());
       if (start && today && start > today) {
-        showToast("error", `Gift card is valid from ${formatDate(start)}.`);
+        showToast("error", t('giftCardValidFrom', { date: formatDate(start) }));
         return;
       }
       if (expiry && today && expiry < today) {
-        showToast("error", `Gift card expired on ${formatDate(expiry)}.`);
+        showToast("error", t('giftCardExpiredOn', { date: formatDate(expiry) }));
         return;
       }
 
@@ -832,10 +847,10 @@ export default function PaymentScreen(props: PaymentScreenProps) {
         setGiftCard(gift);
         setGiftCode("");
       }
-      showToast("success", "Gift card applied.");
+      showToast("success", t('giftCardApplied'));
     } catch (error) {
       console.error("Gift card lookup failed:", error);
-      showToast("error", "Unable to apply gift card.");
+      showToast("error", t('unableToApplyGiftCard'));
     } finally {
       setIsApplyingGiftCard(false);
     }
@@ -927,8 +942,8 @@ export default function PaymentScreen(props: PaymentScreenProps) {
                 </View>
                 <View style={styles.splitHeaderRow}>
                   {[
-                    { id: 0, label: "Cash" },
-                    { id: 1, label: "Card" },
+                    { id: 0, label: t('cash') },
+                    { id: 1, label: t('card') },
                   ].map((method) => {
                     const selected = splitPaymentMethod === method.id;
                     return (
@@ -1016,7 +1031,7 @@ export default function PaymentScreen(props: PaymentScreenProps) {
                   </Text>
                   <TextInput
                     keyboardType="numeric"
-                    placeholder="Enter cash amount"
+                    placeholder={t('enterCashAmount')}
                     placeholderTextColor={colors.textSecondary}
                     value={cashProvided}
                     onChangeText={setCashProvided}
@@ -1307,11 +1322,11 @@ export default function PaymentScreen(props: PaymentScreenProps) {
                     }}
                   >
                     {isSplitMode && splitRemainingAmount > 0
-                      ? "Delivery charge is applied only when the final split is settled."
+                      ? t('deliveryChargeAppliedOnlyWhenFinalSplitSettled')
                       : isAddressDeliveryChargeLocked
                         ? lockedDeliveryChargeSource === "address"
-                          ? "This charge came from the selected address. Enter PIN to override it."
-                          : "This charge came from settings. Enter PIN to override it."
+                          ? t('deliveryChargeInstructionSelectedAddress')
+                          : t('deliveryChargeInstructionSettings')
                         : currentSelectedAddressDeliveryCharge != null
                           ? t('deliveryChargeUnlockedAddress')
                           : resolvedSettingsDeliveryCharge != null
