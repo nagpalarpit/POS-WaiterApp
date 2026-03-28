@@ -1,9 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../constants/storageKeys';
 import localDatabase from '../services/localDatabase';
 import { ORDER_STATUS } from '../utils/orderUtils';
-import { onOrderSync } from '../services/orderSyncService';
+import {
+  isRemoteOrderSyncEvent,
+  onOrderSync,
+} from '../services/orderSyncService';
 
 export const DELIVERY_TYPE = {
   DINE_IN: 0,
@@ -37,6 +40,7 @@ export const useOrdersData = () => {
   const [pickupOrders, setPickupOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncRefreshToken, setSyncRefreshToken] = useState(0);
+  const syncRefreshShowLoaderRef = useRef(false);
 
   const toNumber = (value: unknown, fallback = 0): number => {
     if (typeof value === 'number') return Number.isFinite(value) ? value : fallback;
@@ -84,9 +88,11 @@ export const useOrdersData = () => {
   /**
    * Fetch all orders from local database
    */
-  const fetchOrders = async () => {
+  const fetchOrders = async (showLoader: boolean = true) => {
     try {
-      setLoading(true);
+      if (showLoader) {
+        setLoading(true);
+      }
 
       // Get user info from AsyncStorage to retrieve companyId
       const userDataStr = await AsyncStorage.getItem(STORAGE_KEYS.authUser);
@@ -124,7 +130,9 @@ export const useOrdersData = () => {
     } catch (error) {
       console.error('Error fetching orders:', error);
     } finally {
-      setLoading(false);
+      if (showLoader) {
+        setLoading(false);
+      }
     }
   };
 
@@ -137,6 +145,8 @@ export const useOrdersData = () => {
     const unsubscribe = onOrderSync((event) => {
       const type = (event?.eventType || 'ORDER_SYNC').toUpperCase();
       if (type.endsWith('LOCK') || type === 'UNLOCK') return;
+
+      syncRefreshShowLoaderRef.current = !isRemoteOrderSyncEvent(event);
       setSyncRefreshToken((current) => current + 1);
     });
     return () => { unsubscribe(); };
@@ -144,11 +154,13 @@ export const useOrdersData = () => {
 
   useEffect(() => {
     if (syncRefreshToken > 0) {
+      const showLoader = syncRefreshShowLoaderRef.current;
+      syncRefreshShowLoaderRef.current = false;
       const timeoutId = setTimeout(() => {
-        void fetchOrders();
+        void fetchOrders(showLoader);
       }, 300);
 
-      void fetchOrders();
+      void fetchOrders(showLoader);
 
       return () => clearTimeout(timeoutId);
     }
