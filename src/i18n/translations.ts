@@ -880,7 +880,7 @@ export const TRANSLATIONS: Record<AppLanguage, TranslationDictionary> = {
   de: DE,
 };
 
-export const DEFAULT_LANGUAGE: AppLanguage = 'en';
+export const DEFAULT_LANGUAGE: AppLanguage = 'de';
 
 export function isSupportedLanguage(value: unknown): value is AppLanguage {
   return value === 'en' || value === 'de';
