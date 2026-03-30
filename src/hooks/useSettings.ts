@@ -151,16 +151,19 @@ export const useSettings = () => {
       }
 
       const handleSyncSettings = (payload: any) => {
+        const syncPayload =
+          payload && typeof payload === 'object' ? payload : {};
+
         setSettings((current) => {
           const nextDeliveryCharge =
-            payload?.deliveryCharge !== undefined && payload?.deliveryCharge !== ''
-              ? Number(payload.deliveryCharge) || 0
+            syncPayload?.deliveryCharge !== undefined && syncPayload?.deliveryCharge !== ''
+              ? Number(syncPayload.deliveryCharge) || 0
               : current?.deliveryCharge ?? null;
 
           return {
             ...DEFAULT_SETTINGS,
             ...(current || {}),
-            ...(payload || {}),
+            ...syncPayload,
             deliveryCharge: nextDeliveryCharge,
             company: {
               ...(current?.company || {}),
@@ -168,7 +171,35 @@ export const useSettings = () => {
           };
         });
 
-        void loadSettings();
+        void (async () => {
+          if (Array.isArray(syncPayload?.tableAreas)) {
+            try {
+              const userDataStr = await AsyncStorage.getItem(STORAGE_KEYS.authUser);
+              const userData = userDataStr ? JSON.parse(userDataStr) : null;
+              const companyId =
+                syncPayload?.companyId ??
+                userData?.companyId ??
+                userData?.company?.id;
+
+              if (companyId !== undefined && companyId !== null) {
+                await localDatabase.update(
+                  'settings',
+                  {
+                    'settingInfo.tableAreas': syncPayload.tableAreas,
+                    updateAll: true,
+                  },
+                  {
+                    where: { companyId },
+                  }
+                );
+              }
+            } catch (error) {
+              console.warn('useSettings: Failed to persist synced table areas:', error);
+            }
+          }
+
+          await loadSettings();
+        })();
       };
 
       socket.on('sync-settings', handleSyncSettings);

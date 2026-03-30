@@ -167,6 +167,15 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
 
     if (!selectedTableArea || !stillExists) {
       setSelectedTableArea(tableAreaList[0]);
+      return;
+    }
+
+    const latestSelectedArea = tableAreaList.find(
+      (area: any) => area?.id === selectedTableArea?.id
+    );
+
+    if (latestSelectedArea && latestSelectedArea !== selectedTableArea) {
+      setSelectedTableArea(latestSelectedArea);
     }
   }, [tableAreaList, selectedTableArea]);
 
