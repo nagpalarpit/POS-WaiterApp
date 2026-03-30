@@ -51,6 +51,13 @@ export const API_ENDPOINTS = {
     GET_ALL: `${API_V1}admin/giftCard/getAllGiftCards`,
   },
 
+  deliverySetting: {
+    CREATE: `${API_V1}admin/deliverySetting/create`,
+    UPDATE: `${API_V1}admin/deliverySetting/update`,
+    LIST: `${API_V1}admin/deliverySetting/list`,
+    DELETE: `${API_V1}admin/deliverySetting/softDelete`,
+  },
+
   // Local API endpoints for waiter app
   local: {
     // Orders

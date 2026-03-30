@@ -13,8 +13,10 @@ import {
 import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import BottomDrawer from './BottomDrawer';
 import { useTheme } from '../theme/ThemeProvider';
+import { useToast } from './ToastProvider';
 import customerService from '../services/customerService';
 import deliverySettingService, {
+  DeliverySettingCreatePayload,
   DeliverySettingRecord,
 } from '../services/deliverySettingService';
 import { Customer, CustomerAddress, CustomerUpsertPayload } from '../types/customer';
@@ -54,8 +56,22 @@ type PincodePickerState = {
   query: string;
 } | null;
 
+type DeliverySettingFormState = {
+  zipCode: string;
+  city: string;
+  minimumOrderValue: string;
+  deliveryCharge: string;
+};
+
 const createLocalKey = () =>
   `customer_address_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+const createDeliverySettingFormState = (): DeliverySettingFormState => ({
+  zipCode: '',
+  city: '',
+  minimumOrderValue: '0',
+  deliveryCharge: '0',
+});
 
 const toTrimmedString = (value: unknown): string => {
   if (typeof value !== 'string') return '';
@@ -211,6 +227,7 @@ export default function CustomerDrawer({
 }: CustomerDrawerProps) {
   const { colors } = useTheme();
   const { t } = useTranslation();
+  const { showToast } = useToast();
   const { settings } = useSettings();
   const [mode, setMode] = useState<'list' | 'form'>('list');
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -225,6 +242,13 @@ export default function CustomerDrawer({
     DeliverySettingOption[]
   >([]);
   const [pincodePicker, setPincodePicker] = useState<PincodePickerState>(null);
+  const [deliverySettingDrawerVisible, setDeliverySettingDrawerVisible] = useState(false);
+  const [deliverySettingTargetKey, setDeliverySettingTargetKey] = useState<string | null>(null);
+  const [deliverySettingForm, setDeliverySettingForm] = useState<DeliverySettingFormState>(
+    () => createDeliverySettingFormState(),
+  );
+  const [deliverySettingErrors, setDeliverySettingErrors] = useState<Record<string, string>>({});
+  const [savingDeliverySetting, setSavingDeliverySetting] = useState(false);
   const deliverySettings = useMemo(
     () =>
       liveDeliverySettings.length > 0
@@ -242,6 +266,10 @@ export default function CustomerDrawer({
       setSearchQuery('');
       setLiveDeliverySettings([]);
       setPincodePicker(null);
+      setDeliverySettingDrawerVisible(false);
+      setDeliverySettingTargetKey(null);
+      setDeliverySettingForm(createDeliverySettingFormState());
+      setDeliverySettingErrors({});
       return;
     }
 
@@ -470,6 +498,107 @@ export default function CustomerDrawer({
           }
         : current,
     );
+  };
+
+  const closeDeliverySettingDrawer = () => {
+    Keyboard.dismiss();
+    setDeliverySettingDrawerVisible(false);
+    setDeliverySettingTargetKey(null);
+    setDeliverySettingForm(createDeliverySettingFormState());
+    setDeliverySettingErrors({});
+  };
+
+  const openDeliverySettingDrawer = (address: CustomerFormAddress) => {
+    Keyboard.dismiss();
+    updateForm({ selectedAddressKey: address.localKey });
+    setPincodePicker(null);
+    setDeliverySettingTargetKey(address.localKey);
+    setDeliverySettingForm(createDeliverySettingFormState());
+    setDeliverySettingErrors({});
+    setDeliverySettingDrawerVisible(true);
+  };
+
+  const updateDeliverySettingForm = (patch: Partial<DeliverySettingFormState>) => {
+    setDeliverySettingForm((current) => ({ ...current, ...patch }));
+  };
+
+  const sanitizeDecimalInput = (value: string) => {
+    const sanitized = value.replace(/[^0-9.]/g, '');
+    const [first = '', ...rest] = sanitized.split('.');
+    return rest.length > 0 ? `${first}.${rest.join('')}` : sanitized;
+  };
+
+  const validateDeliverySettingForm = () => {
+    const nextErrors: Record<string, string> = {};
+
+    if (!deliverySettingForm.zipCode.trim()) {
+      nextErrors.zipCode = t('pincodeIsRequired');
+    }
+
+    if (!deliverySettingForm.city.trim()) {
+      nextErrors.city = t('cityIsRequired');
+    }
+
+    setDeliverySettingErrors(nextErrors);
+    return Object.keys(nextErrors).length === 0;
+  };
+
+  const mergeLiveDeliverySetting = (setting: DeliverySettingOption) => {
+    setLiveDeliverySettings((current) => {
+      const base = current.length > 0 ? [...current] : [...deliverySettings];
+      const existingIndex = base.findIndex(
+        (item) => `${item.id ?? ''}` === `${setting.id ?? ''}`,
+      );
+
+      if (existingIndex >= 0) {
+        base[existingIndex] = setting;
+      } else {
+        base.push(setting);
+      }
+
+      return base;
+    });
+  };
+
+  const handleSaveDeliverySetting = async () => {
+    if (!deliverySettingTargetKey) {
+      return;
+    }
+
+    if (!validateDeliverySettingForm()) {
+      return;
+    }
+
+    try {
+      setSavingDeliverySetting(true);
+
+      const city = deliverySettingForm.city.trim();
+      const cityExists = await deliverySettingService.checkCityExists(city);
+      if (cityExists) {
+        showToast('error', t('cityExists'));
+        return;
+      }
+
+      const companyId = Number(settings?.companyId ?? settings?.company?.id ?? 0) || 0;
+      const payload: DeliverySettingCreatePayload = {
+        companyId,
+        zipCode: deliverySettingForm.zipCode.trim(),
+        city,
+        minimumOrderValue: Number(sanitizeDecimalInput(deliverySettingForm.minimumOrderValue) || '0'),
+        deliveryCharge: Number(sanitizeDecimalInput(deliverySettingForm.deliveryCharge) || '0'),
+      };
+
+      const createdSetting = await deliverySettingService.createDeliverySetting(payload);
+      mergeLiveDeliverySetting(createdSetting);
+      applyDeliverySetting(deliverySettingTargetKey, createdSetting);
+      showToast('success', t('deliverySettingAdd'));
+      closeDeliverySettingDrawer();
+    } catch (error) {
+      console.error('CustomerDrawer: Failed to create delivery setting', error);
+      showToast('error', t('unexpectedErrorOccurred'));
+    } finally {
+      setSavingDeliverySetting(false);
+    }
   };
 
   const validateForm = () => {
@@ -792,6 +921,50 @@ export default function CustomerDrawer({
         {t('done')}
       </Text>
     </TouchableOpacity>
+  );
+
+  const deliverySettingFooter = (
+    <View style={{ flexDirection: 'row', gap: 10 }}>
+      <TouchableOpacity
+        onPress={closeDeliverySettingDrawer}
+        disabled={savingDeliverySetting}
+        style={{
+          flex: 1,
+          borderRadius: 14,
+          borderWidth: 1,
+          borderColor: colors.border,
+          backgroundColor: colors.surface,
+          minHeight: 48,
+          alignItems: 'center',
+          justifyContent: 'center',
+          opacity: savingDeliverySetting ? 0.6 : 1,
+        }}
+      >
+        <Text style={{ color: colors.text, fontWeight: '700' }}>{t('cancel')}</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        onPress={handleSaveDeliverySetting}
+        disabled={savingDeliverySetting}
+        style={{
+          flex: 1.1,
+          borderRadius: 14,
+          backgroundColor: colors.primary,
+          minHeight: 48,
+          alignItems: 'center',
+          justifyContent: 'center',
+          opacity: savingDeliverySetting ? 0.8 : 1,
+        }}
+      >
+        {savingDeliverySetting ? (
+          <ActivityIndicator color={colors.textInverse || '#fff'} />
+        ) : (
+          <Text style={{ color: colors.textInverse || '#fff', fontWeight: '800' }}>
+            {t('save')}
+          </Text>
+        )}
+      </TouchableOpacity>
+    </View>
   );
 
   return (
@@ -1178,7 +1351,7 @@ export default function CustomerDrawer({
                 }}
               >
                 <MaterialCommunityIcons
-                  name="map-marker-plus-outline"
+                  name="home-plus-outline"
                   size={20}
                   color={colors.text}
                 />
@@ -1264,14 +1437,100 @@ export default function CustomerDrawer({
                     multiline: true,
                   })}
 
-                  {renderPickerField({
-                    label: `${t('pincode')} *`,
-                    value: address.pincode,
-                    onPress: () => openPincodePicker(address),
-                    placeholder: t('tapToSearchPostCodeOrCity'),
-                    error: errors[`pincode-${address.localKey}`],
-                    disabled: loadingDeliverySettings,
-                  })}
+                  <View style={{ marginBottom: 14 }}>
+                    <View
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        marginBottom: 8,
+                        gap: 10,
+                      }}
+                    >
+                      <Text style={[styles.fieldLabel, { color: colors.text, marginBottom: 0, flex: 1 }]}>
+                        {`${t('pincode')} *`}
+                      </Text>
+                      <TouchableOpacity
+                        onPress={() => openDeliverySettingDrawer(address)}
+                        style={{
+                          height: 34,
+                          minWidth: 34,
+                          borderRadius: 10,
+                          borderWidth: 1,
+                          borderColor: colors.border,
+                          backgroundColor: colors.surfaceHover || colors.background,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          paddingHorizontal: 8,
+                        }}
+                      >
+                        <MaterialCommunityIcons
+                          name="map-marker-plus-outline"
+                          size={18}
+                          color={colors.text}
+                        />
+                      </TouchableOpacity>
+                    </View>
+                    <TouchableOpacity
+                      onPress={() => openPincodePicker(address)}
+                      disabled={loadingDeliverySettings}
+                      activeOpacity={0.85}
+                      style={{
+                        minHeight: 48,
+                        borderWidth: 1,
+                        borderColor: errors[`pincode-${address.localKey}`]
+                          ? colors.error || '#f26e73'
+                          : colors.border,
+                        borderRadius: 14,
+                        backgroundColor: colors.surface,
+                        paddingHorizontal: 14,
+                        paddingVertical: 10,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        opacity: loadingDeliverySettings ? 0.65 : 1,
+                      }}
+                    >
+                      <View
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          flex: 1,
+                          paddingRight: 10,
+                        }}
+                      >
+                        <MaterialCommunityIcons
+                          name="map-search-outline"
+                          size={18}
+                          color={address.pincode ? colors.primary : colors.textSecondary}
+                        />
+                        <Text
+                          numberOfLines={1}
+                          style={{
+                            marginLeft: 10,
+                            color: address.pincode ? colors.text : colors.textSecondary,
+                            flex: 1,
+                          }}
+                        >
+                          {address.pincode || t('tapToSearchPostCodeOrCity')}
+                        </Text>
+                      </View>
+                      {loadingDeliverySettings ? (
+                        <ActivityIndicator size="small" color={colors.primary} />
+                      ) : (
+                        <MaterialIcons
+                          name="keyboard-arrow-right"
+                          size={22}
+                          color={colors.textSecondary}
+                        />
+                      )}
+                    </TouchableOpacity>
+                    {errors[`pincode-${address.localKey}`] ? (
+                      <Text style={{ color: colors.error || '#f26e73', fontSize: 11, marginTop: 6 }}>
+                        {errors[`pincode-${address.localKey}`]}
+                      </Text>
+                    ) : null}
+                  </View>
 
                   {loadingDeliverySettings ? (
                     <View style={{ marginTop: -6, marginBottom: 12, flexDirection: 'row', alignItems: 'center' }}>
@@ -1461,6 +1720,59 @@ export default function CustomerDrawer({
               </TouchableOpacity>
             ))
           )}
+        </View>
+      </BottomDrawer>
+
+      <BottomDrawer
+        visible={visible && deliverySettingDrawerVisible}
+        onClose={closeDeliverySettingDrawer}
+        title={t('deliverySetting')}
+        subtitle={t('addDeliverySetting')}
+        fullHeight
+        maxHeightRatio={0.84}
+        footer={deliverySettingFooter}
+      >
+        <View>
+          {renderField({
+            label: t('zipCode'),
+            value: deliverySettingForm.zipCode,
+            onChangeText: (value) =>
+              updateDeliverySettingForm({ zipCode: value }),
+            placeholder: t('pincode'),
+            error: deliverySettingErrors.zipCode,
+            keyboardType: 'number-pad',
+          })}
+
+          {renderField({
+            label: t('city'),
+            value: deliverySettingForm.city,
+            onChangeText: (value) =>
+              updateDeliverySettingForm({ city: value }),
+            placeholder: t('city'),
+            error: deliverySettingErrors.city,
+          })}
+
+          {renderField({
+            label: t('minimumOrder'),
+            value: deliverySettingForm.minimumOrderValue,
+            onChangeText: (value) =>
+              updateDeliverySettingForm({
+                minimumOrderValue: sanitizeDecimalInput(value),
+              }),
+            placeholder: '0',
+            keyboardType: 'number-pad',
+          })}
+
+          {renderField({
+            label: t('deliveryCharge'),
+            value: deliverySettingForm.deliveryCharge,
+            onChangeText: (value) =>
+              updateDeliverySettingForm({
+                deliveryCharge: sanitizeDecimalInput(value),
+              }),
+            placeholder: '0',
+            keyboardType: 'number-pad',
+          })}
         </View>
       </BottomDrawer>
     </>
