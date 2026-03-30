@@ -1,4 +1,4 @@
-import React, { useState, useLayoutEffect, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useLayoutEffect, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
   View,
   TouchableOpacity,
@@ -87,6 +87,7 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
   const { showToast } = useToast();
   const settingsData = useSettings();
   const groupLabelEnabled = settingsData.settings?.enableGroupLabel === true;
+  const canUseGroupLabel = groupLabelEnabled && deliveryType === 0;
 
   // Local state
   const [showItemDetail, setShowItemDetail] = useState(false);
@@ -129,6 +130,34 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
           familyName: existingOrder?.orderDetails?.familyName ?? '',
         }
       : null;
+
+  const normalizeCartGroupData = useCallback(async (cart: any) => {
+    if (deliveryType === 0) {
+      return cart;
+    }
+
+    const normalizedCart = {
+      ...cart,
+      items: Array.isArray(cart?.items)
+        ? cart.items.map((item: any) => ({
+            ...item,
+            groupType: 1,
+            groupLabel: '',
+          }))
+        : [],
+      removedItems: Array.isArray(cart?.removedItems)
+        ? cart.removedItems.map((item: any) => ({
+            ...item,
+            groupType: 1,
+            groupLabel: '',
+          }))
+        : [],
+    };
+
+    cartService.setActiveGroup(1, '');
+    await cartService.saveCart(normalizedCart);
+    return normalizedCart;
+  }, [deliveryType]);
 
   const isVoucherCategory = (category: any) =>
     String(category?.categoryType || '')
@@ -372,18 +401,21 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
     const hydrateCart = async () => {
       try {
         const orderCart = await cartService.setCartFromOrder(existingOrder);
-        cartData.setCart(orderCart);
+        const resolvedCart = await normalizeCartGroupData(orderCart);
+        cartData.setCart(resolvedCart);
 
         const isTableOrder =
           !!tableNo &&
           (deliveryType === 0 ||
             existingOrder?.orderDetails?.orderDeliveryTypeId === 0);
 
-        if (isTableOrder && orderCart.items.length > 0) {
-          const lastItem = orderCart.items[orderCart.items.length - 1];
+        if (isTableOrder && resolvedCart.items.length > 0) {
+          const lastItem = resolvedCart.items[resolvedCart.items.length - 1];
           const groupType = lastItem?.groupType || 1;
           const groupLabel = lastItem?.groupLabel || '';
           cartService.setActiveGroup(groupType, groupLabel);
+        } else if (deliveryType !== 0) {
+          cartService.setActiveGroup(1, '');
         }
 
         await lockOrder(existingOrder);
@@ -392,7 +424,28 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
       }
     };
     hydrateCart();
-  }, [existingOrder, cartData.setCart, tableNo, deliveryType, navigation, showToast, t]);
+  }, [existingOrder, cartData.setCart, tableNo, deliveryType, navigation, normalizeCartGroupData, showToast, t]);
+
+  useEffect(() => {
+    if (deliveryType === 0) {
+      return;
+    }
+
+    const hasCustomGrouping =
+      cartData.cart.items.some((item) => (item.groupType || 1) !== 1 || !!item.groupLabel) ||
+      (cartData.cart.removedItems || []).some(
+        (item: any) => (item.groupType || 1) !== 1 || !!item.groupLabel,
+      );
+
+    if (!hasCustomGrouping) {
+      cartService.setActiveGroup(1, '');
+      return;
+    }
+
+    void normalizeCartGroupData(cartData.cart).then((normalizedCart: any) => {
+      cartData.setCart(normalizedCart);
+    });
+  }, [cartData.cart, cartData.setCart, deliveryType, normalizeCartGroupData]);
 
   useEffect(() => {
     if (existingOrder) return;
@@ -427,11 +480,11 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
 
 
   const handleAddGroup = () => {
-    const cart = cartData.cart;
-    if (!groupLabelEnabled) {
-      cartService.startNewGroup(cart);
+    if (!canUseGroupLabel) {
+      cartService.setActiveGroup(1, '');
       return;
     }
+    const cart = cartData.cart;
     setGroupModalMode('addGroup');
     setShowGroupModal(true);
   };
@@ -523,7 +576,7 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
       ),
       headerRight: () => (
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-          {groupLabelEnabled ? (
+          {canUseGroupLabel ? (
             <TouchableOpacity
               onPress={handleAddGroup}
               style={{ padding: 8 }}
@@ -563,7 +616,7 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
     deliveryType,
     cartNotes,
     cartData.cart.currentUser,
-    groupLabelEnabled,
+    canUseGroupLabel,
     handleAddGroup,
     t,
   ]);
@@ -578,7 +631,7 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
     resolvedItem?: any;
     voucherCategories?: any[];
   }) => {
-    if (!groupLabelEnabled) return true;
+    if (!canUseGroupLabel) return true;
 
     if (cartService.useTempGroupIfAvailable()) {
       return true;
@@ -726,8 +779,10 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
     attributeValues?: any[]
   ) => {
     try {
-      if (groupLabelEnabled) {
+      if (canUseGroupLabel) {
         cartService.useTempGroupIfAvailable();
+      } else {
+        cartService.setActiveGroup(1, '');
       }
       await cartData.addToCartDirect(
         category,
@@ -889,8 +944,10 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
     };
 
     try {
-      if (groupLabelEnabled) {
+      if (canUseGroupLabel) {
         cartService.useTempGroupIfAvailable();
+      } else {
+        cartService.setActiveGroup(1, '');
       }
       await cartData.addToCartDirect(categoryToUse, item, null, null, undefined);
       setShowAddExtraModal(false);

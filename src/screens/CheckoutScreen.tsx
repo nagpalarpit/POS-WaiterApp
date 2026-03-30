@@ -298,7 +298,22 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
     selectedCustomer?.mobileNo ||
     '';
   const selectedCustomerAddressText = formatCustomerAddress(selectedCustomerAddress);
+  const shouldShowGroupSections = deliveryType === 0;
   const groupedItems = useMemo(() => {
+    if (!shouldShowGroupSections) {
+      return [
+        {
+          groupType: 1,
+          items: checkoutCart.items.map((item) => ({
+            ...item,
+            groupType: 1,
+            groupLabel: '',
+          })),
+          label: '',
+        },
+      ];
+    }
+
     const groups = checkoutCart.items.reduce(
       (acc: Record<number, CartItem[]>, item) => {
         const groupType = item.groupType || 1;
@@ -318,7 +333,7 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
           groups[groupType].find((item) => item.groupLabel)?.groupLabel ||
           `Gange ${groupType}`,
       }));
-  }, [checkoutCart.items]);
+  }, [checkoutCart.items, shouldShowGroupSections]);
   const [expandedGroupType, setExpandedGroupType] = useState<number | null>(null);
   const groupCount = groupedItems.length;
   const latestGroupType =
@@ -791,42 +806,46 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
         ) : null}
 
         {checkoutCart.items.length > 0 ? (
-          groupedItems.map((group) => {
-            const isExpanded = groupCount <= 1 || expandedGroupType === group.groupType;
-            return (
-              <View key={`group-${group.groupType}`} style={{ marginBottom: 12 }}>
-                <TouchableOpacity
-                  onPress={() => {
-                    if (groupCount > 1) setExpandedGroupType(group.groupType);
-                  }}
-                  style={{
-                    paddingHorizontal: 10,
-                    paddingVertical: 8,
-                    borderRadius: 10,
-                    borderWidth: 1,
-                    borderColor: colors.border,
-                    backgroundColor: colors.surface,
-                    marginBottom: 8,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                  }}
-                >
-                  <Text style={{ color: colors.text, fontWeight: '700' }}>
-                    {group.label}
-                  </Text>
-                  {groupCount > 1 ? (
-                    <MaterialCommunityIcons
-                      name={isExpanded ? 'chevron-up' : 'chevron-down'}
-                      size={18}
-                      color={colors.textSecondary}
-                    />
-                  ) : null}
-                </TouchableOpacity>
-                {isExpanded ? group.items.map((item, index) => renderOrderItem(item, index)) : null}
-              </View>
-            );
-          })
+          shouldShowGroupSections ? (
+            groupedItems.map((group) => {
+              const isExpanded = groupCount <= 1 || expandedGroupType === group.groupType;
+              return (
+                <View key={`group-${group.groupType}`} style={{ marginBottom: 12 }}>
+                  <TouchableOpacity
+                    onPress={() => {
+                      if (groupCount > 1) setExpandedGroupType(group.groupType);
+                    }}
+                    style={{
+                      paddingHorizontal: 10,
+                      paddingVertical: 8,
+                      borderRadius: 10,
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      backgroundColor: colors.surface,
+                      marginBottom: 8,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                    }}
+                  >
+                    <Text style={{ color: colors.text, fontWeight: '700' }}>
+                      {group.label}
+                    </Text>
+                    {groupCount > 1 ? (
+                      <MaterialCommunityIcons
+                        name={isExpanded ? 'chevron-up' : 'chevron-down'}
+                        size={18}
+                        color={colors.textSecondary}
+                      />
+                    ) : null}
+                  </TouchableOpacity>
+                  {isExpanded ? group.items.map((item, index) => renderOrderItem(item, index)) : null}
+                </View>
+              );
+            })
+          ) : (
+            checkoutCart.items.map((item, index) => renderOrderItem(item, index))
+          )
         ) : (
           <View
             style={[

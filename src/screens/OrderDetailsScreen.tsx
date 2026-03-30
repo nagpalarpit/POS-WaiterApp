@@ -741,6 +741,8 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
     workingOrderDetails || order?.orderDetails || {};
   const resolvedCompanyId =
     Number(order.companyId || displayedOrderDetails?.companyId || 0) || 0;
+  const shouldShowGroupSections =
+    Number(displayedOrderDetails?.orderDeliveryTypeId ?? 0) === 0;
 
   const rawItems = displayedOrderDetails?.orderItem || [];
   const items = useMemo(
@@ -751,6 +753,20 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
     [rawItems],
   );
   const groupedItems = useMemo(() => {
+    if (!shouldShowGroupSections) {
+      return [
+        {
+          groupType: 1,
+          items: items.map((item: any) => ({
+            ...item,
+            groupType: 1,
+            groupLabel: '',
+          })),
+          label: '',
+        },
+      ];
+    }
+
     const groups = items.reduce((acc: Record<number, any[]>, item: any) => {
       const groupType = item.groupType || 1;
       if (!acc[groupType]) acc[groupType] = [];
@@ -767,7 +783,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
         groups[groupType].find((item: any) => item.groupLabel)?.groupLabel ||
         `Gange ${groupType}`,
     }));
-  }, [items]);
+  }, [items, shouldShowGroupSections]);
 
   const splitPaymentItems = useMemo(
     () =>
@@ -3000,53 +3016,57 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
             </Text>
           </Card>
         ) : activeSection === "items" ? (
-          groupedItems.map((group) => {
-            const isExpanded =
-              groupCount <= 1 || expandedGroupType === group.groupType;
+          shouldShowGroupSections ? (
+            groupedItems.map((group) => {
+              const isExpanded =
+                groupCount <= 1 || expandedGroupType === group.groupType;
 
-            return (
-              <View
-                key={`group-${group.groupType}`}
-                style={{ marginBottom: 12 }}
-              >
-                <TouchableOpacity
-                  activeOpacity={groupCount > 1 ? 0.8 : 1}
-                  onPress={() => {
-                    if (groupCount > 1) {
-                      setExpandedGroupType(group.groupType);
-                    }
-                  }}
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    paddingHorizontal: 12,
-                    paddingVertical: 8,
-                    borderRadius: 10,
-                    borderWidth: 1,
-                    borderColor: colors.border,
-                    backgroundColor: colors.surface,
-                    marginBottom: 8,
-                  }}
+              return (
+                <View
+                  key={`group-${group.groupType}`}
+                  style={{ marginBottom: 12 }}
                 >
-                  <Text style={{ color: colors.text, fontWeight: "700" }}>
-                    {group.label}
-                  </Text>
-                  {groupCount > 1 ? (
-                    <MaterialCommunityIcons
-                      name={isExpanded ? "chevron-up" : "chevron-down"}
-                      size={18}
-                      color={colors.textSecondary}
-                    />
-                  ) : null}
-                </TouchableOpacity>
+                  <TouchableOpacity
+                    activeOpacity={groupCount > 1 ? 0.8 : 1}
+                    onPress={() => {
+                      if (groupCount > 1) {
+                        setExpandedGroupType(group.groupType);
+                      }
+                    }}
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      paddingHorizontal: 12,
+                      paddingVertical: 8,
+                      borderRadius: 10,
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      backgroundColor: colors.surface,
+                      marginBottom: 8,
+                    }}
+                  >
+                    <Text style={{ color: colors.text, fontWeight: "700" }}>
+                      {group.label}
+                    </Text>
+                    {groupCount > 1 ? (
+                      <MaterialCommunityIcons
+                        name={isExpanded ? "chevron-up" : "chevron-down"}
+                        size={18}
+                        color={colors.textSecondary}
+                      />
+                    ) : null}
+                  </TouchableOpacity>
 
-                {isExpanded
-                  ? group.items.map((it: any) => renderItemCard(it))
-                  : null}
-              </View>
-            );
-          })
+                  {isExpanded
+                    ? group.items.map((it: any) => renderItemCard(it))
+                    : null}
+                </View>
+              );
+            })
+          ) : (
+            items.map((it: any) => renderItemCard(it))
+          )
         ) : activeSection === "notes" ? (
           <Card style={{ padding: 12, borderColor: colors.border }}>
             <Text

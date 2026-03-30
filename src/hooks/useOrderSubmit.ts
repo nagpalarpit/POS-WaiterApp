@@ -179,6 +179,7 @@ export const useOrderSubmit = (
   ): PlaceOrderItemPayload[] => {
     const discountId = cart.discount?.discountId ?? null;
     const sourceItems = itemsOverride ?? cart.items;
+    const shouldUseSingleGroup = deliveryType === 1 || deliveryType === 2;
     return sourceItems.map((item: CartItem) => {
       const orderItem: PlaceOrderItemPayload = {
         companyId,
@@ -191,8 +192,8 @@ export const useOrderSubmit = (
         quantity: item.quantity,
         unitPrice: `${item.itemPrice || 0}`,
         orderItemNote: item.orderItemNote || '',
-        groupType: item.groupType,
-        groupLabel: item.groupLabel,
+        groupType: shouldUseSingleGroup ? 1 : item.groupType,
+        groupLabel: shouldUseSingleGroup ? '' : item.groupLabel,
         customId: item.customId,
         tax: item.tax,
         discountItems: item.discountItems,
