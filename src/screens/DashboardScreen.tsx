@@ -30,10 +30,23 @@ import { SERVER_BASE_URL } from '../config/urls';
 import { getOrderStatusLabel, ORDER_STATUS } from '../utils/orderUtils';
 import { formatCurrency } from '../utils/currency';
 import { formatOrderServiceTime } from '../utils/orderServiceDisplay';
-import { isOrderLocked, isTableLocked, lockOrder, lockTable } from '../services/orderSyncService';
+import {
+  emitOrderSync,
+  isOrderLocked,
+  isTableLocked,
+  lockOrder,
+  lockTable,
+  unlockOrder,
+} from '../services/orderSyncService';
 import { useToast } from '../components/ToastProvider';
 import cartService from '../services/cartService';
 import OrderTimeModal from '../components/OrderTimeModal';
+import AppBottomSheet from '../components/AppBottomSheet';
+import orderService from '../services/orderService';
+import {
+  getCustomerDisplayName,
+  resolveOrderCustomer,
+} from '../utils/customerData';
 
 // Hooks
 import { useOrdersData, DELIVERY_TYPE, Order } from '../hooks/useOrdersData';
@@ -76,6 +89,10 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
   const [isSearchVisible, setIsSearchVisible] = useState(false);
   const [searchInput, setSearchInput] = useState('');
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
+  const [moveSheetVisible, setMoveSheetVisible] = useState(false);
+  const [movingOrder, setMovingOrder] = useState<Order | null>(null);
+  const [moveTargetTableNo, setMoveTargetTableNo] = useState<number | null>(null);
+  const [isMoveSubmitting, setIsMoveSubmitting] = useState(false);
   const searchAnimation = useRef(new Animated.Value(0)).current;
   const searchInputRef = useRef<TextInput | null>(null);
 
@@ -260,6 +277,174 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
     return null;
   };
 
+  const getAreaNameForTable = (tableNo: number) => {
+    const area = resolveTableAreaForTable(tableNo);
+    return String(area?.name || '').trim();
+  };
+
+  const allMoveTableNumbers = useMemo(() => {
+    if (allAreaTables.length > 0) {
+      return allAreaTables;
+    }
+
+    return tableNumbers;
+  }, [allAreaTables, tableNumbers]);
+
+  const resetMoveSheet = useCallback(() => {
+    setMoveSheetVisible(false);
+    setMovingOrder(null);
+    setMoveTargetTableNo(null);
+    setIsMoveSubmitting(false);
+  }, []);
+
+  const availableMoveTables = useMemo(() => {
+    if (!movingOrder) {
+      return [];
+    }
+
+    const currentTableNo = Number(movingOrder?.orderDetails?.tableNo);
+    const bookedTables = new Set(
+      ordersData.dineInTables
+        .map((order) => Number(order?.orderDetails?.tableNo))
+        .filter((tableNo) => Number.isFinite(tableNo) && tableNo !== currentTableNo)
+    );
+
+    return allMoveTableNumbers
+      .filter((tableNo) => Number.isFinite(tableNo) && tableNo !== currentTableNo)
+      .filter((tableNo) => !bookedTables.has(tableNo))
+      .filter((tableNo) => !isTableLocked(tableNo))
+      .map((tableNo) => ({
+        tableNo,
+        areaName: getAreaNameForTable(tableNo),
+      }));
+  }, [allMoveTableNumbers, movingOrder, ordersData.dineInTables]);
+
+  const handleMoveSheetClose = useCallback(() => {
+    if (movingOrder && !isMoveSubmitting) {
+      void unlockOrder(movingOrder);
+    }
+    resetMoveSheet();
+  }, [isMoveSubmitting, movingOrder, resetMoveSheet]);
+
+  const handleMoveTablePress = useCallback(
+    (order: Order, event?: any) => {
+      event?.stopPropagation?.();
+
+      if (!order) {
+        return;
+      }
+
+      if (isOrderLocked(order)) {
+        const label = getOrderDisplayLabel(order);
+        showToast('error', `${label} ${t('handledOnAnotherDevice')} ${t('pleaseTryLater')}`);
+        return;
+      }
+
+      void lockOrder(order);
+      setMovingOrder(order);
+      setMoveTargetTableNo(null);
+      setMoveSheetVisible(true);
+    },
+    [getOrderDisplayLabel, showToast, t]
+  );
+
+  const handleConfirmMoveTable = useCallback(async () => {
+    if (!movingOrder) {
+      return;
+    }
+
+    if (!moveTargetTableNo) {
+      showToast('error', t('selectNewTable'));
+      return;
+    }
+
+    const currentTableNo = Number(movingOrder?.orderDetails?.tableNo);
+    const orderNumber =
+      movingOrder?.customOrderId ||
+      (movingOrder as any)?.orderDetails?.customOrderId ||
+      movingOrder?._id ||
+      movingOrder?.id;
+
+    const destinationOccupied = ordersData.dineInTables.some((order) => {
+      const tableNo = Number(order?.orderDetails?.tableNo);
+      const compareOrderNumber =
+        order?.customOrderId ||
+        (order as any)?.orderDetails?.customOrderId ||
+        order?._id ||
+        order?.id;
+
+      return tableNo === moveTargetTableNo && `${compareOrderNumber}` !== `${orderNumber}`;
+    });
+
+    if (destinationOccupied || isTableLocked(moveTargetTableNo)) {
+      showToast('error', t('unableToMoveTable'));
+      return;
+    }
+
+    const orderId =
+      movingOrder?._id ||
+      movingOrder?.id ||
+      (movingOrder as any)?.orderId ||
+      (movingOrder as any)?.orderDetails?.localOrderId;
+
+    if (!orderId) {
+      showToast('error', t('unableToMoveTable'));
+      return;
+    }
+
+    try {
+      setIsMoveSubmitting(true);
+
+      const nextTableArea = resolveTableAreaForTable(moveTargetTableNo);
+      const updatedAt = new Date().toISOString();
+      const updatedOrderDetails = {
+        ...(movingOrder.orderDetails || {}),
+        tableNo: moveTargetTableNo,
+        tableArea: nextTableArea,
+        updatedAt,
+      };
+
+      await orderService.updateOrder(`${orderId}`, {
+        orderDetails: updatedOrderDetails,
+        updatedAt,
+      });
+
+      await unlockOrder(movingOrder);
+      await emitOrderSync(
+        'ORDER_UPDATED',
+        {
+          tableNo: moveTargetTableNo,
+          tableArea: nextTableArea,
+          orderNumber,
+        },
+        {
+          orderInfo: {
+            ...updatedOrderDetails,
+            orderNumber,
+          },
+          tableMoved: true,
+          previousTableNo: currentTableNo,
+          newTableNo: moveTargetTableNo,
+        }
+      );
+
+      await ordersData.fetchOrders(false);
+      showToast('success', t('tableMovedSuccessfully'));
+      resetMoveSheet();
+    } catch (error) {
+      console.error('Move table failed:', error);
+      showToast('error', t('unableToMoveTable'));
+      setIsMoveSubmitting(false);
+    }
+  }, [
+    moveTargetTableNo,
+    movingOrder,
+    ordersData,
+    resetMoveSheet,
+    showToast,
+    t,
+  ]);
+
   const normalizeSearchValue = (value: unknown) =>
     String(value ?? '').trim().toLowerCase();
 
@@ -283,6 +468,25 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
     );
 
     return customOrderId.includes(query);
+  };
+
+  const formatOrderCreatedAt = (value?: string | null) => {
+    if (!value) {
+      return '';
+    }
+
+    const normalized = String(value).replace(' ', 'T');
+    const date = new Date(normalized);
+
+    if (Number.isNaN(date.getTime())) {
+      return '';
+    }
+
+    const pad = (part: number) => String(part).padStart(2, '0');
+
+    return `${pad(date.getDate())}.${pad(date.getMonth() + 1)}.${date.getFullYear()} ${pad(
+      date.getHours()
+    )}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
   };
 
   const normalizedSearchTerm = useMemo(
@@ -752,6 +956,12 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
     return unsubscribe;
   }, [navigation]);
 
+  useEffect(() => {
+    if (activeTab !== DELIVERY_TYPE.DINE_IN && moveSheetVisible) {
+      handleMoveSheetClose();
+    }
+  }, [activeTab, handleMoveSheetClose, moveSheetVisible]);
+
   // ===== Render Functions =====
 
   const renderTableStatusBadge = () => {
@@ -989,6 +1199,7 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
             style={{
               width: '32%',
               aspectRatio: 1,
+              position: 'relative',
               borderColor:
                 table.status === 'available'
                   ? colors.success
@@ -1000,9 +1211,35 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
                   ? colors.success + '10'
                   : table.status === 'booked'
                     ? colors.error + '10'
-                    : colors.warning + '10',
+                  : colors.warning + '10',
             }}
           >
+            {table.order ? (
+              <TouchableOpacity
+                onPress={(event) => handleMoveTablePress(table.order as Order, event)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                style={{
+                  position: 'absolute',
+                  top: 8,
+                  right: 8,
+                  width: 30,
+                  height: 30,
+                  borderRadius: 15,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: colors.surface,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  zIndex: 2,
+                }}
+              >
+                <MaterialIcons
+                  name="swap-horiz"
+                  size={18}
+                  color={colors.primary}
+                />
+              </TouchableOpacity>
+            ) : null}
             <Text
               style={{
                 color: colors.textSecondary,
@@ -1039,6 +1276,10 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
       const orderDetails = (order as any)?.orderDetails || {};
       const serviceTimeLabel = formatOrderServiceTime(orderDetails?.pickupDateTime);
       const familyName = String(orderDetails?.familyName || '').trim();
+      const customerName = getCustomerDisplayName(
+        resolveOrderCustomer(orderDetails, (order as any)?.customer)
+      );
+      const createdAtLabel = formatOrderCreatedAt(order.createdAt || (orderDetails as any)?.createdAt);
 
       return (
         <TouchableOpacity
@@ -1059,9 +1300,11 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
               <Text className="font-semibold text-base" style={{ color: colors.text }}>
                 {order.customOrderId || order.id || order._id}
               </Text>
-              <Text className="text-xs mt-1" style={{ color: colors.textSecondary }}>
-                {new Date(order.createdAt || '').toLocaleTimeString()}
-              </Text>
+              {createdAtLabel ? (
+                <Text className="text-xs mt-1" style={{ color: colors.textSecondary }}>
+                  {t('orderedAt')}: {createdAtLabel}
+                </Text>
+              ) : null}
             </View>
             <View
               className="px-2 py-1 rounded-full"
@@ -1081,6 +1324,15 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
               {orderDetails?.orderDeliveryTypeId === DELIVERY_TYPE.DELIVERY ? t('deliveryTime') : t('pickupTime')}: {' '}
               <Text style={{ color: colors.text, fontWeight: '700' }}>
                 {serviceTimeLabel}
+              </Text>
+            </Text>
+          ) : null}
+
+          {customerName ? (
+            <Text className="text-xs mt-1" style={{ color: colors.textSecondary }}>
+              {t('customer')}: {' '}
+              <Text style={{ color: colors.text, fontWeight: '700' }}>
+                {customerName}
               </Text>
             </Text>
           ) : null}
@@ -1344,6 +1596,220 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
         onClose={handleServiceFlowClose}
         onSave={handleServiceFlowSave}
       />
+
+      <AppBottomSheet
+        visible={moveSheetVisible}
+        onClose={handleMoveSheetClose}
+        title={t('moveTable')}
+        subtitle={
+          movingOrder
+            ? `${t('table')} ${movingOrder.orderDetails?.tableNo ?? ''}`
+            : undefined
+        }
+        snapPoints={['70%']}
+        footer={
+          <View
+            style={{
+              flexDirection: 'row',
+              gap: 12,
+              paddingHorizontal: 4,
+            }}
+          >
+            <TouchableOpacity
+              onPress={handleMoveSheetClose}
+              activeOpacity={0.85}
+              disabled={isMoveSubmitting}
+              style={{
+                flex: 1,
+                minHeight: 48,
+                borderRadius: 14,
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderWidth: 1,
+                borderColor: colors.border,
+                backgroundColor: colors.searchBackground || colors.surface,
+                opacity: isMoveSubmitting ? 0.6 : 1,
+              }}
+            >
+              <Text
+                style={{
+                  color: colors.textSecondary || colors.text,
+                  fontWeight: '700',
+                }}
+              >
+                {t('cancel')}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={handleConfirmMoveTable}
+              activeOpacity={0.85}
+              disabled={!moveTargetTableNo || isMoveSubmitting}
+              style={{
+                flex: 1,
+                minHeight: 48,
+                borderRadius: 14,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: colors.primary,
+                opacity: !moveTargetTableNo || isMoveSubmitting ? 0.5 : 1,
+              }}
+            >
+              <Text
+                style={{
+                  color: colors.textInverse,
+                  fontWeight: '800',
+                }}
+              >
+                {isMoveSubmitting ? t('processing') : t('confirm')}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        }
+      >
+        {movingOrder ? (
+          <View
+            style={{
+              borderWidth: 1,
+              borderColor: colors.border,
+              backgroundColor: colors.surface,
+              borderRadius: 18,
+              padding: 16,
+              marginBottom: 18,
+            }}
+          >
+            <Text
+              style={{
+                color: colors.textSecondary,
+                fontSize: 12,
+                fontWeight: '700',
+                textTransform: 'uppercase',
+                letterSpacing: 0.5,
+              }}
+            >
+              {t('currentSelection')}
+            </Text>
+            <Text
+              style={{
+                color: colors.text,
+                fontSize: 22,
+                fontWeight: '800',
+                marginTop: 6,
+              }}
+            >
+              {t('table')} {movingOrder.orderDetails?.tableNo}
+            </Text>
+            <Text
+              style={{
+                color: colors.textSecondary,
+                fontSize: 13,
+                marginTop: 4,
+              }}
+            >
+              {movingOrder.customOrderId || (movingOrder as any)?.orderDetails?.customOrderId || t('order')}
+            </Text>
+          </View>
+        ) : null}
+
+        <Text
+          style={{
+            color: colors.text,
+            fontSize: 16,
+            fontWeight: '700',
+            marginBottom: 12,
+          }}
+        >
+          {t('selectNewTable')}
+        </Text>
+
+        {availableMoveTables.length > 0 ? (
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
+            {availableMoveTables.map((tableOption) => {
+              const isSelected = moveTargetTableNo === tableOption.tableNo;
+
+              return (
+                <TouchableOpacity
+                  key={tableOption.tableNo}
+                  onPress={() => setMoveTargetTableNo(tableOption.tableNo)}
+                  activeOpacity={0.9}
+                  style={{
+                    width: '32%',
+                    borderRadius: 18,
+                    paddingVertical: 14,
+                    paddingHorizontal: 10,
+                    marginBottom: 12,
+                    borderWidth: 1.5,
+                    borderColor: isSelected ? colors.primary : colors.border,
+                    backgroundColor: isSelected
+                      ? `${colors.primary}14`
+                      : colors.surface,
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: isSelected ? colors.primary : colors.textSecondary,
+                      fontSize: 12,
+                      fontWeight: '700',
+                    }}
+                  >
+                    {t('table')}
+                  </Text>
+                  <Text
+                    style={{
+                      color: isSelected ? colors.primary : colors.text,
+                      fontSize: 22,
+                      fontWeight: '800',
+                      marginTop: 4,
+                    }}
+                  >
+                    {tableOption.tableNo}
+                  </Text>
+                  <Text
+                    numberOfLines={1}
+                    style={{
+                      color: colors.textSecondary,
+                      fontSize: 11,
+                      marginTop: 6,
+                    }}
+                  >
+                    {tableOption.areaName || t('notAssigned')}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        ) : (
+          <View
+            style={{
+              borderWidth: 1,
+              borderStyle: 'dashed',
+              borderColor: colors.border,
+              backgroundColor: colors.searchBackground || colors.surface,
+              borderRadius: 18,
+              paddingVertical: 28,
+              paddingHorizontal: 18,
+              alignItems: 'center',
+            }}
+          >
+            <MaterialIcons
+              name="event-busy"
+              size={28}
+              color={colors.textSecondary}
+            />
+            <Text
+              style={{
+                color: colors.text,
+                fontSize: 15,
+                fontWeight: '700',
+                marginTop: 10,
+                textAlign: 'center',
+              }}
+            >
+              {t('noAvailableTablesToMove')}
+            </Text>
+          </View>
+        )}
+      </AppBottomSheet>
     </SafeAreaView>
   );
 }

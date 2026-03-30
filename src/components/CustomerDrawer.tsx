@@ -1054,22 +1054,7 @@ export default function CustomerDrawer({
       ) : (
         <View>
           {renderField({
-            label: t('firstName'),
-            value: form.firstName,
-            onChangeText: (value) => updateForm({ firstName: value }),
-            placeholder: t('enterFirstName'),
-            error: errors.firstName,
-          })}
-
-          {renderField({
-            label: t('lastName'),
-            value: form.lastName,
-            onChangeText: (value) => updateForm({ lastName: value }),
-            placeholder: t('enterLastName'),
-          })}
-
-          {renderField({
-            label: t('mobileNumber'),
+            label: `${t('phoneNumber')} *`,
             value: form.mobileNo,
             onChangeText: (value) => updateForm({ mobileNo: value }),
             placeholder: t('enterMobileNumber'),
@@ -1085,7 +1070,22 @@ export default function CustomerDrawer({
           ) : null}
 
           {renderField({
-            label: t('email'),
+            label: `${t('firstName')} *`,
+            value: form.firstName,
+            onChangeText: (value) => updateForm({ firstName: value }),
+            placeholder: t('enterFirstName'),
+            error: errors.firstName,
+          })}
+
+          {renderField({
+            label: t('lastName'),
+            value: form.lastName,
+            onChangeText: (value) => updateForm({ lastName: value }),
+            placeholder: t('enterLastName'),
+          })}
+
+          {renderField({
+            label: t('customerEmail'),
             value: form.email,
             onChangeText: (value) => updateForm({ email: value }),
             placeholder: t('enterEmailAddress'),
@@ -1151,7 +1151,7 @@ export default function CustomerDrawer({
                 marginBottom: 10,
               }}
             >
-              <View>
+              <View style={{ flex: 1, paddingRight: 12 }}>
                 <Text style={{ color: colors.text, fontSize: 16, fontWeight: '800' }}>
                   {t('addresses')}
                 </Text>
@@ -1163,21 +1163,23 @@ export default function CustomerDrawer({
               <TouchableOpacity
                 onPress={addAddress}
                 accessibilityRole="button"
-                  accessibilityLabel={t('addAddress')}
+                accessibilityLabel={t('addAddress')}
                 style={{
-                  width: 44,
+                  minWidth: 48,
                   height: 44,
-                  borderRadius: 22,
+                  borderRadius: 12,
                   borderWidth: 1,
                   borderColor: colors.border,
                   backgroundColor: colors.surface,
                   alignItems: 'center',
                   justifyContent: 'center',
+                  paddingHorizontal: 12,
+                  flexShrink: 0,
                 }}
               >
                 <MaterialCommunityIcons
                   name="map-marker-plus-outline"
-                  size={22}
+                  size={20}
                   color={colors.text}
                 />
               </TouchableOpacity>
@@ -1254,7 +1256,7 @@ export default function CustomerDrawer({
                   </View>
 
                   {renderField({
-                    label: t('address'),
+                    label: t('streetFlatHouseAddress'),
                     value: address.addressLine1,
                     onChangeText: (value) => updateAddress(address.localKey, { addressLine1: value }),
                     placeholder: t('streetAndHouseNumber'),
@@ -1262,15 +1264,8 @@ export default function CustomerDrawer({
                     multiline: true,
                   })}
 
-                  {renderField({
-                    label: t('landmark'),
-                    value: address.landmark || '',
-                    onChangeText: (value) => updateAddress(address.localKey, { landmark: value }),
-                    placeholder: t('optionalLandmark'),
-                  })}
-
                   {renderPickerField({
-                    label: t('pincode'),
+                    label: `${t('pincode')} *`,
                     value: address.pincode,
                     onPress: () => openPincodePicker(address),
                     placeholder: t('tapToSearchPostCodeOrCity'),
@@ -1288,7 +1283,7 @@ export default function CustomerDrawer({
                   ) : null}
 
                   {renderField({
-                    label: t('city'),
+                    label: `${t('city')} *`,
                     value: address.city,
                     onChangeText: () => undefined,
                     placeholder: t('autoFilledFromPincode'),
@@ -1316,6 +1311,13 @@ export default function CustomerDrawer({
                       </Text>
                     </View>
                   ) : null}
+
+                  {renderField({
+                    label: t('landmark'),
+                    value: address.landmark || '',
+                    onChangeText: (value) => updateAddress(address.localKey, { landmark: value }),
+                    placeholder: t('optionalLandmark'),
+                  })}
                 </View>
               );
             })}

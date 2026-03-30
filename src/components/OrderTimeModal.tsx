@@ -370,8 +370,6 @@ export default function OrderTimeModal({
                 value={manualHour}
                 onChangeText={setManualHour}
                 keyboardType="number-pad"
-                placeholder="00"
-                placeholderTextColor={colors.textSecondary || colors.text}
                 style={[styles.input, { color: colors.text, textAlign: 'center' }]}
               />
             </View>
@@ -397,8 +395,6 @@ export default function OrderTimeModal({
                 value={manualMinute}
                 onChangeText={setManualMinute}
                 keyboardType="number-pad"
-                placeholder="15"
-                placeholderTextColor={colors.textSecondary || colors.text}
                 style={[styles.input, { color: colors.text, textAlign: 'center' }]}
               />
             </View>
