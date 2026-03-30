@@ -958,6 +958,8 @@ const DE: TranslationDictionary = {
   noExtrasCategoryFound: "Keine Extra-Kategorie gefunden.",
   giftCardZeroBalance:
     "Das verbleibende Guthaben dieser Geschenkkarte beträgt 0",
+  startTakingOrdersButton: "Bestellungen annehmen",
+  continueText: "Fortfahren",
 };
 
 export const TRANSLATIONS: Record<AppLanguage, TranslationDictionary> = {
