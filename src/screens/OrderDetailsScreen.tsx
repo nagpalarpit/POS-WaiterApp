@@ -1299,6 +1299,10 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
             : orderDeliveryTypeId === 3
               ? "kiosk"
               : "table");
+      const paymentCustomer =
+        selectedPaymentMethod === 5
+          ? resolveOrderCustomer(option, option?.selectedCustomer ?? selectedCustomer)
+          : selectedCustomer;
 
       const rawOrderItems = Array.isArray(orderDetails?.orderItem)
         ? orderDetails.orderItem
@@ -2263,9 +2267,12 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
         paymentMethod: selectedPaymentMethod,
         tip,
         deliveryCharge: payableDeliveryCharge,
-      }, selectedCustomer);
+      }, paymentCustomer);
       if (isItemSplit || isExistingSplitOrder) {
         orderInfo.isSplitOrder = true;
+      }
+      if (selectedPaymentMethod === 5 && option?.debitorCustomerDetails) {
+        orderInfo.debitorCustomerDetails = option.debitorCustomerDetails;
       }
 
       const resolvedDiscountPayload = buildDiscountPayload(
@@ -2478,6 +2485,10 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
     try {
       const orderDetails = displayedOrderDetails || {};
       const paymentMethod = toNumber(option?.paymentMethod ?? option?.id, 0);
+      const paymentCustomer =
+        paymentMethod === 5
+          ? resolveOrderCustomer(option, option?.selectedCustomer ?? selectedCustomer)
+          : selectedCustomer;
       const orderItems = Array.isArray(orderDetails?.orderItem)
         ? orderDetails.orderItem
         : Array.isArray(orderDetails?.orderItems)
@@ -2503,7 +2514,10 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
         orderPaymentDetails: Array.isArray(option?.orderPaymentDetails)
           ? option.orderPaymentDetails
           : undefined,
-      }, selectedCustomer);
+      }, paymentCustomer);
+      if (paymentMethod === 5 && option?.debitorCustomerDetails) {
+        previewOrderInfo.debitorCustomerDetails = option.debitorCustomerDetails;
+      }
       emitPosPrintPreview(previewOrderInfo, paymentMethod);
     } catch (error) {
       console.error("Print preview failed:", error);
@@ -2557,6 +2571,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
         splitItems: splitPaymentItems,
         allowSplitOption,
         hidePrintPreview: hideDeleteForSplit,
+        selectedCustomer,
       });
   }, [
     allowSplitOption,
@@ -2566,6 +2581,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
     resolvedDeliveryCharge,
     resolvedCompanyId,
     serviceTypeId,
+    selectedCustomer,
     selectedCustomerAddress?.deliveryCharge,
     splitPaymentItems,
     totals.total,

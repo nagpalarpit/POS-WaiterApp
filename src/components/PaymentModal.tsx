@@ -36,8 +36,15 @@ import {
 } from "../services/paymentFlowStore";
 import AppBottomSheet from "./AppBottomSheet";
 import AppBottomSheetTextInput from "./AppBottomSheetTextInput";
+import CustomerDrawer from "./CustomerDrawer";
 import { useSettings } from "../hooks/useSettings";
 import { useTranslation } from "../contexts/LanguageContext";
+import { Customer } from "../types/customer";
+import {
+  formatCustomerAddress,
+  getCustomerDisplayName,
+  getSelectedCustomerAddress,
+} from "../utils/customerData";
 
 type PaymentDetail = {
   paymentProcessorId: number;
@@ -85,6 +92,10 @@ type PaymentOption = {
   isItemSplit?: boolean;
   splitSelections?: number[];
   splitItemTotal?: number;
+  selectedCustomer?: Customer | null;
+  debitorCustomerDetails?: Record<string, any> | null;
+  customerId?: number | string | null;
+  customerAddressId?: number | string | null;
 };
 
 type PaymentRouteParams = {
@@ -99,6 +110,7 @@ type PaymentRouteParams = {
   splitItems?: SplitSelectableItem[];
   allowSplitOption?: boolean;
   hidePrintPreview?: boolean;
+  selectedCustomer?: Customer | null;
 };
 
 type PaymentScreenProps = {
@@ -227,6 +239,33 @@ const getGiftCardLabel = (
   return code;
 };
 
+const buildDebitorCustomerDetails = (
+  customer?: Customer | null,
+  companyId?: number,
+) => {
+  if (!customer) return null;
+
+  const selectedAddress = getSelectedCustomerAddress(customer);
+
+  return {
+    id: customer.id ?? null,
+    roleId: 4,
+    companyId: companyId ?? null,
+    firstName: customer.firstName || "",
+    lastName: customer.lastName || "",
+    email: customer.email || "",
+    mobileNo: customer.mobileNo || "",
+    steuerId: customer.steuerId || "",
+    customerCompanyName: customer.customerCompanyName || "",
+    addressLine1: selectedAddress?.addressLine1 || "",
+    city: selectedAddress?.city || "",
+    landMark: selectedAddress?.landmark || "",
+    pincode: selectedAddress?.pincode || "",
+    customerAddressId:
+      customer.customerAddressId ?? selectedAddress?.id ?? null,
+  };
+};
+
 export default function PaymentScreen(props: PaymentScreenProps) {
   const { navigation, route } = props;
   const params: PaymentRouteParams = route?.params || {};
@@ -242,6 +281,7 @@ export default function PaymentScreen(props: PaymentScreenProps) {
     splitItems = [],
     allowSplitOption = true,
     hidePrintPreview = false,
+    selectedCustomer = null,
   } = params;
   const { colors } = useTheme();
   const { showToast } = useToast();
@@ -316,6 +356,14 @@ export default function PaymentScreen(props: PaymentScreenProps) {
   const [splitSelections, setSplitSelections] = useState<number[]>(() =>
     splitItems.map(() => 0),
   );
+  const [customerDrawerVisible, setCustomerDrawerVisible] = useState(false);
+  const [customerDrawerMode, setCustomerDrawerMode] = useState<"list" | "form">(
+    "list",
+  );
+  const [selectedDebitorCustomer, setSelectedDebitorCustomer] =
+    useState<Customer | null>(() =>
+      selectedCustomer?.isDebitor === true ? selectedCustomer : null,
+    );
 
   const getCurrentFlowHandlers = () => getPaymentFlowHandlers();
 
@@ -401,6 +449,12 @@ export default function PaymentScreen(props: PaymentScreenProps) {
   useEffect(() => {
     setSplitSelections(currentSplitItems.map(() => 0));
   }, [currentSplitItems]);
+
+  useEffect(() => {
+    setSelectedDebitorCustomer(
+      selectedCustomer?.isDebitor === true ? selectedCustomer : null,
+    );
+  }, [selectedCustomer]);
 
   const footerHeight = 200;
   const sectionGap = 8;
@@ -506,6 +560,16 @@ export default function PaymentScreen(props: PaymentScreenProps) {
   const visiblePrimaryTabs = currentAllowSplitOption
     ? primaryTabs
     : primaryTabs.filter((tab) => tab.id !== 2);
+  const debitorCustomerAddress = getSelectedCustomerAddress(
+    selectedDebitorCustomer,
+  );
+  const debitorCustomerName =
+    getCustomerDisplayName(selectedDebitorCustomer) ||
+    selectedDebitorCustomer?.mobileNo ||
+    "";
+  const debitorCustomerAddressText = formatCustomerAddress(
+    debitorCustomerAddress,
+  );
 
   const getRowBtnStyle = (count: number) => {
     if (count <= 1) return styles.footerBtnFull;
@@ -544,6 +608,7 @@ export default function PaymentScreen(props: PaymentScreenProps) {
   const handleOtherBack = () => {
     setShowOtherMethods(false);
     setActiveTab(0);
+    setSelectedDebitorCustomer(null);
   };
 
   const handleSplitBack = () => {
@@ -685,6 +750,10 @@ export default function PaymentScreen(props: PaymentScreenProps) {
     isCorporate = false,
   ): PaymentOption => {
     const paymentMethod = resolvePaymentMethod();
+    const debitorCustomerDetails =
+      paymentMethod === 5
+        ? buildDebitorCustomerDetails(selectedDebitorCustomer, companyId)
+        : null;
     return {
       id: paymentMethod,
       label: getPaymentLabel(paymentMethod, t),
@@ -698,6 +767,17 @@ export default function PaymentScreen(props: PaymentScreenProps) {
       isItemSplit: isSplitMode,
       splitSelections: isSplitMode ? splitSelections : undefined,
       splitItemTotal: isSplitMode ? splitItemTotal : undefined,
+      ...(paymentMethod === 5 && selectedDebitorCustomer
+        ? {
+            selectedCustomer: selectedDebitorCustomer,
+            debitorCustomerDetails,
+            customerId: selectedDebitorCustomer.id ?? null,
+            customerAddressId:
+              selectedDebitorCustomer.customerAddressId ??
+              debitorCustomerAddress?.id ??
+              null,
+          }
+        : {}),
       ...(activeGiftCard ? { giftCard: activeGiftCard } : {}),
       ...(print ? { print } : {}),
     };
@@ -755,6 +835,10 @@ export default function PaymentScreen(props: PaymentScreenProps) {
       showToast("error", t("selectPaymentMethod"));
       return;
     }
+    if (paymentMethod === 5 && !selectedDebitorCustomer) {
+      showToast("error", t("pleaseSelectDebitorCustomer"));
+      return;
+    }
 
     setIsProcessing(true);
     try {
@@ -784,6 +868,10 @@ export default function PaymentScreen(props: PaymentScreenProps) {
 
   const handlePrintPreview = async () => {
     if (isProcessing) return;
+    if (resolvePaymentMethod() === 5 && !selectedDebitorCustomer) {
+      showToast("error", t("pleaseSelectDebitorCustomer"));
+      return;
+    }
     setIsProcessing(true);
     try {
       const option = buildPaymentOption(true);
@@ -936,6 +1024,115 @@ export default function PaymentScreen(props: PaymentScreenProps) {
                     );
                   })}
                 </View>
+                {selectedOtherMethod === 5 ? (
+                  <View style={{ marginTop: 8 }}>
+                    <Text
+                      style={{ color: colors.textSecondary, marginBottom: 8 }}
+                    >
+                      {t("debitorCustomer")}
+                    </Text>
+
+                    {selectedDebitorCustomer ? (
+                      <View
+                        style={[
+                          styles.debitorCustomerCard,
+                          {
+                            borderColor: colors.primary,
+                            backgroundColor:
+                              colors.surfaceHover || colors.surface,
+                          },
+                        ]}
+                      >
+                        <Text style={{ color: colors.text, fontWeight: "800" }}>
+                          {debitorCustomerName}
+                        </Text>
+                        {selectedDebitorCustomer.customerCompanyName ? (
+                          <Text
+                            style={{
+                              color: colors.textSecondary,
+                              marginTop: 4,
+                            }}
+                          >
+                            {selectedDebitorCustomer.customerCompanyName}
+                          </Text>
+                        ) : null}
+                        {selectedDebitorCustomer.mobileNo ? (
+                          <Text
+                            style={{
+                              color: colors.textSecondary,
+                              marginTop: 4,
+                            }}
+                          >
+                            {selectedDebitorCustomer.mobileNo}
+                          </Text>
+                        ) : null}
+                        {debitorCustomerAddressText ? (
+                          <Text
+                            style={{
+                              color: colors.textSecondary,
+                              marginTop: 4,
+                              lineHeight: 18,
+                            }}
+                          >
+                            {debitorCustomerAddressText}
+                          </Text>
+                        ) : null}
+                      </View>
+                    ) : (
+                      <View
+                        style={[
+                          styles.debitorCustomerCard,
+                          {
+                            borderColor: colors.border,
+                            backgroundColor: colors.surface,
+                          },
+                        ]}
+                      >
+                        <Text style={{ color: colors.textSecondary }}>
+                          {t("searchSelectCreateDebitorCustomerForThisPayment")}
+                        </Text>
+                      </View>
+                    )}
+
+                    <View style={styles.debitorActionRow}>
+                      <TouchableOpacity
+                        onPress={() => {
+                          setCustomerDrawerMode("list");
+                          setCustomerDrawerVisible(true);
+                        }}
+                        style={[
+                          styles.ghostBtn,
+                          styles.debitorActionBtn,
+                          { borderColor: colors.border },
+                        ]}
+                      >
+                        <Text style={{ color: colors.text, fontWeight: "700" }}>
+                          {t("selectCustomer")}
+                        </Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        onPress={() => {
+                          setCustomerDrawerMode("form");
+                          setCustomerDrawerVisible(true);
+                        }}
+                        style={[
+                          styles.debitorAddBtn,
+                          { backgroundColor: colors.primary },
+                        ]}
+                      >
+                        <Text
+                          style={{
+                            color: colors.textInverse,
+                            fontWeight: "700",
+                          }}
+                        >
+                          {t("addCustomer")}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ) : null}
               </View>
             ) : isSplitMode ? (
               <View>
@@ -1749,6 +1946,17 @@ export default function PaymentScreen(props: PaymentScreenProps) {
           />
         </View>
       </AppBottomSheet>
+      <CustomerDrawer
+        visible={customerDrawerVisible}
+        selectedCustomer={selectedDebitorCustomer}
+        debitorOnly
+        forceDebitor
+        initialMode={customerDrawerMode}
+        onClose={() => setCustomerDrawerVisible(false)}
+        onSelect={(customer) => {
+          setSelectedDebitorCustomer(customer);
+        }}
+      />
     </View>
   );
 }
@@ -1922,6 +2130,30 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 8,
     borderWidth: 1,
+  },
+  debitorCustomerCard: {
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+  },
+  debitorActionRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 10,
+  },
+  debitorActionBtn: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  debitorAddBtn: {
+    flex: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
   },
   payBtn: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 8 },
   payBtnPrimary: {

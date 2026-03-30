@@ -220,7 +220,7 @@ const EN: TranslationDictionary = {
   giftCardExpiredOn: "Gift card expired on {{date}}.",
   giftCardValidFrom: "Gift card is valid from {{date}}.",
   unableToApplyGiftCard: "Unable to apply gift card.",
-  operatingExpense: "Operating Expense",
+  operatingExpense: "Betriebsaufwand",
   pending: "Pending",
   pin: "PIN",
   pinToChange: "PIN to Change",
@@ -403,9 +403,13 @@ const EN: TranslationDictionary = {
   loadingDeliverySettings: "Loading delivery settings...",
   addCustomerDescription:
     "Search, select, or create a customer for this order.",
+  selectCustomer: "Select Customer",
   debitorCustomer: "Debitor Customer",
+  searchSelectCreateDebitorCustomerForThisPayment:
+    "Search, select, or create a debitor customer for this payment.",
   requireCompanyDetailsWhenThisCustomerIsMarkedAsDebitor:
     "Require company details when this customer is marked as debitor.",
+  pleaseSelectDebitorCustomer: "Please select a debitor customer.",
   addNewCustomer: "Add New",
   companyName: "Company Name",
   taxId: "Tax ID",
@@ -830,9 +834,13 @@ const DE: TranslationDictionary = {
   useSameCustomerDetailsAndAddressRulesAsPos:
     "Verwenden Sie dieselben Kundendetails und Adressregeln wie im POS.",
   loadingDeliverySettings: "Lieferkonfiguration wird geladen...",
+  selectCustomer: "Kunde auswÃ¤hlen",
   debitorCustomer: "Debitor-Kunde",
+  searchSelectCreateDebitorCustomerForThisPayment:
+    "Suche, wÃ¤hle oder erstelle einen Debitor-Kunden fÃ¼r diese Zahlung.",
   requireCompanyDetailsWhenThisCustomerIsMarkedAsDebitor:
     "Firmenangaben sind erforderlich, wenn dieser Kunde als Debitor markiert ist.",
+  pleaseSelectDebitorCustomer: "Bitte wÃ¤hlen Sie einen Debitor-Kunden aus.",
   companyName: "Firmenname",
   taxId: "Steuer-ID",
   zipCode: "Postleitzahl",

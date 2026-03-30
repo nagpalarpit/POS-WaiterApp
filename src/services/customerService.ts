@@ -93,7 +93,10 @@ class CustomerService {
   async listCustomers(params: CustomerListParams = {}): Promise<Customer[]> {
     const companyId = await this.getCompanyId();
     const payload: any = {
-      query: { roleId: 4 },
+      query: {
+        roleId: 4,
+        ...(params.isDebitor === true ? { isDebitor: true } : {}),
+      },
       companyId: companyId ?? undefined,
       options: {
         paginate: params.limit ?? 10,

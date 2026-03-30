@@ -28,6 +28,7 @@ export interface CustomerListParams {
   searchStr?: string;
   limit?: number;
   page?: number;
+  isDebitor?: boolean;
 }
 
 export interface CustomerUpsertPayload {

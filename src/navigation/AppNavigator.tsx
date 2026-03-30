@@ -70,6 +70,7 @@ export type RootStackParamList = {
     splitItems?: any[];
     allowSplitOption?: boolean;
     hidePrintPreview?: boolean;
+    selectedCustomer?: any;
   };
   Checkout: {
     cart: any;

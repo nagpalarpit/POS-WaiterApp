@@ -30,6 +30,9 @@ import { useTranslation } from '../contexts/LanguageContext';
 type CustomerDrawerProps = {
   visible: boolean;
   selectedCustomer?: Customer | null;
+  debitorOnly?: boolean;
+  forceDebitor?: boolean;
+  initialMode?: 'list' | 'form';
   onClose: () => void;
   onSelect: (customer: Customer | null) => Promise<void> | void;
 };
@@ -144,6 +147,7 @@ const inferPrefillFromSearch = (search: string) => {
 const createFormState = (
   customer?: Customer | null,
   searchPrefill = '',
+  forceDebitor = false,
 ): CustomerFormState => {
   if (!customer) {
     const inferred = inferPrefillFromSearch(searchPrefill);
@@ -153,7 +157,7 @@ const createFormState = (
       lastName: inferred.lastName,
       mobileNo: inferred.mobileNo,
       email: inferred.email,
-      isDebitor: false,
+      isDebitor: forceDebitor,
       customerCompanyName: '',
       steuerId: '',
       addresses: [address],
@@ -178,7 +182,7 @@ const createFormState = (
     lastName: customer.lastName || '',
     mobileNo: customer.mobileNo || '',
     email: customer.email || '',
-    isDebitor: customer.isDebitor === true,
+    isDebitor: forceDebitor || customer.isDebitor === true,
     customerCompanyName: customer.customerCompanyName || '',
     steuerId: customer.steuerId || '',
     addresses,
@@ -222,6 +226,9 @@ const styles = StyleSheet.create({
 export default function CustomerDrawer({
   visible,
   selectedCustomer,
+  debitorOnly = false,
+  forceDebitor = false,
+  initialMode = 'list',
   onClose,
   onSelect,
 }: CustomerDrawerProps) {
@@ -273,6 +280,20 @@ export default function CustomerDrawer({
       return;
     }
 
+    setMode(initialMode);
+    if (initialMode === 'form') {
+      setEditingCustomer(null);
+      setErrors({});
+      setForm(createFormState(null, searchQuery, forceDebitor));
+      setPincodePicker(null);
+    }
+  }, [forceDebitor, initialMode, searchQuery, visible]);
+
+  useEffect(() => {
+    if (!visible) {
+      return;
+    }
+
     if (mode !== 'list') {
       return;
     }
@@ -284,6 +305,7 @@ export default function CustomerDrawer({
         const list = await customerService.listCustomers({
           searchStr: searchQuery,
           limit: 200,
+          isDebitor: debitorOnly,
         });
         if (isActive) {
           setCustomers(list);
@@ -304,7 +326,7 @@ export default function CustomerDrawer({
       isActive = false;
       clearTimeout(timer);
     };
-  }, [mode, visible, searchQuery]);
+  }, [debitorOnly, mode, visible, searchQuery]);
 
   useEffect(() => {
     if (!visible || mode !== 'form') {
@@ -402,7 +424,7 @@ export default function CustomerDrawer({
   const openAddMode = () => {
     setEditingCustomer(null);
     setErrors({});
-    setForm(createFormState(null, searchQuery));
+    setForm(createFormState(null, searchQuery, forceDebitor));
     setPincodePicker(null);
     setMode('form');
   };
@@ -410,7 +432,7 @@ export default function CustomerDrawer({
   const openEditMode = (customer: Customer) => {
     setEditingCustomer(customer);
     setErrors({});
-    setForm(createFormState(customer));
+    setForm(createFormState(customer, '', forceDebitor));
     setPincodePicker(null);
     setMode('form');
   };
@@ -612,7 +634,7 @@ export default function CustomerDrawer({
       nextErrors.mobileNo = t('mobileNumberIsRequired');
     }
 
-    if (form.isDebitor && !form.customerCompanyName.trim()) {
+    if ((forceDebitor || form.isDebitor) && !form.customerCompanyName.trim()) {
       nextErrors.customerCompanyName = t('companyNameIsRequiredForDebitor');
     }
 
@@ -655,7 +677,7 @@ export default function CustomerDrawer({
       lastName: form.lastName.trim(),
       mobileNo: form.mobileNo.trim(),
       email: form.email.trim(),
-      isDebitor: form.isDebitor,
+      isDebitor: forceDebitor ? true : form.isDebitor,
       customerCompanyName: form.customerCompanyName.trim(),
       steuerId: form.steuerId.trim(),
       addresses: form.addresses.map(({ localKey, ...address }) => ({
@@ -975,7 +997,9 @@ export default function CustomerDrawer({
         title={mode === 'list' ? t('customer') : editingCustomer ? t('editCustomer') : t('addCustomer')}
         subtitle={
           mode === 'list'
-            ? t('searchSelectCreateCustomerForThisOrder')
+            ? debitorOnly
+              ? t('searchSelectCreateDebitorCustomerForThisPayment')
+              : t('searchSelectCreateCustomerForThisOrder')
             : t('useSameCustomerDetailsAndAddressRulesAsPos')
         }
         fullHeight
@@ -1285,18 +1309,19 @@ export default function CustomerDrawer({
                 </Text>
               </View>
               <Switch
-                value={form.isDebitor}
+                value={forceDebitor ? true : form.isDebitor}
                 onValueChange={(value) => updateForm({ isDebitor: value })}
+                disabled={forceDebitor}
                 trackColor={{
                   true: `${colors.primary}66`,
                   false: colors.border,
                 }}
-                thumbColor={form.isDebitor ? colors.primary : colors.surface}
+                thumbColor={(forceDebitor || form.isDebitor) ? colors.primary : colors.surface}
               />
             </View>
           </View>
 
-          {form.isDebitor ? (
+          {(forceDebitor || form.isDebitor) ? (
             <>
               {renderField({
                 label: t('companyName'),
