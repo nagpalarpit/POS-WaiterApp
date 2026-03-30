@@ -122,6 +122,13 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
       (address) => address.id === cartData.cart.currentUser?.customerAddressId,
     ) || cartData.cart.currentUser?.addresses?.[0],
   );
+  const resolvedServiceTiming =
+    deliveryType !== 0
+      ? serviceTiming ?? {
+          pickupDateTime: existingOrder?.orderDetails?.pickupDateTime ?? null,
+          familyName: existingOrder?.orderDetails?.familyName ?? '',
+        }
+      : null;
 
   const isVoucherCategory = (category: any) =>
     String(category?.categoryType || '')
@@ -404,7 +411,7 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
     if (!existingOrder && !tableNo) return;
     const unsubscribe = navigation.addListener('beforeRemove', (e: any) => {
       const action = e?.data?.action;
-      if (action?.type === 'NAVIGATE' && action?.payload?.name === 'Checkout') {
+      if (action?.payload?.name === 'Checkout') {
         return;
       }
       if (existingOrder) {
@@ -898,13 +905,13 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
       return;
     }
 
-    navigation.navigate('Checkout', {
+    navigation.push('Checkout', {
       cart: cartData.cart,
       tableNo,
       deliveryType,
       tableArea,
       existingOrder,
-      serviceTiming,
+      serviceTiming: resolvedServiceTiming,
     });
   };
 

@@ -166,6 +166,17 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
     };
   }, []);
 
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('blur', () => {
+      if (toastNavTimer.current) {
+        clearTimeout(toastNavTimer.current);
+        toastNavTimer.current = null;
+      }
+    });
+
+    return unsubscribe;
+  }, [navigation]);
+
   useLayoutEffect(() => {
     navigation.setOptions({
       headerLeft: ({ tintColor }: any) => (
