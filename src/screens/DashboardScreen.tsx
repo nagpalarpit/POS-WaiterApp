@@ -1,5 +1,24 @@
-import React, { useState, useLayoutEffect, useEffect, useMemo } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, FlatList, ActivityIndicator, RefreshControl } from 'react-native';
+import React, {
+  useState,
+  useLayoutEffect,
+  useEffect,
+  useMemo,
+  useRef,
+  useCallback,
+} from 'react';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  ScrollView,
+  FlatList,
+  ActivityIndicator,
+  RefreshControl,
+  Animated,
+  Easing,
+  Keyboard,
+  TextInput,
+} from 'react-native';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -8,7 +27,7 @@ import { STORAGE_KEYS } from '../constants/storageKeys';
 import { useTheme } from '../theme/ThemeProvider';
 import { useTranslation } from '../contexts/LanguageContext';
 import { SERVER_BASE_URL } from '../config/urls';
-import { getOrderStatusLabel } from '../utils/orderUtils';
+import { getOrderStatusLabel, ORDER_STATUS } from '../utils/orderUtils';
 import { formatCurrency } from '../utils/currency';
 import { formatOrderServiceTime } from '../utils/orderServiceDisplay';
 import { isOrderLocked, isTableLocked, lockOrder, lockTable } from '../services/orderSyncService';
@@ -54,6 +73,11 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
   const [selectedTableArea, setSelectedTableArea] = useState<any | null>(null);
   const [serviceTimeModalVisible, setServiceTimeModalVisible] = useState(false);
   const [pendingServiceType, setPendingServiceType] = useState<number | null>(null);
+  const [isSearchVisible, setIsSearchVisible] = useState(false);
+  const [searchInput, setSearchInput] = useState('');
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
+  const searchAnimation = useRef(new Animated.Value(0)).current;
+  const searchInputRef = useRef<TextInput | null>(null);
 
   const companyDisplayName = useMemo(() => {
     const rawName =
@@ -169,6 +193,19 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
     [selectedTableArea]
   );
 
+  const dineInOrderByTable = useMemo(() => {
+    const tableMap = new Map<number, Order>();
+
+    ordersData.dineInTables.forEach((order) => {
+      const tableNo = Number(order?.orderDetails?.tableNo);
+      if (Number.isFinite(tableNo) && !tableMap.has(tableNo)) {
+        tableMap.set(tableNo, order);
+      }
+    });
+
+    return tableMap;
+  }, [ordersData.dineInTables]);
+
   const tableNumbers = useMemo(() => {
     if (selectedTableArea) {
       return selectedAreaTables;
@@ -214,7 +251,96 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
     return null;
   };
 
-  const handleServiceFlowStart = () => {
+  const normalizeSearchValue = (value: unknown) =>
+    String(value ?? '').trim().toLowerCase();
+
+  const isPlacedOrder = (order?: Order | any) => {
+    const rootStatusId = Number(order?.orderStatusId);
+    const detailStatusId = Number(order?.orderDetails?.orderStatusId);
+
+    return (
+      rootStatusId === ORDER_STATUS.PENDING ||
+      detailStatusId === ORDER_STATUS.PENDING
+    );
+  };
+
+  const matchesCustomOrderIdSearch = (order: Order | any, query: string) => {
+    if (!query || !order || !isPlacedOrder(order)) {
+      return false;
+    }
+
+    const customOrderId = normalizeSearchValue(
+      order?.customOrderId ?? order?.orderDetails?.customOrderId
+    );
+
+    return customOrderId.includes(query);
+  };
+
+  const normalizedSearchTerm = useMemo(
+    () => normalizeSearchValue(debouncedSearchTerm),
+    [debouncedSearchTerm]
+  );
+
+  const hasActiveSearch = normalizedSearchTerm.length > 0;
+
+  const filteredTableNumbers = useMemo(() => {
+    if (!hasActiveSearch) {
+      return tableNumbers;
+    }
+
+    return tableNumbers.filter((tableNo) => {
+      if (String(tableNo).includes(normalizedSearchTerm)) {
+        return true;
+      }
+
+      return matchesCustomOrderIdSearch(
+        dineInOrderByTable.get(tableNo),
+        normalizedSearchTerm
+      );
+    });
+  }, [tableNumbers, hasActiveSearch, normalizedSearchTerm, dineInOrderByTable]);
+
+  const filteredDeliveryOrders = useMemo(() => {
+    if (!hasActiveSearch) {
+      return ordersData.deliveryOrders;
+    }
+
+    return ordersData.deliveryOrders.filter((order) =>
+      matchesCustomOrderIdSearch(order, normalizedSearchTerm)
+    );
+  }, [ordersData.deliveryOrders, hasActiveSearch, normalizedSearchTerm]);
+
+  const filteredPickupOrders = useMemo(() => {
+    if (!hasActiveSearch) {
+      return ordersData.pickupOrders;
+    }
+
+    return ordersData.pickupOrders.filter((order) =>
+      matchesCustomOrderIdSearch(order, normalizedSearchTerm)
+    );
+  }, [ordersData.pickupOrders, hasActiveSearch, normalizedSearchTerm]);
+
+  const searchPlaceholder = useMemo(() => {
+    if (activeTab === DELIVERY_TYPE.DINE_IN) {
+      return t('searchByTableNoOrOrderNo');
+    }
+
+    return t('searchByOrderNo');
+  }, [activeTab, t]);
+
+  const openSearch = useCallback(() => {
+    setIsSearchVisible(true);
+  }, []);
+
+  const closeSearch = useCallback(() => {
+    Keyboard.dismiss();
+    searchInputRef.current?.clear();
+    setSearchInput('');
+    setDebouncedSearchTerm('');
+    setIsSearchVisible(false);
+  }, []);
+
+  const handleServiceFlowStart = useCallback(() => {
     if (
       activeTab !== DELIVERY_TYPE.DELIVERY &&
       activeTab !== DELIVERY_TYPE.PICKUP
@@ -224,24 +350,95 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
 
     setPendingServiceType(activeTab);
     setServiceTimeModalVisible(true);
-  };
+  }, [activeTab]);
 
-  const handleServiceFlowClose = () => {
+  const handleServiceFlowClose = useCallback(() => {
     setServiceTimeModalVisible(false);
     setPendingServiceType(null);
-  };
+  }, []);
 
-  const handleServiceFlowSave = (serviceTiming: OrderServiceTiming) => {
-    const nextDeliveryType = pendingServiceType ?? activeTab;
+  const handleServiceFlowSave = useCallback(
+    (serviceTiming: OrderServiceTiming) => {
+      const nextDeliveryType = pendingServiceType ?? activeTab;
 
-    navigation.navigate('Menu', {
-      tableNo: null,
-      deliveryType: nextDeliveryType,
-      serviceTiming,
+      navigation.navigate('Menu', {
+        tableNo: null,
+        deliveryType: nextDeliveryType,
+        serviceTiming,
+      });
+
+      handleServiceFlowClose();
+    },
+    [activeTab, handleServiceFlowClose, navigation, pendingServiceType]
+  );
+
+  useEffect(() => {
+    const debounceTimeout = setTimeout(() => {
+      setDebouncedSearchTerm(searchInput);
+    }, 350);
+
+    return () => clearTimeout(debounceTimeout);
+  }, [searchInput]);
+
+  useEffect(() => {
+    Animated.timing(searchAnimation, {
+      toValue: isSearchVisible ? 1 : 0,
+      duration: isSearchVisible ? 240 : 180,
+      easing: isSearchVisible
+        ? Easing.out(Easing.cubic)
+        : Easing.inOut(Easing.cubic),
+      useNativeDriver: false,
+    }).start(({ finished }) => {
+      if (finished && isSearchVisible) {
+        searchInputRef.current?.focus();
+      }
     });
 
-    handleServiceFlowClose();
-  };
+    if (!isSearchVisible) {
+      Keyboard.dismiss();
+    }
+  }, [isSearchVisible, searchAnimation]);
+
+  const searchInputOpacity = searchAnimation.interpolate({
+    inputRange: [0, 0.45, 1],
+    outputRange: [0, 0, 1],
+  });
+  const searchInputTranslateX = searchAnimation.interpolate({
+    inputRange: [0, 1],
+    outputRange: [12, 0],
+  });
+  const headerTitleOpacity = searchAnimation.interpolate({
+    inputRange: [0, 1],
+    outputRange: [1, 0],
+  });
+  const headerTitleTranslateY = searchAnimation.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, -8],
+  });
+  const logoOpacity = searchAnimation.interpolate({
+    inputRange: [0, 1],
+    outputRange: [1, 0],
+  });
+  const logoWidth = searchAnimation.interpolate({
+    inputRange: [0, 1],
+    outputRange: [36, 0],
+  });
+  const logoMargin = searchAnimation.interpolate({
+    inputRange: [0, 1],
+    outputRange: [4, 0],
+  });
+  const logoTranslateX = searchAnimation.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, -10],
+  });
+  const addButtonOpacity = searchAnimation.interpolate({
+    inputRange: [0, 1],
+    outputRange: [1, 0],
+  });
+  const addButtonScale = searchAnimation.interpolate({
+    inputRange: [0, 1],
+    outputRange: [1, 0.92],
+  });
 
   /**
    * Memoize header left component to prevent re-renders on tab change
@@ -264,83 +461,237 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
           <MaterialIcons name="menu" size={20} color={colors.text} />
         </TouchableOpacity>
 
+        <Animated.View
+          style={{
+            overflow: 'hidden',
+            width: logoWidth,
+            opacity: logoOpacity,
+            marginRight: logoMargin,
+            transform: [{ translateX: logoTranslateX }],
+          }}
+        >
+          <TouchableOpacity
+            onPress={() => navigation.getParent?.()?.openDrawer?.()}
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: 18,
+              overflow: 'hidden',
+              backgroundColor: colors.surfaceHover,
+            }}
+          >
+            {logoUri && !logoLoadFailed ? (
+              <Image
+                source={{ uri: logoUri }}
+                style={{ width: 36, height: 36 }}
+                contentFit="cover"
+                cachePolicy="disk"
+                transition={120}
+                onError={(error) => {
+                  console.log('Dashboard logo failed to load:', error);
+                  setLogoLoadFailed(true);
+                }}
+              />
+            ) : (
+              <View
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: 18,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: colors.primary + '20',
+                }}
+              >
+                <Text
+                  style={{
+                    color: colors.primary,
+                    fontSize: 12,
+                    fontWeight: '800',
+                  }}
+                >
+                  {companyInitials}
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        </Animated.View>
+      </View>
+    ),
+    [
+      colors.primary,
+      colors.surfaceHover,
+      colors.text,
+      companyInitials,
+      logoLoadFailed,
+      logoMargin,
+      logoOpacity,
+      logoTranslateX,
+      logoUri,
+      logoWidth,
+      navigation,
+    ]
+  );
+
+  const searchBarComponent = useMemo(
+    () => (
+      <Animated.View
+        style={{
+          flex: 1,
+          height: 40,
+          borderRadius: 999,
+          flexDirection: 'row',
+          alignItems: 'center',
+          overflow: 'hidden',
+          borderWidth: 1,
+          borderColor: colors.border,
+          backgroundColor: colors.surface,
+          opacity: searchInputOpacity,
+          transform: [{ translateX: searchInputTranslateX }],
+        }}
+      >
         <TouchableOpacity
-          onPress={() => navigation.getParent?.()?.openDrawer?.()}
+          onPress={() => searchInputRef.current?.focus()}
           style={{
             width: 36,
             height: 36,
-            borderRadius: 18,
-            overflow: 'hidden',
-            marginRight: 4,
-            backgroundColor: colors.surfaceHover,
+            alignItems: 'center',
+            justifyContent: 'center',
           }}
         >
-          {logoUri && !logoLoadFailed ? (
-            <Image
-              source={{ uri: logoUri }}
-              style={{ width: 36, height: 36 }}
-              contentFit="cover"
-              cachePolicy="disk"
-              transition={120}
-              onError={(error) => {
-                console.log('Dashboard logo failed to load:', error);
-                setLogoLoadFailed(true);
-              }}
-            />
-          ) : (
-            <View
-              style={{
-                width: 36,
-                height: 36,
-                borderRadius: 18,
-                alignItems: 'center',
-                justifyContent: 'center',
-                backgroundColor: colors.primary + '20',
-              }}
-            >
-              <Text
-                style={{
-                  color: colors.primary,
-                  fontSize: 12,
-                  fontWeight: '800',
-                }}
-              >
-                {companyInitials}
-              </Text>
-            </View>
-          )}
+          <MaterialIcons name="search" size={20} color={colors.text} />
         </TouchableOpacity>
-      </View>
+
+        <View style={{ flex: 1 }}>
+          <TextInput
+            ref={searchInputRef}
+            defaultValue={searchInput}
+            onChangeText={setSearchInput}
+            placeholder={searchPlaceholder}
+            placeholderTextColor={colors.textSecondary}
+            autoCapitalize="none"
+            autoCorrect={false}
+            returnKeyType="search"
+            onSubmitEditing={Keyboard.dismiss}
+            style={{
+              color: colors.text,
+              fontSize: 13,
+              paddingVertical: 0,
+              paddingRight: 8,
+            }}
+          />
+        </View>
+
+        <TouchableOpacity
+          onPress={closeSearch}
+          style={{
+            width: 36,
+            height: 36,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <MaterialIcons
+            name="close"
+            size={18}
+            color={colors.textSecondary}
+          />
+        </TouchableOpacity>
+      </Animated.View>
     ),
-    [colors, companyInitials, logoLoadFailed, logoUri, navigation]
+    [
+      closeSearch,
+      colors.border,
+      colors.surface,
+      colors.text,
+      colors.textSecondary,
+      searchInput,
+      searchInputOpacity,
+      searchInputTranslateX,
+      searchPlaceholder,
+    ]
+  );
+
+  const headerTitleComponent = useMemo(
+    () =>
+      isSearchVisible ? (
+        searchBarComponent
+      ) : (
+        <Animated.View
+          style={{
+            opacity: headerTitleOpacity,
+            transform: [{ translateY: headerTitleTranslateY }],
+          }}
+        >
+          <Text
+            style={{
+              color: colors.text,
+              fontWeight: '700',
+              fontSize: 18,
+            }}
+          >
+            {t('dashboard')}
+          </Text>
+        </Animated.View>
+      ),
+    [
+      colors.text,
+      headerTitleOpacity,
+      headerTitleTranslateY,
+      isSearchVisible,
+      searchBarComponent,
+      t,
+    ]
   );
 
   /**
    * Memoize header right component to prevent re-renders on tab change
    */
   const headerRightComponent = useMemo(
-    () => (
-      <View style={{ flexDirection: 'row', alignItems: 'center', borderRadius: 100 }}>
-        <TouchableOpacity
-          onPress={() => {
-            /* search placeholder */
-          }}
-          style={{ padding: 8, borderRadius: 100 }}
-        >
-          <MaterialIcons name="search" size={20} color={colors.text} />
-        </TouchableOpacity>
-
-        {activeTab !== DELIVERY_TYPE.DINE_IN && (
+    () =>
+      isSearchVisible ? null : (
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
           <TouchableOpacity
-            onPress={handleServiceFlowStart}
-            style={{ padding: 8 }}
+            onPress={openSearch}
+            style={{ padding: 8, borderRadius: 100 }}
           >
-            <MaterialIcons name="add-circle-outline" size={22} color={colors.primary} />
+            <MaterialIcons name="search" size={20} color={colors.text} />
           </TouchableOpacity>
-        )}
-      </View>
-    ),
-    [colors, activeTab, handleServiceFlowStart]
+
+          {activeTab !== DELIVERY_TYPE.DINE_IN && (
+          <Animated.View
+            style={{
+              opacity: addButtonOpacity,
+              transform: [{ scale: addButtonScale }],
+              marginLeft: 4,
+            }}
+            pointerEvents={isSearchVisible ? 'none' : 'auto'}
+          >
+            <TouchableOpacity
+              onPress={handleServiceFlowStart}
+              disabled={isSearchVisible}
+              style={{ padding: 8 }}
+            >
+              <MaterialIcons
+                name="add-circle-outline"
+                size={22}
+                color={colors.primary}
+              />
+            </TouchableOpacity>
+          </Animated.View>
+          )}
+        </View>
+      ),
+    [
+      activeTab,
+      addButtonOpacity,
+      addButtonScale,
+      colors.primary,
+      colors.text,
+      handleServiceFlowStart,
+      isSearchVisible,
+      openSearch,
+    ]
   );
 
   /**
@@ -348,14 +699,26 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
    */
   useLayoutEffect(() => {
     navigation.setOptions({
-      headerTitle: t('dashboard'),
+      headerTitle: () => headerTitleComponent,
+      headerTitleAlign: 'left',
+      headerTitleContainerStyle: isSearchVisible
+        ? { left: 56, right: 8 }
+        : undefined,
       headerStyle: { backgroundColor: colors.background },
       headerTintColor: colors.text,
       headerTitleStyle: { fontWeight: '700' },
       headerLeft: () => headerLeftComponent,
       headerRight: () => headerRightComponent,
     });
-  }, [navigation, colors.background, colors.text, headerLeftComponent, headerRightComponent]);
+  }, [
+    navigation,
+    colors.background,
+    colors.text,
+    headerLeftComponent,
+    headerRightComponent,
+    headerTitleComponent,
+    isSearchVisible,
+  ]);
 
   /**
    * Refresh handler
@@ -543,22 +906,24 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
   const renderEmptyState = () => (
     <View className="flex-1 justify-center items-center py-8">
       <Text className="text-gray-400 text-center">
-        {activeTab === DELIVERY_TYPE.DINE_IN && t('noDineInOrders')}
-        {activeTab === DELIVERY_TYPE.DELIVERY && t('noDeliveryOrders')}
-        {activeTab === DELIVERY_TYPE.PICKUP && t('noPickupOrders')}
+        {hasActiveSearch
+          ? t('noSearchResults')
+          : activeTab === DELIVERY_TYPE.DINE_IN
+            ? t('noDineInOrders')
+            : activeTab === DELIVERY_TYPE.DELIVERY
+              ? t('noDeliveryOrders')
+              : t('noPickupOrders')}
       </Text>
     </View>
   );
 
   const renderDineInTables = () => {
-    if (tableNumbers.length === 0) {
+    if (filteredTableNumbers.length === 0) {
       return renderEmptyState();
     }
 
-    const tables = tableNumbers.map((tableNo) => {
-      const order = ordersData.dineInTables.find(
-        (o) => Number(o.orderDetails?.tableNo) === tableNo
-      );
+    const tables = filteredTableNumbers.map((tableNo) => {
+      const order = dineInOrderByTable.get(tableNo);
       let status = 'available';
 
       if (order) {
@@ -740,9 +1105,9 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
       case DELIVERY_TYPE.DINE_IN:
         return renderDineInTables();
       case DELIVERY_TYPE.DELIVERY:
-        return ordersData.deliveryOrders.length > 0 ? (
+        return filteredDeliveryOrders.length > 0 ? (
           <FlatList
-            data={ordersData.deliveryOrders}
+            data={filteredDeliveryOrders}
             renderItem={renderOrderItem}
             keyExtractor={(item) => item._id}
             scrollEnabled={false}
@@ -752,9 +1117,9 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
           renderEmptyState()
         );
       case DELIVERY_TYPE.PICKUP:
-        return ordersData.pickupOrders.length > 0 ? (
+        return filteredPickupOrders.length > 0 ? (
           <FlatList
-            data={ordersData.pickupOrders}
+            data={filteredPickupOrders}
             renderItem={renderOrderItem}
             keyExtractor={(item) => item._id}
             scrollEnabled={false}

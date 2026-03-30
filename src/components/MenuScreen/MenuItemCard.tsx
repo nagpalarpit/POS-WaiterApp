@@ -73,11 +73,7 @@ export const MenuItemCard: React.FC<MenuItemCardProps> = ({
           <Text style={{ color: colors.textSecondary, fontSize: 11, marginTop: 4, minHeight: 30 }} numberOfLines={2}>
             {item.description}
           </Text>
-        ) : (
-          <Text style={{ color: colors.textSecondary, fontSize: 11, marginTop: 4, minHeight: 30 }}>
-            {t('defaultItemDescription')}
-          </Text>
-        )}
+        ) : ''}
       </View>
 
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 }}>

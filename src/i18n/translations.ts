@@ -184,6 +184,7 @@ const EN: TranslationDictionary = {
   noItemsAvailableForSplit: "No items available for split payment.",
   noItemsInThisOrder: "No items in this order",
   noMatchingItems: "No matching items",
+  noSearchResults: "No matching results",
   noMenuAvailable: "No Menu Available",
   noDeliveryAreasFound: "No delivery areas found",
   noOrderNoteAdded: "No order note added.",
@@ -245,6 +246,8 @@ const EN: TranslationDictionary = {
   selectGroupLabel: "Select Group Label",
   selectPincode: "Select Pincode",
   searchByItemNameOrCustomId: "Search by item name or custom ID",
+  searchByOrderNo: "Search by order No.",
+  searchByTableNoOrOrderNo: "Search by table No. or order No.",
   searchByPostCodeOrCity: "Search by post code or city",
   selectPaymentMethod: "Select a payment method.",
   selected: "Selected",
@@ -611,6 +614,7 @@ const DE: TranslationDictionary = {
   noItemsAvailableForSplit: "Keine Artikel für Split-Zahlung verfügbar.",
   noItemsInThisOrder: "Keine Artikel in dieser Bestellung",
   noMatchingItems: "Keine passenden Artikel",
+  noSearchResults: "Keine passenden Ergebnisse",
   noMenuAvailable: "Kein Menü verfügbar",
   noDeliveryAreasFound: "Keine Liefergebiete gefunden",
   noOrderNoteAdded: "Keine Bestellnotiz hinzugefügt.",
@@ -870,6 +874,8 @@ const DE: TranslationDictionary = {
   chooseTheCourseLabelForThisSection:
     "Wählen Sie die Gangbezeichnung für diesen Abschnitt.",
   searchByItemNameOrCustomId: "Nach Artikelnamen oder Custom-ID suchen",
+  searchByOrderNo: "Nach Bestellnummer suchen",
+  searchByTableNoOrOrderNo: "Nach Tischnr. oder Bestellnr. suchen",
   searchByPostCodeOrCity: "Nach Postleitzahl oder Stadt suchen",
   extrasAreNotConfigured: "Extras sind nicht konfiguriert.",
   failedToAddItemToCart:
