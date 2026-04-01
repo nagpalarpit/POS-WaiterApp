@@ -41,7 +41,7 @@
     ],
     "extra": {
       "NODE_ENV": "DEV",
-      "API_ENV": "live",
+      "API_ENV": "dev",
       "SERVER_BASE_URL_DEV": "http://146.190.9.120:3000/",
       "SERVER_BASE_URL_LIVE": "https://live-api.atgpos.de/",
       "LOCAL_BASE_URL": "",
