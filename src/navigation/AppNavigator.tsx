@@ -9,7 +9,7 @@ import {
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createDrawerNavigator, DrawerContentComponentProps } from '@react-navigation/drawer';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 
 import IPEntryScreen from '../screens/IPEntryScreen';
@@ -36,6 +36,7 @@ import StatusBarIndicator from '../components/StatusBarIndicator';
 import LocalServerLockOverlay from '../components/LocalServerLockOverlay';
 import { getOnboardingUserId } from '../utils/onboarding';
 import { OrderServiceTiming } from '../types/orderFlow';
+import { API_ENV } from '../config/env';
 
 export type RootStackParamList = {
   Onboarding: undefined;
@@ -478,6 +479,7 @@ export default function AppNavigator() {
   const { colors } = useTheme();
   const { showToast } = useToast();
   const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
   const { isAuthenticated, isLoading, user } = useAuth();
   const { isLocalServerReachable } = useConnection();
   const [currentRouteName, setCurrentRouteName] = useState<string | undefined>();
@@ -565,6 +567,8 @@ export default function AppNavigator() {
   const hideStatusBarIndicator = !currentRouteName || currentRouteName === 'IPEntry';
   const isOnboardingRoute = currentRouteName === 'Onboarding';
   const canShowDrawerContent = isAuthenticated && !isOnboardingRoute;
+  const shouldShowTestModeBadge = API_ENV === 'dev';
+  const testModeBadgeTop = (hideStatusBarIndicator ? insets.top : insets.top + 40) + 10;
   const syncCurrentRoute = () => {
     if (!navigationRef.isReady()) {
       return;
@@ -587,6 +591,38 @@ export default function AppNavigator() {
           connectionModalVisible={isConnectionModalVisible}
           onConnectionModalVisibleChange={setIsConnectionModalVisible}
         />
+
+        {shouldShowTestModeBadge ? (
+          <View
+            pointerEvents="none"
+            style={{
+              position: 'absolute',
+              top: testModeBadgeTop,
+              left: 16,
+              right: 16,
+              zIndex: 20,
+              alignItems: 'center',
+            }}
+          >
+            <View
+              style={{
+                borderRadius: 999,
+                paddingHorizontal: 14,
+                paddingVertical: 7,
+                backgroundColor: colors.warning || '#D97706',
+                shadowColor: '#000',
+                shadowOpacity: 0.14,
+                shadowRadius: 8,
+                shadowOffset: { width: 0, height: 3 },
+                elevation: 5,
+              }}
+            >
+              <Text style={{ color: '#fff', fontSize: 12, fontWeight: '800' }}>
+                App is in test mode
+              </Text>
+            </View>
+          </View>
+        ) : null}
 
         {
           Boolean(isLoading) && (
