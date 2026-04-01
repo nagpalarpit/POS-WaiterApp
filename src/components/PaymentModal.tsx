@@ -297,7 +297,7 @@ export default function PaymentScreen(props: PaymentScreenProps) {
     { id: 99, label: t("other") },
   ];
   const otherMethods = [
-    { id: 5, label: t("debitorPayment") },
+    // { id: 5, label: t("debitorPayment") },
     { id: 6, label: "Lieferando" },
     { id: 7, label: "Uber" },
     { id: 8, label: "Wolt" },
@@ -1024,7 +1024,7 @@ export default function PaymentScreen(props: PaymentScreenProps) {
                     );
                   })}
                 </View>
-                {selectedOtherMethod === 5 ? (
+                {/* {selectedOtherMethod === 5 ? (
                   <View style={{ marginTop: 8 }}>
                     <Text
                       style={{ color: colors.textSecondary, marginBottom: 8 }}
@@ -1132,7 +1132,7 @@ export default function PaymentScreen(props: PaymentScreenProps) {
                       </TouchableOpacity>
                     </View>
                   </View>
-                ) : null}
+                ) : null} */}
               </View>
             ) : isSplitMode ? (
               <View>
