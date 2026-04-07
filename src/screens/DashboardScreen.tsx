@@ -148,6 +148,8 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
     );
   }, [settingsData.settings]);
 
+  const hasConfiguredTableAreas = tableAreaList.length > 0;
+
   const allAreaTables = useMemo(() => {
     if (!tableAreaList.length) return [];
     const tableNos = tableAreaList.flatMap((area: any) =>
@@ -233,21 +235,16 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
   }, [ordersData.dineInTables]);
 
   const tableNumbers = useMemo(() => {
+    if (!hasConfiguredTableAreas) {
+      return [];
+    }
+
     if (selectedTableArea) {
       return selectedAreaTables;
     }
 
-    if (allAreaTables.length > 0) {
-      return allAreaTables;
-    }
-
-    const total = Number(settingsData.settings?.totalTables ?? 0);
-    if (total > 0) {
-      return Array.from({ length: total }, (_, i) => i + 1);
-    }
-
-    return [];
-  }, [selectedAreaTables, selectedTableArea, allAreaTables, settingsData.settings]);
+    return allAreaTables;
+  }, [allAreaTables, hasConfiguredTableAreas, selectedAreaTables, selectedTableArea]);
 
   const resolveTableAreaForTable = (tableNo: number) => {
     if (!tableAreaList.length) return null;
@@ -1032,23 +1029,7 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
     if (activeTab !== DELIVERY_TYPE.DINE_IN) return null;
 
     if (!tableAreaList.length) {
-      return (
-        <View
-          style={{
-            marginTop: 12,
-            paddingHorizontal: 12,
-            paddingVertical: 10,
-            borderRadius: 12,
-            borderWidth: 1,
-            borderColor: colors.border,
-            backgroundColor: colors.surface,
-          }}
-        >
-          <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
-            {t('tableAreasNotAvailable')}
-          </Text>
-        </View>
-      );
+      return null;
     }
 
     return (
@@ -1136,7 +1117,65 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
     </View>
   );
 
+  const renderTableAreasUnavailableState = () => (
+    <View
+      style={{
+        marginTop: 16,
+        paddingHorizontal: 20,
+        paddingVertical: 28,
+        borderRadius: 18,
+        borderWidth: 1,
+        borderColor: colors.border,
+        backgroundColor: colors.surface,
+        alignItems: 'center',
+      }}
+    >
+      <View
+        style={{
+          width: 56,
+          height: 56,
+          borderRadius: 28,
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: colors.primary + '14',
+        }}
+      >
+        <MaterialCommunityIcons
+          name="view-grid-outline"
+          size={26}
+          color={colors.primary}
+        />
+      </View>
+      <Text
+        style={{
+          color: colors.text,
+          fontSize: 18,
+          fontWeight: '800',
+          textAlign: 'center',
+          marginTop: 14,
+        }}
+      >
+        {t('tableAreasNotAvailable')}
+      </Text>
+      <Text
+        style={{
+          color: colors.textSecondary,
+          fontSize: 14,
+          lineHeight: 20,
+          textAlign: 'center',
+          marginTop: 8,
+        }}
+      >
+        {t('tableAreasNotAvailableDescription')}
+      </Text>
+    </View>
+  );
+
   const renderDineInTables = () => {
+    if (!hasConfiguredTableAreas) {
+      return renderTableAreasUnavailableState();
+    }
+
     if (filteredTableNumbers.length === 0) {
       return renderEmptyState();
     }

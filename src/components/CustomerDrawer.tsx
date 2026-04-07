@@ -1475,7 +1475,6 @@ export default function CustomerDrawer({
                       <Text style={[styles.fieldLabel, { color: colors.text, marginBottom: 0, flex: 1 }]}>
                         {`${t('pincode')} *`}
                       </Text>
-                      {/*
                       <TouchableOpacity
                         onPress={() => openDeliverySettingDrawer(address)}
                         style={{
@@ -1496,7 +1495,6 @@ export default function CustomerDrawer({
                           color={colors.text}
                         />
                       </TouchableOpacity>
-                      */}
                     </View>
                     <TouchableOpacity
                       onPress={() => openPincodePicker(address)}

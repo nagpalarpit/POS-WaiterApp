@@ -21,11 +21,6 @@ const getActiveTableNumbers = (settings: Settings | null): number[] => {
     return unique.sort((a, b) => a - b);
   }
 
-  const totalTables = Number(settings?.totalTables ?? 0) || 0;
-  if (totalTables > 0) {
-    return Array.from({ length: totalTables }, (_, i) => i + 1);
-  }
-
   return [];
 };
 
@@ -41,15 +36,15 @@ export const useTableStatistics = (dineInOrders: Order[], settings: Settings | n
    * Calculate table statuses: available, booked, semi-paid
    */
   const calculateTableStatuses = (dineInTableOrders: Order[]) => {
-    const settingsData = settings || { totalTables: 20 };
-    const activeTables = getActiveTableNumbers(settingsData);
+    const activeTables = getActiveTableNumbers(settings);
     const activeTableSet = new Set(activeTables);
+    const hasConfiguredTableAreas = activeTables.length > 0;
 
-    const scopedOrders = activeTables.length > 0
+    const scopedOrders = hasConfiguredTableAreas
       ? dineInTableOrders.filter((order) =>
           activeTableSet.has(Number(order.orderDetails?.tableNo))
         )
-      : dineInTableOrders;
+      : [];
 
     const occupiedTableNumbers = new Set(
       scopedOrders
@@ -81,9 +76,7 @@ export const useTableStatistics = (dineInOrders: Order[], settings: Settings | n
       }
     });
 
-    const totalTables = activeTables.length > 0
-      ? activeTables.length
-      : settingsData.totalTables || 20;
+    const totalTables = hasConfiguredTableAreas ? activeTables.length : 0;
     const available = totalTables - occupiedTableNumbers.size;
 
     setAvailableTablesCount(Math.max(0, available));

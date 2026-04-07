@@ -279,6 +279,8 @@ const EN: TranslationDictionary = {
   table: "Table",
   tableNumber: "Table",
   tableAreasNotAvailable: "Table areas not available",
+  tableAreasNotAvailableDescription:
+    "Please create them in POS through Table Mappings.",
   tables: "Tables",
   tapOnItemsToAddThem: "Tap on items to add them",
   tscCanceled: "TSC Canceled",
@@ -725,6 +727,8 @@ const DE: TranslationDictionary = {
   table: "Tisch",
   tableNumber: "Tisch",
   tableAreasNotAvailable: "Tischbereiche nicht verfügbar",
+  tableAreasNotAvailableDescription:
+    "Bitte erstellen Sie diese im POS ueber Tischzuordnungen.",
   tables: "Tische",
   tapOnItemsToAddThem: "Tippen Sie auf Artikel, um sie hinzuzufügen",
   tscCanceled: "TSC storniert",

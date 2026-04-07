@@ -37,8 +37,8 @@ export default function LoginScreen() {
   const { showToast } = useToast();
   const { t } = useTranslation();
 
-  const [username, setUsername] = useState('testyash1@gmail_test.com');
-  const [password, setPassword] = useState('admin@123');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
   useFocusEffect(
