@@ -15,28 +15,25 @@ type OrderSyncEvent = {
   companyId?: number;
 };
 
-type LockInfo = {
-  sourceId: string;
-  updatedAt: number;
-};
-
-type PersistedActiveLock = {
-  eventType: 'TABLE_LOCK' | 'ORDER_LOCK' | 'PAY_LOCK';
-  tableNo?: number | null;
-  orderNumber?: string | number | null;
-  updatedAt: number;
-};
-
-const LOCK_TTL_MS = 5 * 60 * 1000; // 5 minutes
 const PRINT_TTL_MS = 5 * 60 * 1000;
 
-const tableLocks = new Map<number, LockInfo>();
-const orderLocks = new Map<string, LockInfo>();
 const listeners = new Set<(event: OrderSyncEvent) => void>();
 let connectionListenersAttached = false;
 const pendingPrintRequests = new Map<string, number>();
 const handledPrintResults = new Map<string, number>();
-const ACTIVE_LOCK_STORAGE_KEY = STORAGE_KEYS.activeOrderSyncLock;
+let activeOpenContext: {
+  tableNo: number | null;
+  orderNumber: string | null;
+  eventType: string | null;
+  updatedAt: number;
+} | null = null;
+const pendingOpenChecks = new Map<
+  string,
+  {
+    resolve: (value: { hasConflict: boolean; conflictType: 'table' | 'order' | null }) => void;
+    timer: ReturnType<typeof setTimeout>;
+  }
+>();
 
 const deviceId = (() => {
   const ts = Date.now();
@@ -55,106 +52,12 @@ const toNumber = (value: unknown, fallback = 0): number => {
   return fallback;
 };
 
-const pruneLocks = () => {
-  const now = Date.now();
-  for (const [key, lock] of tableLocks.entries()) {
-    if (now - lock.updatedAt > LOCK_TTL_MS) {
-      tableLocks.delete(key);
-    }
-  }
-  for (const [key, lock] of orderLocks.entries()) {
-    if (now - lock.updatedAt > LOCK_TTL_MS) {
-      orderLocks.delete(key);
-    }
-  }
-};
-
 const resetLockState = () => {
-  tableLocks.clear();
-  orderLocks.clear();
-};
-
-const extractLockSnapshot = (orderInfo: any): PersistedActiveLock | null => {
-  const tableNo = orderInfo?.tableNo ?? null;
-  const orderNumber =
-    orderInfo?.orderNumber ??
-    orderInfo?.customOrderId ??
-    orderInfo?._id ??
-    orderInfo?.orderId ??
-    null;
-
-  if (tableNo == null && orderNumber == null) {
-    return null;
-  }
-
-  return {
-    eventType: 'TABLE_LOCK',
-    tableNo,
-    orderNumber,
-    updatedAt: Date.now(),
-  };
-};
-
-const persistActiveLockSnapshot = async (
-  eventType: string,
-  orderInfo: any,
-): Promise<void> => {
-  try {
-    if (eventType === 'TABLE_LOCK' || eventType === 'ORDER_LOCK' || eventType === 'PAY_LOCK') {
-      const snapshot = extractLockSnapshot(orderInfo);
-      if (snapshot) {
-        snapshot.eventType = eventType as PersistedActiveLock['eventType'];
-        await AsyncStorage.setItem(ACTIVE_LOCK_STORAGE_KEY, JSON.stringify(snapshot));
-      }
-      return;
-    }
-
-    if (
-      eventType === 'UNLOCK' ||
-      eventType === 'ORDER_PLACED' ||
-      eventType === 'ORDER_UPDATED' ||
-      eventType === 'ORDER_PAID' ||
-      eventType === 'ORDER_CANCELLED'
-    ) {
-      await AsyncStorage.removeItem(ACTIVE_LOCK_STORAGE_KEY);
-    }
-  } catch (error) {
-    console.log('Failed to persist active lock snapshot:', error);
-  }
-};
-
-const readActiveLockSnapshot = async (): Promise<PersistedActiveLock | null> => {
-  try {
-    const raw = await AsyncStorage.getItem(ACTIVE_LOCK_STORAGE_KEY);
-    if (!raw) return null;
-
-    const parsed = JSON.parse(raw) as PersistedActiveLock;
-    if (!parsed) return null;
-
-    const tableNo = parsed.tableNo != null ? Number(parsed.tableNo) : null;
-    const orderNumber = parsed.orderNumber != null ? String(parsed.orderNumber) : null;
-
-    if (tableNo == null && orderNumber == null) {
-      return null;
-    }
-
-    return {
-      eventType: parsed.eventType,
-      tableNo,
-      orderNumber,
-      updatedAt: Number(parsed.updatedAt) || Date.now(),
-    };
-  } catch (error) {
-    console.log('Failed to read active lock snapshot:', error);
-    return null;
-  }
-};
-
-const clearActiveLockSnapshot = async (): Promise<void> => {
-  try {
-    await AsyncStorage.removeItem(ACTIVE_LOCK_STORAGE_KEY);
-  } catch (error) {
-    console.log('Failed to clear active lock snapshot:', error);
+  activeOpenContext = null;
+  for (const [requestId, pending] of pendingOpenChecks.entries()) {
+    clearTimeout(pending.timer);
+    pending.resolve({ hasConflict: false, conflictType: null });
+    pendingOpenChecks.delete(requestId);
   }
 };
 
@@ -214,42 +117,144 @@ const getOrderKey = (orderInfo: any): string | null => {
   return key ? String(key) : null;
 };
 
-const applyLocks = (eventType: string, orderInfo: any, sourceId: string) => {
-  const tableNo = orderInfo?.tableNo;
-  const orderKey = getOrderKey(orderInfo);
-  const now = Date.now();
+const normalizeTableNo = (value: any): number | null => {
+  if (value === undefined || value === null || value === '') return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
 
-  const lockTable = () => {
-    if (tableNo) {
-      tableLocks.set(Number(tableNo), { sourceId, updatedAt: now });
-    }
-  };
-  const lockOrder = () => {
-    if (orderKey) {
-      orderLocks.set(String(orderKey), { sourceId, updatedAt: now });
-    }
-  };
-  const unlockAll = () => {
-    if (tableNo) tableLocks.delete(Number(tableNo));
-    if (orderKey) orderLocks.delete(String(orderKey));
-  };
+const normalizeOpenContext = (orderInfo: any): {
+  tableNo: number | null;
+  orderNumber: string | null;
+} => ({
+  tableNo: normalizeTableNo(orderInfo?.tableNo),
+  orderNumber: getOrderKey(orderInfo),
+});
 
-  if (eventType === 'TABLE_LOCK') {
-    lockTable();
-  } else if (eventType === 'ORDER_LOCK' || eventType === 'PAY_LOCK') {
-    lockOrder();
-    lockTable();
-  } else if (
+const hasContextValue = (context: {
+  tableNo: number | null;
+  orderNumber: string | null;
+}): boolean => context.tableNo !== null || context.orderNumber !== null;
+
+const syncLocalOpenContext = (eventType: string, orderInfo: any) => {
+  const context = normalizeOpenContext(orderInfo);
+
+  if (eventType === 'TABLE_LOCK' || eventType === 'ORDER_LOCK' || eventType === 'PAY_LOCK') {
+    if (!hasContextValue(context)) return;
+    activeOpenContext = {
+      ...context,
+      eventType,
+      updatedAt: Date.now(),
+    };
+    return;
+  }
+
+  if (
     eventType === 'UNLOCK' ||
     eventType === 'ORDER_PLACED' ||
     eventType === 'ORDER_UPDATED' ||
     eventType === 'ORDER_PAID' ||
     eventType === 'ORDER_CANCELLED'
   ) {
-    unlockAll();
+    if (!activeOpenContext) return;
+    if (!hasContextValue(context)) {
+      activeOpenContext = null;
+      return;
+    }
+
+    const sameTable =
+      context.tableNo !== null &&
+      activeOpenContext.tableNo !== null &&
+      context.tableNo === activeOpenContext.tableNo;
+    const sameOrder =
+      !!context.orderNumber &&
+      !!activeOpenContext.orderNumber &&
+      context.orderNumber === activeOpenContext.orderNumber;
+
+    if (sameTable || sameOrder) {
+      activeOpenContext = null;
+    }
+  }
+};
+
+const findOpenConflict = (orderInfo: any): 'table' | 'order' | null => {
+  if (!activeOpenContext) return null;
+
+  const context = normalizeOpenContext(orderInfo);
+
+  if (
+    context.tableNo !== null &&
+    activeOpenContext.tableNo !== null &&
+    context.tableNo === activeOpenContext.tableNo
+  ) {
+    return 'table';
   }
 
-  pruneLocks();
+  if (
+    context.orderNumber &&
+    activeOpenContext.orderNumber &&
+    context.orderNumber === activeOpenContext.orderNumber
+  ) {
+    return 'order';
+  }
+
+  return null;
+};
+
+const buildOpenCheckRequestId = () => {
+  const ts = Date.now();
+  const rand = Math.random().toString(36).slice(2, 9);
+  return `open_check_${ts}_${rand}`;
+};
+
+const handleOpenCheckRequest = (payload: OrderSyncEvent) => {
+  if (!payload) return;
+  if (payload.posId === deviceId) return;
+
+  const requestId =
+    (payload?.orderData as any)?.requestId ||
+    (payload as any)?.requestId ||
+    null;
+  if (!requestId) return;
+
+  const orderInfo = extractOrderInfo(payload.orderData);
+  const conflictType = findOpenConflict(orderInfo);
+  if (!conflictType) return;
+
+  const socket = getSocket();
+  if (!socket) return;
+
+  socket.emit('pos-order-sync', {
+    companyId: payload.companyId ?? cachedCompanyId ?? undefined,
+    orderData: {
+      requestId,
+      conflictType,
+      orderInfo: normalizeOpenContext(orderInfo),
+    },
+    eventType: 'OPEN_CHECK_CONFLICT',
+    timestamp: new Date().toISOString(),
+    posId: deviceId,
+  });
+};
+
+const handleOpenCheckConflict = (payload: OrderSyncEvent) => {
+  const requestId =
+    (payload?.orderData as any)?.requestId ||
+    (payload as any)?.requestId ||
+    null;
+  if (!requestId) return;
+
+  const pending = pendingOpenChecks.get(String(requestId));
+  if (!pending) return;
+
+  clearTimeout(pending.timer);
+  pendingOpenChecks.delete(String(requestId));
+  pending.resolve({
+    hasConflict: true,
+    conflictType:
+      ((payload?.orderData as any)?.conflictType as 'table' | 'order' | null) ||
+      null,
+  });
 };
 
 const resolveCompanyId = async (): Promise<number> => {
@@ -348,12 +353,18 @@ export const initOrderSync = () => {
     if (!payload) return;
     if (payload.posId === deviceId) return;
     const eventType = payload.eventType || 'ORDER_SYNC';
+    if (eventType === 'OPEN_CHECK_REQUEST') {
+      handleOpenCheckRequest(payload);
+      return;
+    }
+    if (eventType === 'OPEN_CHECK_CONFLICT') {
+      handleOpenCheckConflict(payload);
+      return;
+    }
     if (eventType === 'PRINT_SUCCESS' || eventType === 'PRINT_ERROR') {
       const requestId = extractPrintRequestId(payload);
       if (!shouldHandlePrintResult(requestId)) return;
     }
-    const orderInfo = extractOrderInfo(payload.orderData);
-    applyLocks(eventType, orderInfo, payload.posId || 'unknown');
     listeners.forEach((listener) => listener(payload));
   });
 
@@ -405,6 +416,17 @@ export const emitOrderSync = async (
   orderData?: any
 ) => {
   const socket = getSocket();
+  syncLocalOpenContext(eventType, orderInfo);
+
+  if (
+    eventType === 'TABLE_LOCK' ||
+    eventType === 'ORDER_LOCK' ||
+    eventType === 'PAY_LOCK' ||
+    eventType === 'UNLOCK'
+  ) {
+    return;
+  }
+
   if (!socket) return;
   const companyId = await resolveCompanyId();
   const payload: OrderSyncEvent = {
@@ -415,8 +437,6 @@ export const emitOrderSync = async (
     posId: deviceId,
   };
 
-  await persistActiveLockSnapshot(eventType, orderInfo);
-  applyLocks(eventType, orderInfo, deviceId);
   socket.emit('pos-order-sync', payload);
 };
 
@@ -529,21 +549,11 @@ export const emitPosKotPrint = (printOrder: any) => {
 };
 
 export const isTableLocked = (tableNo: number): boolean => {
-  if (!tableNo) return false;
-  pruneLocks();
-  const lock = tableLocks.get(Number(tableNo));
-  if (!lock) return false;
-  return lock.sourceId !== deviceId;
+  return false;
 };
 
 export const isOrderLocked = (orderOrId: any): boolean => {
-  pruneLocks();
-  const orderInfo = typeof orderOrId === 'object' ? orderOrId : { orderNumber: orderOrId };
-  const key = getOrderKey(orderInfo);
-  if (!key) return false;
-  const lock = orderLocks.get(String(key));
-  if (!lock) return false;
-  return lock.sourceId !== deviceId;
+  return false;
 };
 
 export const lockTable = async (tableNo: number) => {
@@ -587,30 +597,45 @@ export const unlockOrder = async (order: any) => {
 };
 
 export const releasePersistedActiveLock = async (): Promise<boolean> => {
-  const snapshot = await readActiveLockSnapshot();
-  if (!snapshot) return false;
-
-  const socket = getSocket();
-  if (!socket || !socket.connected) {
-    return false;
-  }
-
-  const payload: Record<string, any> = {};
-  if (snapshot.tableNo != null) {
-    payload.tableNo = snapshot.tableNo;
-  }
-  if (snapshot.orderNumber != null) {
-    payload.orderNumber = snapshot.orderNumber;
-  }
-
-  if (!Object.keys(payload).length) {
-    await clearActiveLockSnapshot();
-    return false;
-  }
-
-  await emitOrderSync('UNLOCK', payload);
-  await clearActiveLockSnapshot();
-  return true;
+  return false;
 };
 
 export const lockPayment = async (order: any) => lockOrder(order, 'PAY_LOCK');
+
+export const checkRemoteOpenConflict = async (
+  orderInfo: any,
+  timeoutMs = 450,
+): Promise<{ hasConflict: boolean; conflictType: 'table' | 'order' | null }> => {
+  const socket = getSocket();
+  if (!socket || !socket.connected) {
+    return { hasConflict: false, conflictType: null };
+  }
+
+  const context = normalizeOpenContext(orderInfo);
+  if (!hasContextValue(context)) {
+    return { hasConflict: false, conflictType: null };
+  }
+
+  const companyId = await resolveCompanyId();
+  const requestId = buildOpenCheckRequestId();
+
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      pendingOpenChecks.delete(requestId);
+      resolve({ hasConflict: false, conflictType: null });
+    }, timeoutMs);
+
+    pendingOpenChecks.set(requestId, { resolve, timer });
+
+    socket.emit('pos-order-sync', {
+      companyId,
+      orderData: {
+        requestId,
+        orderInfo: context,
+      },
+      eventType: 'OPEN_CHECK_REQUEST',
+      timestamp: new Date().toISOString(),
+      posId: deviceId,
+    });
+  });
+};

@@ -31,9 +31,8 @@ import { getOrderStatusLabel, ORDER_STATUS } from '../utils/orderUtils';
 import { formatCurrency } from '../utils/currency';
 import { formatOrderServiceTime } from '../utils/orderServiceDisplay';
 import {
+  checkRemoteOpenConflict,
   emitOrderSync,
-  isOrderLocked,
-  isTableLocked,
   lockOrder,
   lockTable,
   unlockOrder,
@@ -309,7 +308,6 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
     return allMoveTableNumbers
       .filter((tableNo) => Number.isFinite(tableNo) && tableNo !== currentTableNo)
       .filter((tableNo) => !bookedTables.has(tableNo))
-      .filter((tableNo) => !isTableLocked(tableNo))
       .map((tableNo) => ({
         tableNo,
         areaName: getAreaNameForTable(tableNo),
@@ -324,14 +322,23 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
   }, [isMoveSubmitting, movingOrder, resetMoveSheet]);
 
   const handleMoveTablePress = useCallback(
-    (order: Order, event?: any) => {
+    async (order: Order, event?: any) => {
       event?.stopPropagation?.();
 
       if (!order) {
         return;
       }
 
-      if (isOrderLocked(order)) {
+      const conflict = await checkRemoteOpenConflict({
+        tableNo: order?.orderDetails?.tableNo,
+        orderNumber:
+          order?.customOrderId ||
+          (order as any)?.orderDetails?.customOrderId ||
+          (order as any)?.orderDetails?.orderNumber ||
+          order?._id ||
+          order?.id,
+      });
+      if (conflict.hasConflict) {
         const label = getOrderDisplayLabel(order);
         showToast('error', `${label} ${t('handledOnAnotherDevice')} ${t('pleaseTryLater')}`);
         return;
@@ -373,7 +380,11 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
       return tableNo === moveTargetTableNo && `${compareOrderNumber}` !== `${orderNumber}`;
     });
 
-    if (destinationOccupied || isTableLocked(moveTargetTableNo)) {
+    const tableConflict = await checkRemoteOpenConflict({
+      tableNo: moveTargetTableNo,
+      orderNumber,
+    });
+    if (destinationOccupied || tableConflict.hasConflict) {
       showToast('error', t('unableToMoveTable'));
       return;
     }
@@ -1207,9 +1218,18 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
         {tables.map((table) => (
           <TouchableOpacity
             key={table.tableNo}
-            onPress={() => {
+            onPress={async () => {
               if (table.order) {
-                if (isOrderLocked(table.order)) {
+                const orderConflict = await checkRemoteOpenConflict({
+                  tableNo: table.order?.orderDetails?.tableNo ?? table.tableNo,
+                  orderNumber:
+                    table.order?.customOrderId ||
+                    (table.order as any)?.orderDetails?.customOrderId ||
+                    (table.order as any)?.orderDetails?.orderNumber ||
+                    table.order?._id ||
+                    table.order?.id,
+                });
+                if (orderConflict.hasConflict) {
                   const label = getOrderDisplayLabel(table.order);
                   showToast('error', `${label} ${t('handledOnAnotherDevice')} ${t('pleaseTryLater')}`);
                   return;
@@ -1219,7 +1239,10 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
                 return;
               }
 
-              if (isTableLocked(table.tableNo)) {
+              const tableConflict = await checkRemoteOpenConflict({
+                tableNo: table.tableNo,
+              });
+              if (tableConflict.hasConflict) {
                 showToast('error', `${t('table')} ${table.tableNo} ${t('selectedOnAnotherDevice')}`);
                 return;
               }
@@ -1322,8 +1345,17 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
 
       return (
         <TouchableOpacity
-          onPress={() => {
-            if (isOrderLocked(order)) {
+          onPress={async () => {
+            const conflict = await checkRemoteOpenConflict({
+              tableNo: order?.orderDetails?.tableNo,
+              orderNumber:
+                order?.customOrderId ||
+                (order as any)?.orderDetails?.customOrderId ||
+                (order as any)?.orderDetails?.orderNumber ||
+                order?._id ||
+                order?.id,
+            });
+            if (conflict.hasConflict) {
               const label = getOrderDisplayLabel(order);
               showToast('error', `${label} ${t('handledOnAnotherDevice')} ${t('pleaseTryLater')}`);
               return;

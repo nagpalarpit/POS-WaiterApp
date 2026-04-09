@@ -156,7 +156,7 @@ const EN: TranslationDictionary = {
   group: "Group",
   guest: "Guest",
   handledOnAnotherDevice:
-    "is being handled on another device. Please try later.",
+    "is being handled on another device.",
   helpAndSupport: "Help & Support",
   home: "Home",
   itemName: "Item Name",
@@ -611,7 +611,7 @@ const DE: TranslationDictionary = {
   group: "Gang",
   guest: "Gast",
   handledOnAnotherDevice:
-    "wird auf einem anderen Gerät bearbeitet. Bitte später erneut versuchen.",
+    "wird auf einem anderen Gerät bearbeitet.",
   helpAndSupport: "Hilfe & Support",
   home: "Startseite",
   itemName: "Artikelname",

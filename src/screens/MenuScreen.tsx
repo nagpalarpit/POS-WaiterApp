@@ -39,8 +39,7 @@ import {
 } from '../utils/cartCalculations';
 import cartService from '../services/cartService';
 import {
-  isOrderLocked,
-  isTableLocked,
+  checkRemoteOpenConflict,
   lockOrder,
   lockTable,
   unlockOrder,
@@ -381,25 +380,35 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
 
   useEffect(() => {
     if (!existingOrder) return;
-    if (isOrderLocked(existingOrder)) {
-      const blockedOrderLabel =
-        existingOrder?.customOrderId ||
-        existingOrder?.orderDetails?.customOrderId ||
-        existingOrder?.orderDetails?.orderNumber ||
-        existingOrder?._id ||
-        existingOrder?.id ||
-        t('order');
-      showToast(
-        'error',
-        `${blockedOrderLabel} ${t('handledOnAnotherDevice')} ${t('pleaseTryLater')}`,
-      );
-      if (navigation.canGoBack?.()) {
-        navigation.goBack();
-      }
-      return;
-    }
     const hydrateCart = async () => {
       try {
+        const conflict = await checkRemoteOpenConflict({
+          tableNo: existingOrder?.orderDetails?.tableNo,
+          orderNumber:
+            existingOrder?.customOrderId ||
+            existingOrder?.orderDetails?.customOrderId ||
+            existingOrder?.orderDetails?.orderNumber ||
+            existingOrder?._id ||
+            existingOrder?.id,
+        });
+        if (conflict.hasConflict) {
+          const blockedOrderLabel =
+            existingOrder?.customOrderId ||
+            existingOrder?.orderDetails?.customOrderId ||
+            existingOrder?.orderDetails?.orderNumber ||
+            existingOrder?._id ||
+            existingOrder?.id ||
+            t('order');
+          showToast(
+            'error',
+            `${blockedOrderLabel} ${t('handledOnAnotherDevice')} ${t('pleaseTryLater')}`,
+          );
+          if (navigation.canGoBack?.()) {
+            navigation.goBack();
+          }
+          return;
+        }
+
         const orderCart = await cartService.setCartFromOrder(existingOrder);
         const resolvedCart = await normalizeCartGroupData(orderCart);
         cartData.setCart(resolvedCart);
@@ -450,14 +459,18 @@ export default function MenuScreen({ navigation, route }: MenuScreenProps) {
   useEffect(() => {
     if (existingOrder) return;
     if (!tableNo) return;
-    if (isTableLocked(tableNo)) {
-      showToast('error', `${t('table')} ${tableNo} ${t('selectedOnAnotherDevice')}`);
-      if (navigation.canGoBack?.()) {
-        navigation.goBack();
+    const validateTableOpen = async () => {
+      const conflict = await checkRemoteOpenConflict({ tableNo });
+      if (conflict.hasConflict) {
+        showToast('error', `${t('table')} ${tableNo} ${t('selectedOnAnotherDevice')}`);
+        if (navigation.canGoBack?.()) {
+          navigation.goBack();
+        }
+        return;
       }
-      return;
-    }
-    lockTable(tableNo);
+      lockTable(tableNo);
+    };
+    void validateTableOpen();
   }, [existingOrder, tableNo, navigation, showToast, t]);
 
   useEffect(() => {
