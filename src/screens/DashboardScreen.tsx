@@ -55,13 +55,14 @@ import { OrderServiceTiming } from '../types/orderFlow';
 
 interface DashboardScreenProps {
   navigation: any;
+  route?: any;
 }
 
 /**
  * Refactored DashboardScreen with extracted logic
  * Responsibilities: Navigation, state orchestration, and layout
  */
-export default function DashboardScreen({ navigation }: DashboardScreenProps) {
+export default function DashboardScreen({ navigation, route }: DashboardScreenProps) {
   const { colors } = useTheme();
   const { t, language } = useTranslation();
 
@@ -963,6 +964,12 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
     });
     return unsubscribe;
   }, [navigation]);
+
+  useEffect(() => {
+    const refreshToken = route?.params?.refreshToken;
+    if (!refreshToken) return;
+    ordersData.fetchOrders(false);
+  }, [ordersData, route?.params?.refreshToken]);
 
   useEffect(() => {
     if (activeTab !== DELIVERY_TYPE.DINE_IN && moveSheetVisible) {

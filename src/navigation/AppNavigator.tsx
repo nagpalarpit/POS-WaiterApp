@@ -47,7 +47,9 @@ export type RootStackParamList = {
   Onboarding: undefined;
   IPEntry: undefined;
   Login: undefined;
-  Dashboard: undefined;
+  Dashboard: {
+    refreshToken?: number;
+  };
   Account: undefined;
   Settings: undefined;
   Support: undefined;
@@ -495,11 +497,12 @@ export default function AppNavigator() {
   useEffect(() => {
     const unsubscribe = onOrderSync((payload) => {
       const eventType = String(payload?.eventType || '').toUpperCase();
+      const orderInfo =
+        payload?.orderData?.orderInfo ||
+        payload?.orderData ||
+        {};
+
       if (eventType === 'ORDER_COMPLETION_STARTED') {
-        const orderInfo =
-          payload?.orderData?.orderInfo ||
-          payload?.orderData ||
-          {};
         if (!hasActiveOrderSyncConflict(orderInfo)) {
           return;
         }
@@ -531,6 +534,7 @@ export default function AppNavigator() {
         showToast('error', t(messageKey, { value }));
 
         if (navigationRef.isReady()) {
+          const refreshToken = Date.now();
           navigationRef.dispatch(
             CommonActions.reset({
               index: 0,
@@ -539,7 +543,67 @@ export default function AppNavigator() {
                   name: 'Main',
                   state: {
                     index: 0,
-                    routes: [{ name: 'Dashboard' }],
+                    routes: [{ name: 'Dashboard', params: { refreshToken } }],
+                  },
+                },
+              ],
+            }),
+          );
+        }
+        return;
+      }
+
+      if (
+        eventType === 'ORDER_PLACED' ||
+        eventType === 'ORDER_UPDATED' ||
+        eventType === 'ORDER_PAID' ||
+        eventType === 'ORDER_CANCELLED'
+      ) {
+        if (!hasActiveOrderSyncConflict(orderInfo)) {
+          return;
+        }
+
+        clearActiveOrderSyncContext();
+
+        const isTableContext =
+          orderInfo?.tableNo !== undefined &&
+          orderInfo?.tableNo !== null &&
+          orderInfo?.tableNo !== '';
+        const value = isTableContext
+          ? `${orderInfo?.tableNo}`
+          : `${
+              orderInfo?.orderNumber ||
+              orderInfo?.customOrderId ||
+              orderInfo?._id ||
+              orderInfo?.orderId ||
+              t('order')
+            }`;
+        const messageKey =
+          eventType === 'ORDER_PLACED'
+            ? isTableContext
+              ? 'tableClosedBecausePlacedOnAnotherDevice'
+              : 'orderClosedBecausePlacedOnAnotherDevice'
+            : eventType === 'ORDER_PAID'
+              ? isTableContext
+                ? 'tableClosedBecausePaidOnAnotherDevice'
+                : 'orderClosedBecausePaidOnAnotherDevice'
+              : isTableContext
+                ? 'tableClosedBecauseChangedOnAnotherDevice'
+                : 'orderClosedBecauseChangedOnAnotherDevice';
+
+        showToast('error', t(messageKey, { value }));
+
+        if (navigationRef.isReady()) {
+          const refreshToken = Date.now();
+          navigationRef.dispatch(
+            CommonActions.reset({
+              index: 0,
+              routes: [
+                {
+                  name: 'Main',
+                  state: {
+                    index: 0,
+                    routes: [{ name: 'Dashboard', params: { refreshToken } }],
                   },
                 },
               ],

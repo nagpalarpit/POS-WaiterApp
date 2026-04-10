@@ -271,6 +271,10 @@ const EN: TranslationDictionary = {
     "Order {{value}} has been closed here because placing started on another device.",
   orderClosedBecausePaidOnAnotherDevice:
     "Order {{value}} has been closed here because payment started on another device.",
+  tableClosedBecauseChangedOnAnotherDevice:
+    "Table {{value}} has been closed here because it changed on another device.",
+  orderClosedBecauseChangedOnAnotherDevice:
+    "Order {{value}} has been closed here because it changed on another device.",
   settingsDeliveryChargeUnlocked:
     "Settings delivery charge unlocked. You can change it if needed.",
   split: "Split",
@@ -986,6 +990,10 @@ const DE: TranslationDictionary = {
     "Bestellung {{value}} wurde hier geschlossen, weil das Buchen auf einem anderen GerÃ¤t gestartet wurde.",
   orderClosedBecausePaidOnAnotherDevice:
     "Bestellung {{value}} wurde hier geschlossen, weil die Zahlung auf einem anderen GerÃ¤t gestartet wurde.",
+  tableClosedBecauseChangedOnAnotherDevice:
+    "Tisch {{value}} wurde hier geschlossen, weil er auf einem anderen GerÃ¤t geÃ¤ndert wurde.",
+  orderClosedBecauseChangedOnAnotherDevice:
+    "Bestellung {{value}} wurde hier geschlossen, weil sie auf einem anderen GerÃ¤t geÃ¤ndert wurde.",
   startTakingOrdersButton: "Bestellungen annehmen",
   continueText: "Fortfahren",
 };
