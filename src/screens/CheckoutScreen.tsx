@@ -24,7 +24,13 @@ import PinModal from '../components/PinModal';
 import OrderTimeModal from '../components/OrderTimeModal';
 import { CartItemRow } from '../components/MenuScreen/CartItemRow';
 import { formatCurrency } from '../utils/currency';
-import { emitOrderSync, emitPosKotPrint, unlockOrder, unlockTable } from '../services/orderSyncService';
+import {
+  emitOrderCompletionStarted,
+  emitOrderSync,
+  emitPosKotPrint,
+  unlockOrder,
+  unlockTable,
+} from '../services/orderSyncService';
 import { useToast } from '../components/ToastProvider';
 import {
   getCartItemQuantity,
@@ -498,8 +504,6 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
           )
           : { added: checkoutCart.items, removed: [] };
 
-      const submitResult = await orderSubmit.submitOrder(0);
-      const submittedOrder = submitResult?.order;
       const orderInfo = {
         tableNo,
         orderNumber:
@@ -510,6 +514,9 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
           existingOrder?.id,
         orderDeliveryTypeId: deliveryType,
       };
+      await emitOrderCompletionStarted('PLACE', orderInfo);
+      const submitResult = await orderSubmit.submitOrder(0);
+      const submittedOrder = submitResult?.order;
       await emitOrderSync(
         existingOrder ? 'ORDER_UPDATED' : 'ORDER_PLACED',
         orderInfo,

@@ -263,6 +263,14 @@ const EN: TranslationDictionary = {
   selectedCustomer: "Selected Customer",
   selectedForOrder: "Selected For Order",
   selectedOnAnotherDevice: "is currently selected on another device.",
+  tableClosedBecausePlacedOnAnotherDevice:
+    "Table {{value}} has been closed here because placing started on another device.",
+  tableClosedBecausePaidOnAnotherDevice:
+    "Table {{value}} has been closed here because payment started on another device.",
+  orderClosedBecausePlacedOnAnotherDevice:
+    "Order {{value}} has been closed here because placing started on another device.",
+  orderClosedBecausePaidOnAnotherDevice:
+    "Order {{value}} has been closed here because payment started on another device.",
   settingsDeliveryChargeUnlocked:
     "Settings delivery charge unlocked. You can change it if needed.",
   split: "Split",
@@ -970,6 +978,14 @@ const DE: TranslationDictionary = {
   noExtrasCategoryFound: "Keine Extra-Kategorie gefunden.",
   giftCardZeroBalance:
     "Das verbleibende Guthaben dieser Geschenkkarte beträgt 0",
+  tableClosedBecausePlacedOnAnotherDevice:
+    "Tisch {{value}} wurde hier geschlossen, weil das Buchen auf einem anderen GerÃ¤t gestartet wurde.",
+  tableClosedBecausePaidOnAnotherDevice:
+    "Tisch {{value}} wurde hier geschlossen, weil die Zahlung auf einem anderen GerÃ¤t gestartet wurde.",
+  orderClosedBecausePlacedOnAnotherDevice:
+    "Bestellung {{value}} wurde hier geschlossen, weil das Buchen auf einem anderen GerÃ¤t gestartet wurde.",
+  orderClosedBecausePaidOnAnotherDevice:
+    "Bestellung {{value}} wurde hier geschlossen, weil die Zahlung auf einem anderen GerÃ¤t gestartet wurde.",
   startTakingOrdersButton: "Bestellungen annehmen",
   continueText: "Fortfahren",
 };

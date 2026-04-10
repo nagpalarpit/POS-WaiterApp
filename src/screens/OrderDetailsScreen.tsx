@@ -40,6 +40,7 @@ import PinModal from "../components/PinModal";
 import CancelOrderModal from "../components/CancelOrderModal";
 import { formatCurrency } from "../utils/currency";
 import {
+  emitOrderCompletionStarted,
   emitOrderSync,
   emitPosCancelPrint,
   emitPosPrint,
@@ -2595,6 +2596,15 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
 
   const handleMarkAsPaid = useCallback(() => {
     if (isPaid) return;
+    void emitOrderCompletionStarted("PAY", {
+      tableNo: order?.orderDetails?.tableNo ?? null,
+      orderNumber:
+        order?.customOrderId ||
+        order?.orderDetails?.customOrderId ||
+        order?.orderDetails?.orderNumber ||
+        order?._id ||
+        order?.id,
+    });
     lockPayment(order);
     openPaymentScreen("settle");
   }, [isPaid, marking, openPaymentScreen, order]);

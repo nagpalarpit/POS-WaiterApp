@@ -440,6 +440,27 @@ export const emitOrderSync = async (
   socket.emit('pos-order-sync', payload);
 };
 
+export const emitOrderCompletionStarted = async (
+  actionType: 'PLACE' | 'PAY',
+  orderInfo: any,
+) => {
+  const context = normalizeOpenContext(orderInfo);
+  if (!hasContextValue(context)) return;
+
+  await emitOrderSync('ORDER_COMPLETION_STARTED', context, {
+    orderInfo: context,
+    actionType,
+  });
+};
+
+export const hasActiveOrderSyncConflict = (orderInfo: any): boolean => {
+  return findOpenConflict(orderInfo) !== null;
+};
+
+export const clearActiveOrderSyncContext = (): void => {
+  activeOpenContext = null;
+};
+
 export const emitPosPrint = (orderInfo: any, paymentMethod?: number) => {
   const socket = getSocket();
   if (!socket) return;

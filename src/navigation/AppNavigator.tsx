@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Platform, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import {
+  CommonActions,
   DefaultTheme,
   DrawerActions,
   NavigationContainer,
@@ -25,7 +26,11 @@ import CartScreen from '../components/MenuScreen/CartDrawer';
 import PaymentScreen from '../components/PaymentModal';
 import posIdService from '../services/posIdService';
 import serverConnection from '../services/serverConnection';
-import { onOrderSync } from '../services/orderSyncService';
+import {
+  clearActiveOrderSyncContext,
+  hasActiveOrderSyncConflict,
+  onOrderSync,
+} from '../services/orderSyncService';
 import { useTheme } from '../theme/ThemeProvider';
 import { useToast } from '../components/ToastProvider';
 import { useConnection } from '../contexts/ConnectionProvider';
@@ -490,6 +495,60 @@ export default function AppNavigator() {
   useEffect(() => {
     const unsubscribe = onOrderSync((payload) => {
       const eventType = String(payload?.eventType || '').toUpperCase();
+      if (eventType === 'ORDER_COMPLETION_STARTED') {
+        const orderInfo =
+          payload?.orderData?.orderInfo ||
+          payload?.orderData ||
+          {};
+        if (!hasActiveOrderSyncConflict(orderInfo)) {
+          return;
+        }
+
+        clearActiveOrderSyncContext();
+
+        const actionType = String(payload?.orderData?.actionType || 'PAY').toUpperCase();
+        const isTableContext =
+          orderInfo?.tableNo !== undefined &&
+          orderInfo?.tableNo !== null &&
+          orderInfo?.tableNo !== '';
+        const value = isTableContext
+          ? `${orderInfo?.tableNo}`
+          : `${
+              orderInfo?.orderNumber ||
+              orderInfo?.customOrderId ||
+              orderInfo?._id ||
+              orderInfo?.orderId ||
+              t('order')
+            }`;
+        const messageKey = isTableContext
+          ? actionType === 'PLACE'
+            ? 'tableClosedBecausePlacedOnAnotherDevice'
+            : 'tableClosedBecausePaidOnAnotherDevice'
+          : actionType === 'PLACE'
+            ? 'orderClosedBecausePlacedOnAnotherDevice'
+            : 'orderClosedBecausePaidOnAnotherDevice';
+
+        showToast('error', t(messageKey, { value }));
+
+        if (navigationRef.isReady()) {
+          navigationRef.dispatch(
+            CommonActions.reset({
+              index: 0,
+              routes: [
+                {
+                  name: 'Main',
+                  state: {
+                    index: 0,
+                    routes: [{ name: 'Dashboard' }],
+                  },
+                },
+              ],
+            }),
+          );
+        }
+        return;
+      }
+
       if (eventType === 'PRINT_SUCCESS') {
         showToast('success', t('printSuccessful'));
         return;
