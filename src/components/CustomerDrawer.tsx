@@ -409,6 +409,8 @@ export default function CustomerDrawer({
     setForm((current) => ({ ...current, ...patch }));
   };
 
+  const getOptionalLabel = (label: string) => `${label} ${t('optional')}`;
+
   const updateAddress = (
     localKey: string,
     patch: Partial<CustomerFormAddress>,
@@ -1275,14 +1277,14 @@ export default function CustomerDrawer({
           })}
 
           {renderField({
-            label: t('lastName'),
+            label: getOptionalLabel(t('lastName')),
             value: form.lastName,
             onChangeText: (value) => updateForm({ lastName: value }),
             placeholder: t('enterLastName'),
           })}
 
           {renderField({
-            label: t('customerEmail'),
+            label: getOptionalLabel(t('customerEmail')),
             value: form.email,
             onChangeText: (value) => updateForm({ email: value }),
             placeholder: t('enterEmailAddress'),
@@ -1324,7 +1326,7 @@ export default function CustomerDrawer({
           {(forceDebitor || form.isDebitor) ? (
             <>
               {renderField({
-                label: t('companyName'),
+                label: `${t('companyName')} *`,
                 value: form.customerCompanyName,
                 onChangeText: (value) => updateForm({ customerCompanyName: value }),
                 placeholder: t('enterCompanyName'),
@@ -1332,7 +1334,7 @@ export default function CustomerDrawer({
               })}
 
               {renderField({
-                label: t('taxId'),
+                label: getOptionalLabel(t('taxId')),
                 value: form.steuerId,
                 onChangeText: (value) => updateForm({ steuerId: value }),
                 placeholder: t('enterTaxId'),
@@ -1597,7 +1599,7 @@ export default function CustomerDrawer({
                   ) : null}
 
                   {renderField({
-                    label: t('landmark'),
+                    label: getOptionalLabel(t('landmark')),
                     value: address.landmark || '',
                     onChangeText: (value) => updateAddress(address.localKey, { landmark: value }),
                     placeholder: t('optionalLandmark'),

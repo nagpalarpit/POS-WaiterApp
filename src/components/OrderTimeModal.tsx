@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import AppBottomSheet from './AppBottomSheet';
@@ -17,6 +17,7 @@ type Props = {
 };
 
 const pad = (value: number) => String(value).padStart(2, '0');
+const MIN_DURATION_MINUTES = 15;
 
 const formatDuration = (hours: number, minutes: number) =>
   `${pad(hours)}:${pad(minutes)}`;
@@ -66,6 +67,7 @@ export default function OrderTimeModal({
   const [durationValue, setDurationValue] = useState('00:15');
   const [manualHour, setManualHour] = useState('');
   const [manualMinute, setManualMinute] = useState('');
+  const manualHourInputRef = useRef<any>(null);
 
   useEffect(() => {
     if (!visible) return;
@@ -80,7 +82,7 @@ export default function OrderTimeModal({
       const target = new Date(normalized);
       if (!Number.isNaN(target.getTime())) {
         const diffMs = target.getTime() - Date.now();
-        const diffMinutes = Math.max(Math.ceil(diffMs / 60000), 0);
+        const diffMinutes = Math.max(Math.ceil(diffMs / 60000), MIN_DURATION_MINUTES);
         const hours = Math.floor(diffMinutes / 60);
         const minutes = diffMinutes % 60;
         setDurationValue(formatDuration(hours, minutes));
@@ -90,6 +92,16 @@ export default function OrderTimeModal({
 
     setDurationValue('00:15');
   }, [initialValue, visible]);
+
+  useEffect(() => {
+    if (!visible || !isManualTime) return;
+
+    const focusTimer = setTimeout(() => {
+      manualHourInputRef.current?.focus?.();
+    }, 100);
+
+    return () => clearTimeout(focusTimer);
+  }, [isManualTime, visible]);
 
   const isPickup = deliveryType === 2;
   const modalTitle = isPickup ? t('addPickupTime') : t('addDeliveryTime');
@@ -116,7 +128,7 @@ export default function OrderTimeModal({
 
   const adjustDuration = (deltaMinutes: number) => {
     const { hours, minutes } = parseDuration(durationValue);
-    const totalMinutes = Math.max(hours * 60 + minutes + deltaMinutes, 0);
+    const totalMinutes = Math.max(hours * 60 + minutes + deltaMinutes, MIN_DURATION_MINUTES);
     const nextHours = Math.floor(totalMinutes / 60);
     const nextMinutes = totalMinutes % 60;
     setDurationValue(formatDuration(nextHours, nextMinutes));
@@ -367,6 +379,7 @@ export default function OrderTimeModal({
               ]}
             >
               <AppBottomSheetTextInput
+                ref={manualHourInputRef}
                 value={manualHour}
                 onChangeText={setManualHour}
                 keyboardType="number-pad"

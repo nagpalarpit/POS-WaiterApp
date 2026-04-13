@@ -359,6 +359,7 @@ const EN: TranslationDictionary = {
   basePrice: "Base Price",
   totalPrice: "Total Price",
   required: "Required",
+  optional: "(optional)",
   optionalMultiple: "Optional - Multiple",
   custom: "Custom",
   percentage: "Percentage",
@@ -970,6 +971,7 @@ const DE: TranslationDictionary = {
   preparingRestaurantDashboardAndLiveOrderSync:
     "Restaurant-Dashboard und Live-Bestellsynchronisierung werden vorbereitet.",
   required: "Erforderlich",
+  optional: "(optional)",
   optionalMultiple: "Optional - Mehrfach",
   custom: "Benutzerdefiniert",
   percentage: "Prozent",
