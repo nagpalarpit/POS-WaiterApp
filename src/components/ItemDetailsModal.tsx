@@ -252,6 +252,9 @@ export default function ItemDetailsModal({
         return total;
     };
 
+    const getOptionPrice = (value?: number) => Number(value ?? 0);
+    const formatOptionPrice = (value?: number) => formatCurrency(getOptionPrice(value));
+
     const handleConfirm = () => {
         console.log('ItemDetailsModal: handleConfirm called with:', {
             variant: selectedVariant ? { id: selectedVariant.id, name: selectedVariant.name } : null,
@@ -336,11 +339,10 @@ export default function ItemDetailsModal({
                                                 <Text style={{ color: colors.text, fontWeight: '500' }}>
                                                     {variant.name}
                                                 </Text>
-                                                {(variant.price || 0) > 0 && (
-                                                    <Text style={{ color: colors.primary, fontWeight: 'bold' }}>
-                                                        +{formatCurrency(Number(variant.price || 0))}
-                                                    </Text>
-                                                )}
+                                                <Text style={{ color: colors.primary, fontWeight: 'bold' }}>
+                                                    {getOptionPrice(variant.price) > 0 ? '+' : ''}
+                                                    {formatOptionPrice(variant.price)}
+                                                </Text>
                                             </View>
                                         </TouchableOpacity>
                                     )}
@@ -393,11 +395,9 @@ export default function ItemDetailsModal({
                                                             </Text>
                                                         </View>
                                                         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                                            {(attrValue.price || 0) > 0 && (
-                                                                <Text style={{ color: colors.primary, fontWeight: 'bold', marginRight: 8 }}>
-                                                                    {formatCurrency(Number(attrValue.price || 0))}
-                                                                </Text>
-                                                            )}
+                                                            <Text style={{ color: colors.primary, fontWeight: 'bold', marginRight: 8 }}>
+                                                                {formatOptionPrice(attrValue.price)}
+                                                            </Text>
                                                             {isAttributeValueSelected(attrValue) && (
                                                                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                                                                     <TouchableOpacity

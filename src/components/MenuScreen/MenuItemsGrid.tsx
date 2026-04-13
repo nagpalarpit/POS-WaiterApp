@@ -93,7 +93,7 @@ export const MenuItemsGrid: React.FC<MenuItemsGridProps> = ({
         </View>
       )}
       ListEmptyComponent={renderEmptyState}
-      columnWrapperStyle={numColumns > 1 ? { alignItems: 'stretch' } : undefined}
+      columnWrapperStyle={numColumns > 1 ? { alignItems: 'flex-start' } : undefined}
       showsVerticalScrollIndicator={false}
     />
   );

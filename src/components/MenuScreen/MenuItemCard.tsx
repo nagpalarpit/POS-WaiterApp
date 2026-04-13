@@ -64,13 +64,13 @@ export const MenuItemCard: React.FC<MenuItemCardProps> = ({
       </View> */}
 
       <View style={{ marginTop: 10 }}>
-        <Text style={{ color: colors.text, fontSize: 14, fontWeight: '700' }} numberOfLines={2}>
+        <Text style={{ color: colors.text, fontSize: 14, fontWeight: '700' }}>
           {itemCode ? `${itemCode}. ` : ''}
           {item.name}
         </Text>
 
         {hasDescription ? (
-          <Text style={{ color: colors.textSecondary, fontSize: 11, marginTop: 4, minHeight: 30 }} numberOfLines={2}>
+          <Text style={{ color: colors.textSecondary, fontSize: 11, marginTop: 4 }}>
             {item.description}
           </Text>
         ) : ''}

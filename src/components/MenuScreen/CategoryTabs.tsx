@@ -1,6 +1,5 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { MenuCategory } from '../../hooks/useMenuData';
 
 interface CategoryTabsProps {
@@ -31,7 +30,6 @@ export const CategoryTabs: React.FC<CategoryTabsProps> = ({
                 borderColor: colors.border,
                 paddingHorizontal: 14,
                 paddingVertical: 10,
-                maxHeight: 72,
                 backgroundColor: colors.background,
             }}
             scrollEnabled={true}
@@ -62,9 +60,7 @@ export const CategoryTabs: React.FC<CategoryTabsProps> = ({
                                     color: colors.text,
                                     fontSize: 12,
                                     fontWeight: '700',
-                                    maxWidth: 110,
                                 }}
-                                numberOfLines={1}
                             >
                                 {category.name}
                             </Text>
