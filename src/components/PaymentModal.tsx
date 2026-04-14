@@ -1954,7 +1954,9 @@ export default function PaymentScreen(props: PaymentScreenProps) {
         initialMode={customerDrawerMode}
         onClose={() => setCustomerDrawerVisible(false)}
         onSelect={(customer) => {
-          setSelectedDebitorCustomer(customer);
+          setSelectedDebitorCustomer(
+            customer?.isDebitor === true ? customer : null,
+          );
         }}
       />
     </View>

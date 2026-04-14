@@ -182,7 +182,7 @@ const createFormState = (
     lastName: customer.lastName || '',
     mobileNo: customer.mobileNo || '',
     email: customer.email || '',
-    isDebitor: forceDebitor || customer.isDebitor === true,
+    isDebitor: customer.isDebitor === true,
     customerCompanyName: customer.customerCompanyName || '',
     steuerId: customer.steuerId || '',
     addresses,
@@ -636,7 +636,7 @@ export default function CustomerDrawer({
       nextErrors.mobileNo = t('mobileNumberIsRequired');
     }
 
-    if ((forceDebitor || form.isDebitor) && !form.customerCompanyName.trim()) {
+    if (form.isDebitor && !form.customerCompanyName.trim()) {
       nextErrors.customerCompanyName = t('companyNameIsRequiredForDebitor');
     }
 
@@ -679,7 +679,7 @@ export default function CustomerDrawer({
       lastName: form.lastName.trim(),
       mobileNo: form.mobileNo.trim(),
       email: form.email.trim(),
-      isDebitor: forceDebitor ? true : form.isDebitor,
+      isDebitor: form.isDebitor,
       customerCompanyName: form.customerCompanyName.trim(),
       steuerId: form.steuerId.trim(),
       addresses: form.addresses.map(({ localKey, ...address }) => ({
@@ -1311,19 +1311,18 @@ export default function CustomerDrawer({
                 </Text>
               </View>
               <Switch
-                value={forceDebitor ? true : form.isDebitor}
+                value={form.isDebitor}
                 onValueChange={(value) => updateForm({ isDebitor: value })}
-                disabled={forceDebitor}
                 trackColor={{
                   true: `${colors.primary}66`,
                   false: colors.border,
                 }}
-                thumbColor={(forceDebitor || form.isDebitor) ? colors.primary : colors.surface}
+                thumbColor={form.isDebitor ? colors.primary : colors.surface}
               />
             </View>
           </View>
 
-          {(forceDebitor || form.isDebitor) ? (
+          {form.isDebitor ? (
             <>
               {renderField({
                 label: `${t('companyName')} *`,

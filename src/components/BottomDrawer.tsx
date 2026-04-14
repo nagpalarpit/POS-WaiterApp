@@ -19,7 +19,7 @@ import {
   ViewStyle,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeProvider';
 
 type BottomDrawerProps = {
@@ -420,12 +420,12 @@ export default function BottomDrawer({
             )}
 
             {footer ? (
-              <View
+              <SafeAreaView
+                edges={['bottom']}
                 style={[
                   styles.footer,
                   {
                     borderTopColor: colors.border,
-                    paddingBottom: Math.max(insets.bottom, 16),
                   },
                   footerStyle,
                 ]}
@@ -434,7 +434,7 @@ export default function BottomDrawer({
                 }}
               >
                 {footer}
-              </View>
+              </SafeAreaView>
             ) : null}
           </KeyboardAvoidingView>
         </Animated.View>
