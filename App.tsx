@@ -24,6 +24,7 @@ function ThemedStatusBar() {
     <StatusBar
       style={name === 'light' ? 'dark' : 'light'}
       backgroundColor={colors.background}
+      translucent={false}
     />
   );
 }
