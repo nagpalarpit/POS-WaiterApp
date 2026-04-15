@@ -560,7 +560,7 @@ export default function CheckoutScreen({ navigation, route }: CheckoutScreenProp
             }
             : undefined;
         if (printItems.length > 0 || canceledPrintObj) {
-          emitPosKotPrint({
+          await emitPosKotPrint({
             items: printItems,
             canceledObj: canceledPrintObj,
             isOrderDetails: true,

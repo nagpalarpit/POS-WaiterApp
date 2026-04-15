@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../constants/storageKeys';
-import { getSocket } from './socket';
+import { connectLocalSocket, getSocket } from './socket';
 import {
   buildPosPrintCurrentUser,
   mergeOrderCustomerData,
@@ -544,9 +544,14 @@ export const emitPosCancelPrint = (order: any) => {
   socket.emit('new-order', payload);
 };
 
-export const emitPosKotPrint = (printOrder: any) => {
-  const socket = getSocket();
-  if (!socket) return;
+export const emitPosKotPrint = async (printOrder: any) => {
+  let socket = getSocket();
+  if (!socket?.connected) {
+    const connected = await connectLocalSocket();
+    if (!connected) return;
+    socket = getSocket();
+  }
+  if (!socket?.connected) return;
   const printRequestId = registerPrintRequest();
   const normalizedOrderInfo = mergeOrderCustomerData(
     printOrder?.orderInfo || {},
