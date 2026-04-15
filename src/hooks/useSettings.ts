@@ -19,6 +19,11 @@ export interface Settings {
     name?: string;
   };
   isKiosk?: boolean;
+  isPaymentTerminal?: boolean;
+  paymentTerminal?: string;
+  paymentTerminalHost?: string;
+  paymentTerminalPort?: string | number;
+  paymentTerminalPassword?: string | number | null;
   tableAreas?: any[];
 }
 

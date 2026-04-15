@@ -37,6 +37,8 @@ import {
 import AppBottomSheet from "./AppBottomSheet";
 import AppBottomSheetTextInput from "./AppBottomSheetTextInput";
 import CustomerDrawer from "./CustomerDrawer";
+import CloverPaymentSheet from "./CloverPaymentSheet";
+import cloverTerminalService from "../services/cloverTerminalService";
 import { useSettings } from "../hooks/useSettings";
 import { useTranslation } from "../contexts/LanguageContext";
 import { Customer } from "../types/customer";
@@ -96,6 +98,7 @@ type PaymentOption = {
   debitorCustomerDetails?: Record<string, any> | null;
   customerId?: number | string | null;
   customerAddressId?: number | string | null;
+  cloverResponse?: any;
 };
 
 type PaymentRouteParams = {
@@ -107,6 +110,8 @@ type PaymentRouteParams = {
   orderDeliveryTypeId?: number;
   selectedAddressDeliveryCharge?: number | null;
   companyId?: number;
+  orderNo?: string | number | null;
+  terminalPaymentEnabled?: boolean;
   splitItems?: SplitSelectableItem[];
   allowSplitOption?: boolean;
   hidePrintPreview?: boolean;
@@ -278,6 +283,8 @@ export default function PaymentScreen(props: PaymentScreenProps) {
     orderDeliveryTypeId = 0,
     selectedAddressDeliveryCharge = null,
     companyId,
+    orderNo = null,
+    terminalPaymentEnabled = true,
     splitItems = [],
     allowSplitOption = true,
     hidePrintPreview = false,
@@ -318,6 +325,7 @@ export default function PaymentScreen(props: PaymentScreenProps) {
   const [splitGiftCard, setSplitGiftCard] = useState<GiftCard | null>(null);
   const [isApplyingGiftCard, setIsApplyingGiftCard] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isCloverProcessing, setIsCloverProcessing] = useState(false);
   const [isSplitMode, setIsSplitMode] = useState(false);
   const [showOtherMethods, setShowOtherMethods] = useState(false);
   const [deliveryChargeEditorVisible, setDeliveryChargeEditorVisible] =
@@ -748,6 +756,7 @@ export default function PaymentScreen(props: PaymentScreenProps) {
   const buildPaymentOption = (
     print = false,
     isCorporate = false,
+    cloverResponse?: any,
   ): PaymentOption => {
     const paymentMethod = resolvePaymentMethod();
     const debitorCustomerDetails =
@@ -779,8 +788,43 @@ export default function PaymentScreen(props: PaymentScreenProps) {
           }
         : {}),
       ...(activeGiftCard ? { giftCard: activeGiftCard } : {}),
+      ...(cloverResponse ? { cloverResponse } : {}),
       ...(print ? { print } : {}),
     };
+  };
+
+  const processCardTerminalPayment = async (
+    paymentMethod: number,
+  ): Promise<any | null> => {
+    if (!terminalPaymentEnabled) return null;
+    if (!cloverTerminalService.shouldUseTerminal(settings, paymentMethod)) {
+      return null;
+    }
+
+    setIsCloverProcessing(true);
+    try {
+      const response = await cloverTerminalService.processCardPaymentIfNeeded({
+        settings,
+        paymentMethod,
+        amount: due,
+        orderNo: orderNo || undefined,
+      });
+      const decision = cloverTerminalService.getDecision(response);
+
+      if (decision === "approved") {
+        showToast("success", t("paymentApproved"));
+        return response;
+      }
+      if (decision === "aborted") {
+        throw new Error("PAYMENT_CANCELLED");
+      }
+      if (decision === "declined") {
+        throw new Error("PAYMENT_DECLINED");
+      }
+      throw new Error("UNKNOWN_TERMINAL_RESPONSE");
+    } finally {
+      setIsCloverProcessing(false);
+    }
   };
 
   const closeWithReset = () => {
@@ -842,7 +886,8 @@ export default function PaymentScreen(props: PaymentScreenProps) {
 
     setIsProcessing(true);
     try {
-      const option = buildPaymentOption(print, isCorporate);
+      const cloverResponse = await processCardTerminalPayment(paymentMethod);
+      const option = buildPaymentOption(print, isCorporate, cloverResponse);
       const result = await getCurrentFlowHandlers()?.onSelect?.(option);
       if ((result as any)?.keepOpen) {
         if ((result as any)?.resetPayment) {
@@ -860,7 +905,16 @@ export default function PaymentScreen(props: PaymentScreenProps) {
       }
     } catch (error) {
       console.log("Payment failed:", error);
-      showToast("error", t("unableToProcessPayment"));
+      const message = `${(error as Error)?.message || ""}`;
+      if (message === "PAYMENT_CANCELLED") {
+        showToast("error", t("paymentCancelled"));
+      } else if (message === "PAYMENT_DECLINED") {
+        showToast("error", t("paymentDeclined"));
+      } else if (message === "UNKNOWN_TERMINAL_RESPONSE") {
+        showToast("error", t("unknownTerminalResponse"));
+      } else {
+        showToast("error", t("unableToProcessPayment"));
+      }
     } finally {
       setIsProcessing(false);
     }
@@ -1959,6 +2013,7 @@ export default function PaymentScreen(props: PaymentScreenProps) {
           );
         }}
       />
+      <CloverPaymentSheet visible={isCloverProcessing} />
     </View>
   );
 }

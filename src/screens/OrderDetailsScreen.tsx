@@ -1580,6 +1580,10 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
             giftCardTotal > 0 && Math.abs(selectedTotal - giftCardTotal) < 0.01;
         }
 
+        if (option?.cloverResponse) {
+          splitOrderInfo.cloverResponse = option.cloverResponse;
+        }
+
         enrichBulkSettleOrderInfo(
           splitOrderInfo,
           order,
@@ -2309,6 +2313,10 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
           giftCardTotal > 0 && Math.abs(totals.total - giftCardTotal) < 0.01;
       }
 
+      if (option?.cloverResponse) {
+        orderInfo.cloverResponse = option.cloverResponse;
+      }
+
       const settlePayload: any = {
         currency,
         paymentMethod: selectedPaymentMethod,
@@ -2569,6 +2577,14 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
         selectedAddressDeliveryCharge:
           selectedCustomerAddress?.deliveryCharge ?? null,
         companyId: resolvedCompanyId,
+        orderNo:
+          order?.customOrderId ||
+          order?.orderDetails?.customOrderId ||
+          order?.orderDetails?.orderNumber ||
+          order?._id ||
+          order?.id ||
+          null,
+        terminalPaymentEnabled: shouldSettle,
         splitItems: splitPaymentItems,
         allowSplitOption,
         hidePrintPreview: hideDeleteForSplit,
