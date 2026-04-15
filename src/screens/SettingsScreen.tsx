@@ -59,7 +59,7 @@ export default function SettingsScreen() {
   const appVersion =
     (Constants as any)?.expoConfig?.version ||
     (Constants as any)?.manifest?.version ||
-    '1.0.1';
+    '1.0.2';
 
   useFocusEffect(
     useCallback(() => {
