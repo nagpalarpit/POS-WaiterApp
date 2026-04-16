@@ -16,6 +16,7 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.HSL.WaiterApp",
       "infoPlist": {
+        "NSLocalNetworkUsageDescription": "WaiterApp connects to the configured payment terminal on the local network.",
         "NSAppTransportSecurity": {
           "NSAllowsArbitraryLoads": true
         }
@@ -42,11 +43,29 @@
     "plugins": [
       "./plugins/withAndroidCleartextTraffic",
       "expo-sqlite",
-      "expo-font"
+      "expo-font",
+      [
+        "@sentry/react-native",
+        {
+          "url": "https://sentry.io/",
+          "note": "Use SENTRY_AUTH_TOKEN env to upload source maps. Do not commit auth tokens.",
+          "organization": "YOUR_SENTRY_ORG_SLUG",
+          "project": "YOUR_SENTRY_PROJECT_SLUG"
+        }
+      ]
     ],
     "extra": {
       "NODE_ENV": "DEV",
       "API_ENV": "dev",
+      "SENTRY_ENABLED": true,
+      "SENTRY_DSN": "",
+      "SENTRY_ENVIRONMENT": "development",
+      "SENTRY_RELEASE": "waiterapp@1.0.0",
+      "SENTRY_DIST": "1",
+      "SENTRY_TRACES_SAMPLE_RATE": 0,
+      "SENTRY_SEND_DEFAULT_PII": false,
+      "SENTRY_DEBUG": false,
+      "SENTRY_TERMINAL_DEBUG_HEX": false,
       "SERVER_BASE_URL_DEV": "http://146.190.9.120:3000/",
       "SERVER_BASE_URL_LIVE": "https://live-api.atgpos.de/",
       "LOCAL_BASE_URL": "",

@@ -1,3 +1,5 @@
+// Native terminal TCP payloads need Buffer in the React Native runtime.
+import './src/polyfills';
 import './src/styles/tailwind.css';
 import React, { useEffect } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -14,8 +16,11 @@ import { AuthProvider } from './src/contexts/AuthContext';
 import { LanguageProvider } from './src/contexts/LanguageContext';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
+import { initializeSentry, wrapWithSentry } from './src/services/sentry/sentryService';
 
 import StartupSplash from './src/components/StartupSplash';
+
+initializeSentry();
 
 function ThemedStatusBar() {
   const { name, colors } = useTheme();
@@ -29,7 +34,7 @@ function ThemedStatusBar() {
   );
 }
 
-export default function App() {
+function App() {
   const [showStartupSplash, setShowStartupSplash] = React.useState(true);
 
   useEffect(() => {
@@ -74,3 +79,5 @@ export default function App() {
     </PaperProvider>
   );
 }
+
+export default wrapWithSentry(App);

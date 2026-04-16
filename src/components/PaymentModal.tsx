@@ -803,6 +803,7 @@ export default function PaymentScreen(props: PaymentScreenProps) {
 
     setIsCloverProcessing(true);
     try {
+      // Card payments are authorized on the waiter device before the order flow continues.
       const response = await cloverTerminalService.processCardPaymentIfNeeded({
         settings,
         paymentMethod,
@@ -886,6 +887,7 @@ export default function PaymentScreen(props: PaymentScreenProps) {
 
     setIsProcessing(true);
     try {
+      // Keep the existing order settlement path intact; only card payments attach terminal evidence.
       const cloverResponse = await processCardTerminalPayment(paymentMethod);
       const option = buildPaymentOption(print, isCorporate, cloverResponse);
       const result = await getCurrentFlowHandlers()?.onSelect?.(option);

@@ -1580,6 +1580,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
             giftCardTotal > 0 && Math.abs(selectedTotal - giftCardTotal) < 0.01;
         }
 
+        // Preserve terminal approval evidence with the split settlement payload.
         if (option?.cloverResponse) {
           splitOrderInfo.cloverResponse = option.cloverResponse;
         }
@@ -2313,6 +2314,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
           giftCardTotal > 0 && Math.abs(totals.total - giftCardTotal) < 0.01;
       }
 
+      // Preserve terminal approval evidence with the normal settlement payload.
       if (option?.cloverResponse) {
         orderInfo.cloverResponse = option.cloverResponse;
       }
