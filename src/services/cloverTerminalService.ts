@@ -8,11 +8,6 @@ import {
   reconcileTerminalPayment,
   terminalDecision,
 } from './paymentTerminal/paymentTerminalClient';
-import {
-  addSentryBreadcrumb,
-  captureTerminalError,
-  captureTerminalEvent,
-} from './sentry/sentryService';
 
 export type { TerminalDecision };
 
@@ -90,7 +85,7 @@ class CloverTerminalService {
     const amountCents = Math.round(toNumber(amount, 0) * 100);
     if (!ip.host || !ip.port || amountCents <= 0) {
       const error = new Error('Terminal configuration is incomplete.');
-      captureTerminalError(error, 'configuration_error', {
+      console.warn('[payment-terminal] configuration_error', {
         ...safeTerminalConfig(ip),
         amountCents,
       });
@@ -98,13 +93,13 @@ class CloverTerminalService {
     }
 
     const forward = (entry: Record<string, any>) => {
-      addSentryBreadcrumb('zvt_event', {
+      console.log('[payment-terminal] zvt_event', {
         ...safeTerminalConfig(ip),
         ...entry,
       });
     };
 
-    captureTerminalEvent('authorize_start', {
+    console.log('[payment-terminal] authorize_start', {
       ...safeTerminalConfig(ip),
       amountCents,
     });
@@ -123,23 +118,19 @@ class CloverTerminalService {
       );
       let decision = terminalDecision(response);
 
-      captureTerminalEvent(
-        'authorize_result',
-        {
-          ...safeTerminalConfig(ip),
-          amountCents,
-          decision,
-          ok: response?.ok,
-          outcome: response?.outcome,
-          status: response?.status,
-          userMessage: response?.userMessage,
-          terminalEvidence: response?.terminalEvidence,
-        },
-        decision === 'approved' ? 'info' : decision === 'pending' ? 'warning' : 'error',
-      );
+      console.log('[payment-terminal] authorize_result', {
+        ...safeTerminalConfig(ip),
+        amountCents,
+        decision,
+        ok: response?.ok,
+        outcome: response?.outcome,
+        status: response?.status,
+        userMessage: response?.userMessage,
+        terminalEvidence: response?.terminalEvidence,
+      });
 
       if (decision === 'pending') {
-        captureTerminalEvent('reconcile_start', safeTerminalConfig(ip), 'warning');
+        console.warn('[payment-terminal] reconcile_start', safeTerminalConfig(ip));
         response = await reconcileTerminalPayment(
           ip,
           {
@@ -153,20 +144,16 @@ class CloverTerminalService {
           forward,
         );
         decision = terminalDecision(response);
-        captureTerminalEvent(
-          'reconcile_result',
-          {
-            ...safeTerminalConfig(ip),
-            amountCents,
-            decision,
-            ok: response?.ok,
-            outcome: response?.outcome,
-            status: response?.status,
-            userMessage: response?.userMessage,
-            terminalEvidence: response?.terminalEvidence,
-          },
-          decision === 'approved' ? 'info' : 'error',
-        );
+        console.log('[payment-terminal] reconcile_result', {
+          ...safeTerminalConfig(ip),
+          amountCents,
+          decision,
+          ok: response?.ok,
+          outcome: response?.outcome,
+          status: response?.status,
+          userMessage: response?.userMessage,
+          terminalEvidence: response?.terminalEvidence,
+        });
       }
 
       return {
@@ -175,7 +162,7 @@ class CloverTerminalService {
         orderNo: ip.orderNo,
       };
     } catch (error: any) {
-      captureTerminalError(error, 'authorize_error', {
+      console.error('[payment-terminal] authorize_error', {
         ...safeTerminalConfig(ip),
         amountCents,
         message: error?.message || String(error),

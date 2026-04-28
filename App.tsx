@@ -16,11 +16,8 @@ import { AuthProvider } from './src/contexts/AuthContext';
 import { LanguageProvider } from './src/contexts/LanguageContext';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
-import { initializeSentry, wrapWithSentry } from './src/services/sentry/sentryService';
 
 import StartupSplash from './src/components/StartupSplash';
-
-initializeSentry();
 
 function ThemedStatusBar() {
   const { name, colors } = useTheme();
@@ -80,4 +77,4 @@ function App() {
   );
 }
 
-export default wrapWithSentry(App);
+export default App;
