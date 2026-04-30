@@ -409,7 +409,7 @@ class OrderService {
     delete normalizedOrderInfo.id;
     delete normalizedOrderInfo._id;
     delete normalizedOrderInfo.isPaid;
-    delete normalizedOrderInfo.orderEditInOffline;
+    delete normalizedOrderInfo?.orderEditInOffline;
     delete normalizedOrderInfo.customerId;
     delete normalizedOrderInfo.customerAddressId;
     delete normalizedOrderInfo.customer;

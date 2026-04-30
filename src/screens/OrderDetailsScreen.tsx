@@ -286,7 +286,7 @@ const buildOrderSyncInfo = (
   }));
 
   delete normalized.isPaid;
-  delete normalized.orderEditInOffline;
+  delete normalized?.orderEditInOffline;
 
   return normalized;
 };
@@ -1865,7 +1865,6 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
           count: getOrderItemCount(mergedOrderItems) || toNumber(orderDetails?.count, 1),
           isSplitOrder: true,
           isPaid: 1,
-          orderEditInOffline: true,
           localOrderId,
           customOrderId: order?.customOrderId || orderDetails?.customOrderId,
           parentLocalOrderId: undefined,
@@ -1926,8 +1925,8 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
         const bulkMainOrderInfo = {
           ...finalizedMainOrderInfo,
         };
-        delete bulkMainOrderInfo.isPaid;
-        delete bulkMainOrderInfo.orderEditInOffline;
+        delete bulkMainOrderInfo?.isPaid;
+        delete bulkMainOrderInfo?.orderEditInOffline;
 
         const mainBulkSettleObj = {
           currency,
@@ -2260,7 +2259,6 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
         canceledObj: orderDetails?.canceledObj ?? undefined,
         canceledCount: orderDetails?.canceledCount ?? undefined,
         canceledOrderPayment: orderDetails?.canceledOrderPayment ?? 0,
-        orderEditInOffline: true,
         invoiceNumber,
         paidBy: paidBy || undefined,
         company: orderDetails?.company || order?.company || undefined,
