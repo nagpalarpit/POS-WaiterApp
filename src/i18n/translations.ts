@@ -155,8 +155,7 @@ const EN: TranslationDictionary = {
   food: "Food",
   group: "Group",
   guest: "Guest",
-  handledOnAnotherDevice:
-    "is being handled on another device.",
+  handledOnAnotherDevice: "is being handled on another device.",
   helpAndSupport: "Help & Support",
   home: "Home",
   itemName: "Item Name",
@@ -206,8 +205,14 @@ const EN: TranslationDictionary = {
   processing: "Processing...",
   payment: "Payment",
   paymentMethods: "Payment Methods",
+  paymentTerminalClover: "Clover",
+  paymentTerminalVerifone: "Verifone",
   paymentSessionExpired: "Payment session expired. Please try again.",
   paymentSummary: "Payment Summary",
+  paymentTerminalSettingsMissing:
+    "Card terminal settings are incomplete. Please check POS settings.",
+  terminalPaymentInProgress:
+    "{{terminal}} payment is in progress. Please wait and do not use the back button or close the app.",
   pay: "Pay",
   payAndPrint: "Pay & Print",
   printFailed: "Print failed",
@@ -387,6 +392,8 @@ const EN: TranslationDictionary = {
   paymentMethodsLabel: "Payment Methods",
   cashProvidedLabel: "Cash provided",
   cardPaymentSelected: "Card payment selected",
+  cardPaymentDeclined: "Card payment was declined.",
+  cardPaymentCancelled: "Card payment was cancelled.",
   selectedLabel: "Selected",
   remainingLabel: "Remaining",
   subtotalLabel: "Subtotal",
@@ -623,8 +630,7 @@ const DE: TranslationDictionary = {
   food: "Essen",
   group: "Gang",
   guest: "Gast",
-  handledOnAnotherDevice:
-    "wird auf einem anderen Gerät bearbeitet.",
+  handledOnAnotherDevice: "wird auf einem anderen Gerät bearbeitet.",
   helpAndSupport: "Hilfe & Support",
   home: "Startseite",
   itemName: "Artikelname",
@@ -671,9 +677,15 @@ const DE: TranslationDictionary = {
   processing: "Wird verarbeitet...",
   payment: "Zahlung",
   paymentMethods: "Zahlungsmethoden",
+  paymentTerminalClover: "Clover",
+  paymentTerminalVerifone: "Verifone",
+  paymentTerminalSettingsMissing:
+    "Kartenterminal-Einstellungen sind unvollstÃ¤ndig. Bitte POS-Einstellungen prÃ¼fen.",
   paymentSessionExpired:
     "Die Zahlungssitzung ist abgelaufen. Bitte erneut versuchen.",
   paymentSummary: "Zahlungsübersicht",
+  terminalPaymentInProgress:
+    "{{terminal}}-Zahlung wird verarbeitet. Bitte warten Sie und verwenden Sie nicht die Zurück-Taste oder schließen Sie die App nicht.",
   pay: "Bezahlen",
   payAndPrint: "Bezahlen & Drucken",
   printFailed: "Druck fehlgeschlagen",
@@ -822,6 +834,8 @@ const DE: TranslationDictionary = {
   paymentMethodsLabel: "Zahlungsmethoden",
   cashProvidedLabel: "Erhaltenes Bargeld",
   cardPaymentSelected: "Kartenzahlung ausgewählt",
+  cardPaymentDeclined: "Kartenzahlung wurde abgelehnt.",
+  cardPaymentCancelled: "Kartenzahlung wurde abgebrochen.",
   selectedLabel: "Ausgewählt",
   remainingLabel: "Verbleibend",
   subtotalLabel: "Zwischensumme",

@@ -12,6 +12,11 @@ export interface Settings {
   enablePickup?: boolean;
   enableGroupLabel?: boolean;
   deliveryCharge?: number | null;
+  isPaymentTerminal?: boolean;
+  paymentTerminal?: string;
+  paymentTerminalHost?: string;
+  paymentTerminalPort?: string | number;
+  paymentTerminalPassword?: string;
   companyId?: string | number;
   companyName?: string;
   company?: {

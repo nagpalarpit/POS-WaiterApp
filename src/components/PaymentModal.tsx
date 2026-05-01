@@ -15,6 +15,7 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  BackHandler,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CommonActions } from "@react-navigation/native";
@@ -40,6 +41,7 @@ import CustomerDrawer from "./CustomerDrawer";
 import { useSettings } from "../hooks/useSettings";
 import { useTranslation } from "../contexts/LanguageContext";
 import { Customer } from "../types/customer";
+import { authorizeTerminalPayment } from "../services/terminalPaymentService";
 import {
   formatCustomerAddress,
   getCustomerDisplayName,
@@ -96,6 +98,9 @@ type PaymentOption = {
   debitorCustomerDetails?: Record<string, any> | null;
   customerId?: number | string | null;
   customerAddressId?: number | string | null;
+  paymentTerminal?: "clover" | "verifone";
+  paymentTerminalDecision?: string;
+  paymentTerminalResponse?: any;
 };
 
 type PaymentRouteParams = {
@@ -111,6 +116,8 @@ type PaymentRouteParams = {
   allowSplitOption?: boolean;
   hidePrintPreview?: boolean;
   selectedCustomer?: Customer | null;
+  orderNo?: string | number | null;
+  shouldSettle?: boolean;
 };
 
 type PaymentScreenProps = {
@@ -186,6 +193,16 @@ const normalizeNullableAmount = (value: unknown): number | null => {
   if (value === null || value === undefined) return null;
   if (typeof value === "string" && value.trim() === "") return null;
   return round2(Math.max(toNumber(value, 0), 0));
+};
+
+const isTerminalPaymentEnabled = (value: unknown): boolean => {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value === 1;
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    return normalized === "true" || normalized === "1";
+  }
+  return false;
 };
 
 const getPaymentLabel = (
@@ -282,6 +299,8 @@ export default function PaymentScreen(props: PaymentScreenProps) {
     allowSplitOption = true,
     hidePrintPreview = false,
     selectedCustomer = null,
+    orderNo = null,
+    shouldSettle = false,
   } = params;
   const { colors } = useTheme();
   const { showToast } = useToast();
@@ -318,6 +337,9 @@ export default function PaymentScreen(props: PaymentScreenProps) {
   const [splitGiftCard, setSplitGiftCard] = useState<GiftCard | null>(null);
   const [isApplyingGiftCard, setIsApplyingGiftCard] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [terminalProcessingLabel, setTerminalProcessingLabel] = useState<
+    string | null
+  >(null);
   const [isSplitMode, setIsSplitMode] = useState(false);
   const [showOtherMethods, setShowOtherMethods] = useState(false);
   const [deliveryChargeEditorVisible, setDeliveryChargeEditorVisible] =
@@ -338,9 +360,9 @@ export default function PaymentScreen(props: PaymentScreenProps) {
   const [currentOrderDeliveryTypeId, setCurrentOrderDeliveryTypeId] = useState(
     () => Math.max(0, Math.floor(toNumber(orderDeliveryTypeId, 0))),
   );
-  const [customDeliveryCharge, setCustomDeliveryCharge] = useState<number | null>(
-    null,
-  );
+  const [customDeliveryCharge, setCustomDeliveryCharge] = useState<
+    number | null
+  >(null);
   const [
     currentSelectedAddressDeliveryCharge,
     setCurrentSelectedAddressDeliveryCharge,
@@ -366,6 +388,18 @@ export default function PaymentScreen(props: PaymentScreenProps) {
     );
 
   const getCurrentFlowHandlers = () => getPaymentFlowHandlers();
+  const getTerminalDisplayLabel = (terminal: unknown): string => {
+    const normalized = String(terminal || "")
+      .trim()
+      .toLowerCase();
+    if (normalized === "clover") {
+      return t("paymentTerminalClover");
+    }
+    if (normalized === "verifone") {
+      return t("paymentTerminalVerifone");
+    }
+    return t("card");
+  };
 
   const closeFlow = () => {
     if (closeHandledRef.current) {
@@ -378,9 +412,13 @@ export default function PaymentScreen(props: PaymentScreenProps) {
 
   useLayoutEffect(() => {
     if (navigation?.setOptions) {
-      navigation.setOptions({ headerTitle: title || t("payment") });
+      navigation.setOptions({
+        headerTitle: title || t("payment"),
+        headerBackVisible: !terminalProcessingLabel,
+        gestureEnabled: !terminalProcessingLabel,
+      });
     }
-  }, [navigation, title, t]);
+  }, [navigation, terminalProcessingLabel, title, t]);
 
   useEffect(() => {
     if (!getCurrentFlowHandlers()?.onSelect) {
@@ -397,6 +435,36 @@ export default function PaymentScreen(props: PaymentScreenProps) {
       closeFlow();
     };
   }, []);
+
+  useEffect(() => {
+    if (!navigation?.addListener) {
+      return;
+    }
+
+    const unsubscribe = navigation.addListener("beforeRemove", (event: any) => {
+      if (!terminalProcessingLabel) {
+        return;
+      }
+      event.preventDefault();
+    });
+
+    return unsubscribe;
+  }, [navigation, terminalProcessingLabel]);
+
+  useEffect(() => {
+    if (!terminalProcessingLabel) {
+      return;
+    }
+
+    const subscription = BackHandler.addEventListener(
+      "hardwareBackPress",
+      () => true,
+    );
+
+    return () => {
+      subscription.remove();
+    };
+  }, [terminalProcessingLabel]);
 
   useEffect(() => {
     setCurrentOrderTotal(round2(toNumber(orderTotal, 0)));
@@ -689,16 +757,15 @@ export default function PaymentScreen(props: PaymentScreenProps) {
 
   useEffect(() => {
     const preferredDeliveryCharge =
-      currentOrderDeliveryTypeId === 1 &&
-      customDeliveryCharge != null
+      currentOrderDeliveryTypeId === 1 && customDeliveryCharge != null
         ? customDeliveryCharge
         : currentOrderDeliveryTypeId === 1 &&
-      currentSelectedAddressDeliveryCharge != null
-        ? currentSelectedAddressDeliveryCharge
-        : currentOrderDeliveryTypeId === 1 &&
-            resolvedSettingsDeliveryCharge != null
-          ? resolvedSettingsDeliveryCharge
-          : resolvedOrderDeliveryCharge;
+            currentSelectedAddressDeliveryCharge != null
+          ? currentSelectedAddressDeliveryCharge
+          : currentOrderDeliveryTypeId === 1 &&
+              resolvedSettingsDeliveryCharge != null
+            ? resolvedSettingsDeliveryCharge
+            : resolvedOrderDeliveryCharge;
     setDeliveryChargeValue(
       preferredDeliveryCharge > 0 ? `${preferredDeliveryCharge}` : "",
     );
@@ -843,6 +910,67 @@ export default function PaymentScreen(props: PaymentScreenProps) {
     setIsProcessing(true);
     try {
       const option = buildPaymentOption(print, isCorporate);
+      const amountCents = Math.round(due * 100);
+      const shouldUseTerminalPayment =
+        shouldSettle &&
+        paymentMethod === 1 &&
+        amountCents > 0 &&
+        isTerminalPaymentEnabled(settings?.isPaymentTerminal);
+
+      if (shouldUseTerminalPayment) {
+        let terminalResult;
+        setTerminalProcessingLabel(
+          getTerminalDisplayLabel(settings?.paymentTerminal),
+        );
+        try {
+          terminalResult = await authorizeTerminalPayment(
+            settings,
+            amountCents,
+            orderNo,
+          );
+        } catch (error) {
+          console.log("Terminal payment failed:", error);
+          const message =
+            error instanceof Error ? error.message : String(error || "");
+          if (message === "PAYMENT_TERMINAL_NOT_CONFIGURED") {
+            showToast("error", t("paymentTerminalSettingsMissing"));
+          } else {
+            showToast("error", message || t("unableToProcessPayment"));
+          }
+          return;
+        } finally {
+          setTerminalProcessingLabel(null);
+        }
+
+        if (terminalResult.decision === "declined") {
+          showToast(
+            "error",
+            terminalResult.response?.userMessage || t("cardPaymentDeclined"),
+          );
+          return;
+        }
+
+        if (terminalResult.decision === "aborted") {
+          showToast(
+            "error",
+            terminalResult.response?.userMessage || t("cardPaymentCancelled"),
+          );
+          return;
+        }
+
+        if (terminalResult.decision !== "approved") {
+          showToast(
+            "error",
+            terminalResult.response?.userMessage || t("unableToProcessPayment"),
+          );
+          return;
+        }
+
+        option.paymentTerminal = terminalResult.config.terminal;
+        option.paymentTerminalDecision = terminalResult.decision;
+        option.paymentTerminalResponse = terminalResult.response;
+      }
+
       const result = await getCurrentFlowHandlers()?.onSelect?.(option);
       if ((result as any)?.keepOpen) {
         if ((result as any)?.resetPayment) {
@@ -1523,10 +1651,10 @@ export default function PaymentScreen(props: PaymentScreenProps) {
                     {isSplitMode && splitRemainingAmount > 0
                       ? t("deliveryChargeAppliedOnlyWhenFinalSplitSettled")
                       : currentSelectedAddressDeliveryCharge != null
-                          ? t("deliveryChargeUnlockedAddress")
-                          : resolvedSettingsDeliveryCharge != null
-                            ? t("deliveryChargeUnlockedSettings")
-                            : t("deliveryChargeNoAddress")}
+                        ? t("deliveryChargeUnlockedAddress")
+                        : resolvedSettingsDeliveryCharge != null
+                          ? t("deliveryChargeUnlockedSettings")
+                          : t("deliveryChargeNoAddress")}
                   </Text>
                 </View>
               ) : null}
@@ -1959,6 +2087,41 @@ export default function PaymentScreen(props: PaymentScreenProps) {
           );
         }}
       />
+      {terminalProcessingLabel ? (
+        <View
+          style={[
+            styles.terminalProcessingOverlay,
+            { backgroundColor: "rgba(0, 0, 0, 0.45)" },
+          ]}
+        >
+          <View
+            style={[
+              styles.terminalProcessingCard,
+              {
+                backgroundColor: colors.surface,
+                borderColor: colors.border,
+              },
+            ]}
+          >
+            <ActivityIndicator size="large" color={colors.primary} />
+            <Text
+              style={[styles.terminalProcessingTitle, { color: colors.text }]}
+            >
+              {t("terminalPaymentInProgress", {
+                terminal: terminalProcessingLabel,
+              })}
+            </Text>
+            <Text
+              style={[
+                styles.terminalProcessingSubtitle,
+                { color: colors.textSecondary },
+              ]}
+            >
+              {t("processing")}
+            </Text>
+          </View>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -2236,5 +2399,32 @@ const styles = StyleSheet.create({
   linkBtn: {
     paddingHorizontal: 6,
     paddingVertical: 4,
+  },
+  terminalProcessingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 24,
+    zIndex: 50,
+  },
+  terminalProcessingCard: {
+    width: "100%",
+    maxWidth: 360,
+    borderWidth: 1,
+    borderRadius: 18,
+    paddingHorizontal: 20,
+    paddingVertical: 24,
+    alignItems: "center",
+  },
+  terminalProcessingTitle: {
+    marginTop: 14,
+    fontSize: 17,
+    fontWeight: "700",
+    textAlign: "center",
+  },
+  terminalProcessingSubtitle: {
+    marginTop: 8,
+    fontSize: 14,
+    textAlign: "center",
   },
 });

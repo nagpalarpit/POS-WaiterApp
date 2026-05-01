@@ -1,0 +1,40 @@
+diff --git a/node_modules/@nagpal_a_hsl/zvt-client/android/build.gradle b/node_modules/@nagpal_a_hsl/zvt-client/android/build.gradle
+index 9980c4b..1ea14db 100644
+--- a/node_modules/@nagpal_a_hsl/zvt-client/android/build.gradle
++++ b/node_modules/@nagpal_a_hsl/zvt-client/android/build.gradle
+@@ -1,6 +1,5 @@
+ apply plugin: 'com.android.library'
+ apply plugin: 'kotlin-android'
+-apply plugin: 'maven-publish'
+ 
+ group = 'org.accurateitsolution.zvtclient'
+ version = '0.1.2'
+@@ -10,7 +9,6 @@ if (expoModulesCorePlugin.exists()) {
+   apply from: expoModulesCorePlugin
+   applyKotlinExpoModulesCorePlugin()
+   useCoreDependencies()
+-  useExpoPublishing()
+ }
+ 
+ buildscript {
+@@ -42,12 +40,6 @@ android {
+   lintOptions {
+     abortOnError false
+   }
+-
+-  publishing {
+-    singleVariant('release') {
+-      withSourcesJar()
+-    }
+-  }
+ }
+ 
+ repositories {
+@@ -55,7 +47,5 @@ repositories {
+ }
+ 
+ dependencies {
+-  implementation project(':expo-modules-core')
+-  implementation "org.jetbrains.kotlin:kotlin-stdlib:${getKotlinVersion()}"
+   implementation 'androidx.core:core-ktx:1.13.1'
+ }

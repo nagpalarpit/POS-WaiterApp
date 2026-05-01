@@ -100,7 +100,10 @@ const mergeUserAccessSnapshot = (...accessLists: any[]) => {
     }
 
     accessList.forEach((entry: any, index: number) => {
-      mergedByIndex[index] = mergeSnapshotObject(entry, mergedByIndex[index] || {});
+      mergedByIndex[index] = mergeSnapshotObject(
+        entry,
+        mergedByIndex[index] || {},
+      );
 
       if (mergedByIndex[index].userAccessTypeId === undefined) {
         mergedByIndex[index].userAccessTypeId = null;
@@ -126,9 +129,11 @@ const enrichBulkSettleOrderInfo = (
   }
 
   const enriched = orderInfo;
-  const userSources = [sourceUserData, sourceOrder?.user, sourceOrderDetails?.user].filter(
-    (item) => item && typeof item === "object",
-  );
+  const userSources = [
+    sourceUserData,
+    sourceOrder?.user,
+    sourceOrderDetails?.user,
+  ].filter((item) => item && typeof item === "object");
   const userCompanySources = [
     sourceUserData?.company,
     sourceOrder?.user?.company,
@@ -155,7 +160,8 @@ const enrichBulkSettleOrderInfo = (
     );
     enriched.user = mergeSnapshotObject(enriched.user, mergedUser);
     if (enriched.user.imagePath === undefined) enriched.user.imagePath = null;
-    if (enriched.user.designation === undefined) enriched.user.designation = null;
+    if (enriched.user.designation === undefined)
+      enriched.user.designation = null;
     if (enriched.user.steuerId === undefined) enriched.user.steuerId = null;
     if (enriched.user.customerCompanyName === undefined) {
       enriched.user.customerCompanyName = null;
@@ -275,15 +281,17 @@ const buildOrderSyncInfo = (
   orderInfo: any,
   orderNumber?: string | number | null,
 ) => {
-  const normalized = sanitizeOrderInfoForPos(mergeOrderCustomerData({
-    ...(orderInfo || {}),
-    orderNumber:
-      orderInfo?.orderNumber ||
-      orderInfo?.customOrderId ||
-      orderNumber ||
-      orderInfo?._id ||
-      orderInfo?.id,
-  }));
+  const normalized = sanitizeOrderInfoForPos(
+    mergeOrderCustomerData({
+      ...(orderInfo || {}),
+      orderNumber:
+        orderInfo?.orderNumber ||
+        orderInfo?.customOrderId ||
+        orderNumber ||
+        orderInfo?._id ||
+        orderInfo?.id,
+    }),
+  );
 
   delete normalized.isPaid;
   delete normalized?.orderEditInOffline;
@@ -363,7 +371,6 @@ const normalizeTaxKey = (value: unknown): string | null => {
   return raw;
 };
 
-
 const getOrderItemsForTax = (orderDetails: any): any[] => {
   const items =
     orderDetails?.orderItem ??
@@ -377,7 +384,9 @@ const getPosItemToppings = (item: any) => {
   const toppings: Array<{ price: number; toppingCount: number }> = [];
 
   if (item?.orderItemVariant) {
-    const attributes = Array.isArray(item?.orderItemVariant?.orderItemVariantAttributes)
+    const attributes = Array.isArray(
+      item?.orderItemVariant?.orderItemVariantAttributes,
+    )
       ? item.orderItemVariant.orderItemVariantAttributes
       : [];
     attributes.forEach((attribute: any) => {
@@ -452,8 +461,8 @@ const resolveTaxMeta = (
     const defaultThreshold = 8162;
     const deliveryTypeId = Number(
       orderDetails?.orderDeliveryTypeId ??
-      orderDetails?.orderInfo?.orderDeliveryTypeId ??
-      0,
+        orderDetails?.orderInfo?.orderDeliveryTypeId ??
+        0,
     );
     if (orderIdNum <= defaultThreshold && deliveryTypeId === 0) {
       taxKey = "19%";
@@ -538,7 +547,7 @@ const getCanceledPayment = (items: any[] = []) => {
         (acc: number, current: any) =>
           acc +
           toNumber(current?.attributeValuePrice ?? current?.price, 0) *
-          toNumber(current?.quantity, 1),
+            toNumber(current?.quantity, 1),
         total,
       ) || total;
     canceledOrderPayment += total * toNumber(item.quantity, 0);
@@ -559,9 +568,9 @@ const normalizeAttributeValues = (values: any[] = []) => {
       "",
     attributeValuePrice: toNumber(
       value.unitPrice ??
-      value.attributeValuePrice ??
-      value.price ??
-      value.menuItemVariantAttributeValue?.price,
+        value.attributeValuePrice ??
+        value.price ??
+        value.menuItemVariantAttributeValue?.price,
       0,
     ),
     attributeValueQuantity: Math.max(
@@ -587,9 +596,9 @@ const extractFromVariants = (variants: any[] = []) => {
 
     variantPrice += toNumber(
       variant?.unitPrice ??
-      variant?.price ??
-      variant?.variantPrice ??
-      variant?.menuItemVariant?.price,
+        variant?.price ??
+        variant?.variantPrice ??
+        variant?.menuItemVariant?.price,
       0,
     );
 
@@ -655,9 +664,9 @@ const normalizeOrderItem = (item: any, index: number) => {
       variantDetails.variantName,
     variantPrice: toNumber(
       item?.variantPrice ??
-      item?.orderItemVariant?.variantPrice ??
-      item?.orderItemVariant?.price ??
-      item?.orderItemVariant?.unitPrice,
+        item?.orderItemVariant?.variantPrice ??
+        item?.orderItemVariant?.price ??
+        item?.orderItemVariant?.unitPrice,
       variantDetails.variantPrice,
     ),
     attributeName: item?.attributeName || variantDetails.attributeName,
@@ -669,7 +678,11 @@ const normalizeOrderItem = (item: any, index: number) => {
   };
 };
 
-const getOrderTypeLabel = (deliveryType: number, t: (key: string) => string, tableNo?: number) => {
+const getOrderTypeLabel = (
+  deliveryType: number,
+  t: (key: string) => string,
+  tableNo?: number,
+) => {
   if (tableNo) return `${t("table")} ${tableNo}`;
   if (deliveryType === 1) return t("delivery");
   if (deliveryType === 2) return t("pickup");
@@ -724,12 +737,14 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
     return (
       <SafeAreaView
         style={{ flex: 1, backgroundColor: colors.background }}
-        edges={['bottom']}
+        edges={["bottom"]}
       >
         <View
           style={{ flex: 1, justifyContent: "center", alignItems: "center" }}
         >
-          <Text style={{ color: colors.textSecondary }}>{t("noOrderProvided")}</Text>
+          <Text style={{ color: colors.textSecondary }}>
+            {t("noOrderProvided")}
+          </Text>
         </View>
       </SafeAreaView>
     );
@@ -761,9 +776,9 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
           items: items.map((item: any) => ({
             ...item,
             groupType: 1,
-            groupLabel: '',
+            groupLabel: "",
           })),
-          label: '',
+          label: "",
         },
       ];
     }
@@ -864,7 +879,8 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
     groupCount > 0 ? groupedItems[groupCount - 1].groupType : null;
 
   const paymentLabel =
-    PAYMENT_METHOD_LABELS[selectedPaymentId ?? paymentProcessorId] || t("notSet");
+    PAYMENT_METHOD_LABELS[selectedPaymentId ?? paymentProcessorId] ||
+    t("notSet");
   const serviceTypeId = displayedOrderDetails?.orderDeliveryTypeId ?? 0;
   const serviceTimeLabel = formatOrderServiceTime(
     displayedOrderDetails?.pickupDateTime,
@@ -873,10 +889,11 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
   const selectedCustomer = resolveOrderCustomer(displayedOrderDetails);
   const selectedCustomerName = getCustomerDisplayName(selectedCustomer);
   const selectedCustomerAddress = getSelectedCustomerAddress(selectedCustomer);
-  const selectedCustomerAddressText = formatCustomerAddress(selectedCustomerAddress);
+  const selectedCustomerAddressText = formatCustomerAddress(
+    selectedCustomerAddress,
+  );
   const settingsDeliveryCharge =
-    settings?.deliveryCharge !== undefined &&
-    settings?.deliveryCharge !== null
+    settings?.deliveryCharge !== undefined && settings?.deliveryCharge !== null
       ? toNumber(settings.deliveryCharge, 0)
       : null;
   const customerAddressDeliveryCharge =
@@ -891,10 +908,10 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
       : null;
   const resolvedDeliveryCharge =
     serviceTypeId === 1
-      ? customerAddressDeliveryCharge ??
+      ? (customerAddressDeliveryCharge ??
         settingsDeliveryCharge ??
         storedDeliveryCharge ??
-        0
+        0)
       : 0;
   const orderStatusLabel = getOrderStatusLabel(order, language);
   const statusTone = getStatusTone(orderStatusLabel, colors);
@@ -920,7 +937,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
   useFocusEffect(
     useCallback(() => {
       editingRef.current = false;
-      return () => { };
+      return () => {};
     }, []),
   );
 
@@ -1047,45 +1064,51 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
         baseOrderId;
 
       const customerIdValue = toNumber(orderDetails?.customerId, 0);
-      const placeOrderPayload: any = mergeOrderCustomerData({
-        ...orderDetails,
-        companyId,
-        orderDeliveryTypeId: deliveryTypeId,
-        orderType,
-        isPickup: orderDetails?.isPickup ?? deliveryTypeId === 2,
-        currency: orderDetails?.currency || "EUR",
-        isPriceIncludingTax: orderDetails?.isPriceIncludingTax ?? false,
-        orderSubTotal: toNumber(orderDetails?.orderSubTotal, 0),
-        orderPromoCodeDiscountTotal: toNumber(
-          orderDetails?.orderPromoCodeDiscountTotal,
-          0,
-        ),
-        orderDiscountTotal: toNumber(orderDetails?.orderDiscountTotal, 0),
-        orderTotal: toNumber(orderDetails?.orderTotal, 0),
-        orderNotes: orderDetails?.orderNotes || "",
-        countryCode: orderDetails?.countryCode || "IN",
-        count: toNumber(orderDetails?.count, getOrderItemCount(orderItems) || 1),
-        customerId: customerIdValue > 0 ? customerIdValue : undefined,
-        userEmail: orderDetails?.userEmail || "",
-        userFirstName: orderDetails?.userFirstName || "",
-        userLastName: orderDetails?.userLastName || "",
-        userMobile: orderDetails?.userMobile ?? null,
-        customerAddressId: orderDetails?.customerAddressId ?? undefined,
-        addresses: orderDetails?.addresses || [],
-        addedBy: orderDetails?.addedBy ?? null,
-        posId: orderDetails?.posId || "",
-        orderItem: orderItems,
-        id: null,
-        customOrderId,
-        localOrderId: baseOrderId,
-        orderStatusId: ORDER_STATUS.CANCELED,
-        reason: trimmed,
-        isDeleted: false,
-        paymentMethod: 0,
-        canceledObj,
-        canceledCount,
-        canceledOrderPayment,
-      }, selectedCustomer);
+      const placeOrderPayload: any = mergeOrderCustomerData(
+        {
+          ...orderDetails,
+          companyId,
+          orderDeliveryTypeId: deliveryTypeId,
+          orderType,
+          isPickup: orderDetails?.isPickup ?? deliveryTypeId === 2,
+          currency: orderDetails?.currency || "EUR",
+          isPriceIncludingTax: orderDetails?.isPriceIncludingTax ?? false,
+          orderSubTotal: toNumber(orderDetails?.orderSubTotal, 0),
+          orderPromoCodeDiscountTotal: toNumber(
+            orderDetails?.orderPromoCodeDiscountTotal,
+            0,
+          ),
+          orderDiscountTotal: toNumber(orderDetails?.orderDiscountTotal, 0),
+          orderTotal: toNumber(orderDetails?.orderTotal, 0),
+          orderNotes: orderDetails?.orderNotes || "",
+          countryCode: orderDetails?.countryCode || "IN",
+          count: toNumber(
+            orderDetails?.count,
+            getOrderItemCount(orderItems) || 1,
+          ),
+          customerId: customerIdValue > 0 ? customerIdValue : undefined,
+          userEmail: orderDetails?.userEmail || "",
+          userFirstName: orderDetails?.userFirstName || "",
+          userLastName: orderDetails?.userLastName || "",
+          userMobile: orderDetails?.userMobile ?? null,
+          customerAddressId: orderDetails?.customerAddressId ?? undefined,
+          addresses: orderDetails?.addresses || [],
+          addedBy: orderDetails?.addedBy ?? null,
+          posId: orderDetails?.posId || "",
+          orderItem: orderItems,
+          id: null,
+          customOrderId,
+          localOrderId: baseOrderId,
+          orderStatusId: ORDER_STATUS.CANCELED,
+          reason: trimmed,
+          isDeleted: false,
+          paymentMethod: 0,
+          canceledObj,
+          canceledCount,
+          canceledOrderPayment,
+        },
+        selectedCustomer,
+      );
 
       Object.keys(placeOrderPayload).forEach((key) => {
         if (
@@ -1240,9 +1263,9 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
       const companyId =
         Number(
           order.companyId ||
-          orderDetails?.companyId ||
-          userData?.companyId ||
-          0,
+            orderDetails?.companyId ||
+            userData?.companyId ||
+            0,
         ) || 0;
       const invoiceNumber =
         await commonFunctionService.generateInvoice(companyId);
@@ -1260,24 +1283,24 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
       const defaultAmount = totals.total + tip + deliveryCharge - giftCardTotal;
       const incomingPaymentDetails = Array.isArray(option?.orderPaymentDetails)
         ? option.orderPaymentDetails
-          .map((detail: any) => ({
-            paymentProcessorId: toNumber(
-              detail?.paymentProcessorId,
-              selectedPaymentMethod,
-            ),
-            paymentTotal: toNumber(detail?.paymentTotal, 0),
-          }))
-          .filter((detail: any) => detail.paymentTotal > 0)
+            .map((detail: any) => ({
+              paymentProcessorId: toNumber(
+                detail?.paymentProcessorId,
+                selectedPaymentMethod,
+              ),
+              paymentTotal: toNumber(detail?.paymentTotal, 0),
+            }))
+            .filter((detail: any) => detail.paymentTotal > 0)
         : [];
       let orderPaymentDetails =
         incomingPaymentDetails.length > 0
           ? incomingPaymentDetails
           : [
-            {
-              paymentProcessorId: selectedPaymentMethod,
-              paymentTotal: toNumber(defaultAmount, 0),
-            },
-          ];
+              {
+                paymentProcessorId: selectedPaymentMethod,
+                paymentTotal: toNumber(defaultAmount, 0),
+              },
+            ];
       const splitAmount = orderPaymentDetails.reduce(
         (sum: number, detail: any) => sum + toNumber(detail?.paymentTotal, 0),
         0,
@@ -1302,7 +1325,10 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
               : "table");
       const paymentCustomer =
         selectedPaymentMethod === 5
-          ? resolveOrderCustomer(option, option?.selectedCustomer ?? selectedCustomer)
+          ? resolveOrderCustomer(
+              option,
+              option?.selectedCustomer ?? selectedCustomer,
+            )
           : selectedCustomer;
 
       const rawOrderItems = Array.isArray(orderDetails?.orderItem)
@@ -1363,9 +1389,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
         orderDetails,
         payableSubTotal,
       );
-      let payableTotal = round2(
-        Math.max(payableSubTotal - payableDiscount, 0),
-      );
+      let payableTotal = round2(Math.max(payableSubTotal - payableDiscount, 0));
       let payableCount = toNumber(
         orderDetails?.count,
         getOrderItemCount(normalizedOrderItems) || 1,
@@ -1374,8 +1398,8 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
 
       let splitSelections = Array.isArray(option?.splitSelections)
         ? option.splitSelections.map((qty: any) =>
-          Math.max(0, Math.floor(toNumber(qty, 0))),
-        )
+            Math.max(0, Math.floor(toNumber(qty, 0))),
+          )
         : [];
       const isExistingSplitOrder =
         orderDetails?.isSplitOrder === true ||
@@ -1387,8 +1411,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
 
       // Match POS PaymentComponent: when the current order is already split,
       // a regular Pay action should finalize via the split/bulk flow.
-      const shouldFinalizeExistingSplit =
-        !isItemSplit && isExistingSplitOrder;
+      const shouldFinalizeExistingSplit = !isItemSplit && isExistingSplitOrder;
 
       if (shouldFinalizeExistingSplit) {
         splitSelections = normalizedOrderItems.map((item: any) =>
@@ -1479,11 +1502,11 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
           incomingPaymentDetails.length > 0
             ? incomingPaymentDetails
             : [
-              {
-                paymentProcessorId: selectedPaymentMethod,
-                paymentTotal: splitDefaultAmount,
-              },
-            ];
+                {
+                  paymentProcessorId: selectedPaymentMethod,
+                  paymentTotal: splitDefaultAmount,
+                },
+              ];
         const splitPaymentSummary = option?.orderPaymentSummary ?? {
           paymentProcessorId: selectedPaymentMethod,
         };
@@ -1494,60 +1517,74 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
             0,
           ) || splitDefaultAmount,
         );
-        const splitOrderInfo: any = mergeOrderCustomerData({
-          companyId,
-          currency,
-          isPickup: orderDetails?.isPickup ?? orderDeliveryTypeId === 2,
-          pickupDateTime: orderDetails?.pickupDateTime ?? null,
-          familyName: orderDetails?.familyName ?? "",
-          orderType,
-          isSandbox: orderDetails?.isSandbox ?? false,
-          isPriceIncludingTax: orderDetails?.isPriceIncludingTax ?? false,
-          orderDeliveryTypeId,
-          orderPromoCodeDiscountTotal: toNumber(
-            orderDetails?.orderPromoCodeDiscountTotal,
-            0,
-          ),
-          countryCode:
-            orderDetails?.countryCode || userData?.countryCode || "IN",
-          orderNotes: orderDetails?.orderNotes || "",
-          orderDiscountTotal: selectedDiscount,
-          orderItem: selectedOrderItems,
-          orderStatusId: ORDER_STATUS.DELIVERED,
-          orderSubTotal: selectedSubTotal,
-          orderTotal: selectedTotal,
-          createdAt: orderDetails?.createdAt || order?.createdAt || now,
-          count: getOrderItemCount(selectedOrderItems),
-          user: orderDetails?.user || order?.user || userData || null,
-          addedBy: orderDetails?.addedBy ?? paidBy ?? null,
-          posId: orderDetails?.posId || order?.posId || "",
-          onHold: false,
-          holdingName: "",
-          atgPinsPayloads: orderDetails?.atgPinsPayloads ?? [],
-          tableNo: orderDetails?.tableNo ?? null,
-          tableArea: orderDetails?.tableArea ?? null,
-          tsc: tsc ?? undefined,
-          customOrderId:
-            orderDetails?.customOrderId || order?.customOrderId || "",
-          parentLocalOrderId: localOrderId,
-          reason: orderDetails?.reason ?? "",
-          isDeleted: false,
-          updatedAt: now,
-          paidAt: now,
-          isCorporate,
-          isFinalBillPrint: !!option.print,
-          canceledOrderPayment: 0,
-          invoiceNumber,
-          paidBy: paidBy || undefined,
-          company: orderDetails?.company || order?.company || undefined,
-          printObj: orderDetails?.printObj ?? order?.printObj ?? undefined,
-          paymentMethod: selectedPaymentMethod,
-          orderPaymentSummary: splitPaymentSummary,
-          orderPaymentDetails: splitPaymentDetails,
-          tip,
-          deliveryCharge: splitDeliveryCharge,
-          isSplitOrder: true,
-        }, selectedCustomer);
+        const splitOrderInfo: any = mergeOrderCustomerData(
+          {
+            companyId,
+            currency,
+            isPickup: orderDetails?.isPickup ?? orderDeliveryTypeId === 2,
+            pickupDateTime: orderDetails?.pickupDateTime ?? null,
+            familyName: orderDetails?.familyName ?? "",
+            orderType,
+            isSandbox: orderDetails?.isSandbox ?? false,
+            isPriceIncludingTax: orderDetails?.isPriceIncludingTax ?? false,
+            orderDeliveryTypeId,
+            orderPromoCodeDiscountTotal: toNumber(
+              orderDetails?.orderPromoCodeDiscountTotal,
+              0,
+            ),
+            countryCode:
+              orderDetails?.countryCode || userData?.countryCode || "IN",
+            orderNotes: orderDetails?.orderNotes || "",
+            orderDiscountTotal: selectedDiscount,
+            orderItem: selectedOrderItems,
+            orderStatusId: ORDER_STATUS.DELIVERED,
+            orderSubTotal: selectedSubTotal,
+            orderTotal: selectedTotal,
+            createdAt: orderDetails?.createdAt || order?.createdAt || now,
+            count: getOrderItemCount(selectedOrderItems),
+            user: orderDetails?.user || order?.user || userData || null,
+            addedBy: orderDetails?.addedBy ?? paidBy ?? null,
+            posId: orderDetails?.posId || order?.posId || "",
+            onHold: false,
+            holdingName: "",
+            atgPinsPayloads: orderDetails?.atgPinsPayloads ?? [],
+            tableNo: orderDetails?.tableNo ?? null,
+            tableArea: orderDetails?.tableArea ?? null,
+            tsc: tsc ?? undefined,
+            customOrderId:
+              orderDetails?.customOrderId || order?.customOrderId || "",
+            parentLocalOrderId: localOrderId,
+            reason: orderDetails?.reason ?? "",
+            isDeleted: false,
+            updatedAt: now,
+            paidAt: now,
+            isCorporate,
+            isFinalBillPrint: !!option.print,
+            canceledOrderPayment: 0,
+            invoiceNumber,
+            paidBy: paidBy || undefined,
+            company: orderDetails?.company || order?.company || undefined,
+            printObj: orderDetails?.printObj ?? order?.printObj ?? undefined,
+            paymentMethod: selectedPaymentMethod,
+            orderPaymentSummary: splitPaymentSummary,
+            orderPaymentDetails: splitPaymentDetails,
+            tip,
+            deliveryCharge: splitDeliveryCharge,
+            isSplitOrder: true,
+          },
+          selectedCustomer,
+        );
+
+        if (option?.paymentTerminalResponse) {
+          splitOrderInfo.paymentTerminal = option?.paymentTerminal;
+          splitOrderInfo.paymentTerminalDecision =
+            option?.paymentTerminalDecision;
+          splitOrderInfo.paymentTerminalResponse =
+            option?.paymentTerminalResponse;
+          if (option?.paymentTerminal === "clover") {
+            splitOrderInfo.cloverResponse = option?.paymentTerminalResponse;
+          }
+        }
 
         const splitDiscountPayload = buildDiscountPayload(
           orderDetails,
@@ -1761,10 +1798,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
             (sum: number, item: any) => sum + toNumber(item?.quantity, 0),
             0,
           );
-          showToast(
-            "success",
-            t("splitPaymentSaved"),
-          );
+          showToast("success", t("splitPaymentSaved"));
           setMarking(false);
           return {
             keepModalOpen: true,
@@ -1862,7 +1896,9 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
           paidAt: now,
           tip: round2(finalOrderTip),
           deliveryCharge: round2(finalOrderDeliveryCharge),
-          count: getOrderItemCount(mergedOrderItems) || toNumber(orderDetails?.count, 1),
+          count:
+            getOrderItemCount(mergedOrderItems) ||
+            toNumber(orderDetails?.count, 1),
           isSplitOrder: true,
           isPaid: 1,
           localOrderId,
@@ -1889,7 +1925,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
           const details = splitOrder?.orderDetails || {};
           const paymentMethod = toNumber(
             details?.paymentMethod ??
-            details?.orderPaymentSummary?.paymentProcessorId,
+              details?.orderPaymentSummary?.paymentProcessorId,
             selectedPaymentMethod,
           );
           const splitLocalOrderId =
@@ -2112,15 +2148,15 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
                   giftCardTotal:
                     toNumber(
                       settledRow?.giftCardTotal ??
-                      settledDataValues?.giftCardTotal ??
-                      existingOrderDetails?.giftCardTotal,
+                        settledDataValues?.giftCardTotal ??
+                        existingOrderDetails?.giftCardTotal,
                       0,
                     ) || 0,
                   giftCardLogs: normalizeGiftCardLogs(
                     settledRow?.giftCardLogs ??
-                    settledDataValues?.giftCardLogs ??
-                    existingOrderDetails?.giftCardLogs ??
-                    null,
+                      settledDataValues?.giftCardLogs ??
+                      existingOrderDetails?.giftCardLogs ??
+                      null,
                   ),
                   orderCustomerDetails:
                     settledRow?.orderCustomerDetails ??
@@ -2136,7 +2172,8 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
                   delete updatedOrderDetails.parentLocalOrderId;
                 }
 
-                const isSplitChildOrder = !!localOrderRecord?.parentLocalOrderId;
+                const isSplitChildOrder =
+                  !!localOrderRecord?.parentLocalOrderId;
                 const updatedSettleOrderInfo = {
                   ...(localOrderRecord?.settleInfo?.orderInfo || {}),
                   ...updatedOrderDetails,
@@ -2162,7 +2199,8 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
                 const localOrderUpdatePayload: any = {
                   orderStatusId: ORDER_STATUS.DELIVERED,
                   isSynced: true,
-                  orderDetails: sanitizePersistedOrderDetails(updatedOrderDetails),
+                  orderDetails:
+                    sanitizePersistedOrderDetails(updatedOrderDetails),
                   settleInfo: updatedSettleInfo,
                 };
 
@@ -2177,7 +2215,10 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
                 }
 
                 localOrderUpdateTasks.push(
-                  orderService.updateOrder(currentLocalId, localOrderUpdatePayload),
+                  orderService.updateOrder(
+                    currentLocalId,
+                    localOrderUpdatePayload,
+                  ),
                 );
               },
             );
@@ -2215,58 +2256,62 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
         return { keepModalOpen: false, resetToDashboard: true };
       }
 
-      const orderInfo: any = mergeOrderCustomerData({
-        companyId,
-        currency,
-        isPickup: orderDetails?.isPickup ?? orderDeliveryTypeId === 2,
-        pickupDateTime: orderDetails?.pickupDateTime ?? null,
-        familyName: orderDetails?.familyName ?? "",
-        orderType,
-        isSandbox: orderDetails?.isSandbox ?? false,
-        isPriceIncludingTax: orderDetails?.isPriceIncludingTax ?? false,
-        orderDeliveryTypeId,
-        orderPromoCodeDiscountTotal: toNumber(
-          orderDetails?.orderPromoCodeDiscountTotal,
-          0,
-        ),
-        countryCode: orderDetails?.countryCode || userData?.countryCode || "IN",
-        orderNotes: orderDetails?.orderNotes || "",
-        orderDiscountTotal: payableDiscount,
-        orderItem: normalizedOrderItems,
-        orderStatusId: ORDER_STATUS.DELIVERED,
-        orderSubTotal: payableSubTotal,
-        orderTotal: payableTotal,
-        createdAt: orderDetails?.createdAt || order?.createdAt || now,
-        count: payableCount,
-        user: orderDetails?.user || order?.user || userData || null,
-        addedBy: orderDetails?.addedBy ?? paidBy ?? null,
-        posId: orderDetails?.posId || order?.posId || "",
-        onHold: orderDetails?.onHold ?? false,
-        holdingName: orderDetails?.holdingName ?? "",
-        atgPinsPayloads: orderDetails?.atgPinsPayloads ?? [],
-        tableNo: orderDetails?.tableNo ?? null,
-        tableArea: orderDetails?.tableArea ?? null,
-        tsc: tsc ?? undefined,
-        customOrderId:
-          orderDetails?.customOrderId || order?.customOrderId || "",
-        localOrderId,
-        reason: orderDetails?.reason ?? "",
-        isDeleted: orderDetails?.isDeleted ?? order?.isDeleted ?? false,
-        updatedAt: now,
-        paidAt: now,
-        isCorporate,
-        isFinalBillPrint: !!option.print,
-        canceledObj: orderDetails?.canceledObj ?? undefined,
-        canceledCount: orderDetails?.canceledCount ?? undefined,
-        canceledOrderPayment: orderDetails?.canceledOrderPayment ?? 0,
-        invoiceNumber,
-        paidBy: paidBy || undefined,
-        company: orderDetails?.company || order?.company || undefined,
-        printObj: orderDetails?.printObj ?? order?.printObj ?? undefined,
-        paymentMethod: selectedPaymentMethod,
-        tip,
-        deliveryCharge: payableDeliveryCharge,
-      }, paymentCustomer);
+      const orderInfo: any = mergeOrderCustomerData(
+        {
+          companyId,
+          currency,
+          isPickup: orderDetails?.isPickup ?? orderDeliveryTypeId === 2,
+          pickupDateTime: orderDetails?.pickupDateTime ?? null,
+          familyName: orderDetails?.familyName ?? "",
+          orderType,
+          isSandbox: orderDetails?.isSandbox ?? false,
+          isPriceIncludingTax: orderDetails?.isPriceIncludingTax ?? false,
+          orderDeliveryTypeId,
+          orderPromoCodeDiscountTotal: toNumber(
+            orderDetails?.orderPromoCodeDiscountTotal,
+            0,
+          ),
+          countryCode:
+            orderDetails?.countryCode || userData?.countryCode || "IN",
+          orderNotes: orderDetails?.orderNotes || "",
+          orderDiscountTotal: payableDiscount,
+          orderItem: normalizedOrderItems,
+          orderStatusId: ORDER_STATUS.DELIVERED,
+          orderSubTotal: payableSubTotal,
+          orderTotal: payableTotal,
+          createdAt: orderDetails?.createdAt || order?.createdAt || now,
+          count: payableCount,
+          user: orderDetails?.user || order?.user || userData || null,
+          addedBy: orderDetails?.addedBy ?? paidBy ?? null,
+          posId: orderDetails?.posId || order?.posId || "",
+          onHold: orderDetails?.onHold ?? false,
+          holdingName: orderDetails?.holdingName ?? "",
+          atgPinsPayloads: orderDetails?.atgPinsPayloads ?? [],
+          tableNo: orderDetails?.tableNo ?? null,
+          tableArea: orderDetails?.tableArea ?? null,
+          tsc: tsc ?? undefined,
+          customOrderId:
+            orderDetails?.customOrderId || order?.customOrderId || "",
+          localOrderId,
+          reason: orderDetails?.reason ?? "",
+          isDeleted: orderDetails?.isDeleted ?? order?.isDeleted ?? false,
+          updatedAt: now,
+          paidAt: now,
+          isCorporate,
+          isFinalBillPrint: !!option.print,
+          canceledObj: orderDetails?.canceledObj ?? undefined,
+          canceledCount: orderDetails?.canceledCount ?? undefined,
+          canceledOrderPayment: orderDetails?.canceledOrderPayment ?? 0,
+          invoiceNumber,
+          paidBy: paidBy || undefined,
+          company: orderDetails?.company || order?.company || undefined,
+          printObj: orderDetails?.printObj ?? order?.printObj ?? undefined,
+          paymentMethod: selectedPaymentMethod,
+          tip,
+          deliveryCharge: payableDeliveryCharge,
+        },
+        paymentCustomer,
+      );
       if (isItemSplit || isExistingSplitOrder) {
         orderInfo.isSplitOrder = true;
       }
@@ -2298,6 +2343,14 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
 
       orderInfo.orderPaymentSummary = orderPaymentSummary;
       orderInfo.orderPaymentDetails = orderPaymentDetails;
+      if (option?.paymentTerminalResponse) {
+        orderInfo.paymentTerminal = option?.paymentTerminal;
+        orderInfo.paymentTerminalDecision = option?.paymentTerminalDecision;
+        orderInfo.paymentTerminalResponse = option?.paymentTerminalResponse;
+        if (option?.paymentTerminal === "clover") {
+          orderInfo.cloverResponse = option?.paymentTerminalResponse;
+        }
+      }
 
       if (giftCard) {
         orderInfo.giftCard = giftCard;
@@ -2323,14 +2376,21 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
         settlePayload,
         allowOfflineFallback,
       );
-      if (settleRes?.remote === false && settleRes?.isNetworkError && allowOfflineFallback) {
+      if (
+        settleRes?.remote === false &&
+        settleRes?.isNetworkError &&
+        allowOfflineFallback
+      ) {
         const offlineOrderInfo = {
           ...orderInfo,
           isTscOffline: true,
         };
         try {
           const orderId =
-            order?._id || order?.id || order?.orderId || orderDetails?.localOrderId;
+            order?._id ||
+            order?.id ||
+            order?.orderId ||
+            orderDetails?.localOrderId;
           if (orderId) {
             await orderService.updateOrder(`${orderId}`, {
               orderStatusId: ORDER_STATUS.DELIVERED,
@@ -2364,7 +2424,10 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
             {
               ...offlineOrderInfo,
               localOrderId:
-                order?._id || order?.id || order?.orderId || orderDetails?.localOrderId,
+                order?._id ||
+                order?.id ||
+                order?.orderId ||
+                orderDetails?.localOrderId,
               customOrderId:
                 order?.customOrderId || offlineOrderInfo?.customOrderId,
             },
@@ -2406,7 +2469,10 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
       // Ensure local order captures gift card data after settlement
       try {
         const orderId =
-          order?._id || order?.id || order?.orderId || orderDetails?.localOrderId;
+          order?._id ||
+          order?.id ||
+          order?.orderId ||
+          orderDetails?.localOrderId;
         if (orderId) {
           await orderService.updateOrder(`${orderId}`, {
             orderStatusId: ORDER_STATUS.DELIVERED,
@@ -2434,7 +2500,10 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
           {
             ...orderInfo,
             localOrderId:
-              order?._id || order?.id || order?.orderId || orderDetails?.localOrderId,
+              order?._id ||
+              order?.id ||
+              order?.orderId ||
+              orderDetails?.localOrderId,
             customOrderId: order?.customOrderId || orderInfo?.customOrderId,
           },
           order?.customOrderId || order?._id,
@@ -2445,16 +2514,17 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
       return { keepModalOpen: false, resetToDashboard: true };
     } catch (err) {
       setMarking(false);
-      console.error("Error settling order after payment selection:", JSON.stringify(err));
+      console.error(
+        "Error settling order after payment selection:",
+        JSON.stringify(err),
+      );
       showToast("error", t("unableToCompletePayment"));
       return { keepModalOpen: false };
     }
   };
 
   const handlePaymentSelect = async (option: any) => {
-    setSelectedPaymentId(
-      toNumber(option?.paymentMethod ?? option?.id, 0),
-    );
+    setSelectedPaymentId(toNumber(option?.paymentMethod ?? option?.id, 0));
 
     if (!pendingSettleRef.current) {
       return { keepOpen: true };
@@ -2486,34 +2556,41 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
       const paymentMethod = toNumber(option?.paymentMethod ?? option?.id, 0);
       const paymentCustomer =
         paymentMethod === 5
-          ? resolveOrderCustomer(option, option?.selectedCustomer ?? selectedCustomer)
+          ? resolveOrderCustomer(
+              option,
+              option?.selectedCustomer ?? selectedCustomer,
+            )
           : selectedCustomer;
       const orderItems = Array.isArray(orderDetails?.orderItem)
         ? orderDetails.orderItem
         : Array.isArray(orderDetails?.orderItems)
           ? orderDetails.orderItems
           : [];
-      const previewOrderInfo: any = mergeOrderCustomerData({
-        ...orderDetails,
-        orderItem: orderItems,
-        invoiceNumber: "printPreview",
-        paymentMethod,
-        isPrint: true,
-        printReceipt: true,
-        tip: toNumber(option?.tip, 0),
-        giftCard: option?.giftCard ?? null,
-        appliedGiftCard: option?.giftCard ?? null,
-        giftCardTotal: toNumber(option?.giftCardTotal, 0),
-        deliveryCharge: toNumber(
-          option?.deliveryCharge,
-          resolvedDeliveryCharge,
-        ),
-        orderPaymentSummary:
-          option?.orderPaymentSummary ?? { paymentProcessorId: paymentMethod },
-        orderPaymentDetails: Array.isArray(option?.orderPaymentDetails)
-          ? option.orderPaymentDetails
-          : undefined,
-      }, paymentCustomer);
+      const previewOrderInfo: any = mergeOrderCustomerData(
+        {
+          ...orderDetails,
+          orderItem: orderItems,
+          invoiceNumber: "printPreview",
+          paymentMethod,
+          isPrint: true,
+          printReceipt: true,
+          tip: toNumber(option?.tip, 0),
+          giftCard: option?.giftCard ?? null,
+          appliedGiftCard: option?.giftCard ?? null,
+          giftCardTotal: toNumber(option?.giftCardTotal, 0),
+          deliveryCharge: toNumber(
+            option?.deliveryCharge,
+            resolvedDeliveryCharge,
+          ),
+          orderPaymentSummary: option?.orderPaymentSummary ?? {
+            paymentProcessorId: paymentMethod,
+          },
+          orderPaymentDetails: Array.isArray(option?.orderPaymentDetails)
+            ? option.orderPaymentDetails
+            : undefined,
+        },
+        paymentCustomer,
+      );
       if (paymentMethod === 5 && option?.debitorCustomerDetails) {
         previewOrderInfo.debitorCustomerDetails = option.debitorCustomerDetails;
       }
@@ -2539,25 +2616,29 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
     });
   }, [pendingSettle, handlePaymentSelect, handlePrintPreview]);
 
-  const registerPaymentHandlers = useCallback((shouldSettle: boolean) => {
-    setPendingSettle(shouldSettle);
-    pendingSettleRef.current = shouldSettle;
+  const registerPaymentHandlers = useCallback(
+    (shouldSettle: boolean) => {
+      setPendingSettle(shouldSettle);
+      pendingSettleRef.current = shouldSettle;
 
-    setPaymentFlowHandlers({
-      onSelect: handlePaymentSelect,
-      onPrintPreview: handlePrintPreview,
-      onClose: () => {
-        setPendingSettle(false);
-        pendingSettleRef.current = false;
-      },
-    });
-  }, [handlePaymentSelect, handlePrintPreview]);
+      setPaymentFlowHandlers({
+        onSelect: handlePaymentSelect,
+        onPrintPreview: handlePrintPreview,
+        onClose: () => {
+          setPendingSettle(false);
+          pendingSettleRef.current = false;
+        },
+      });
+    },
+    [handlePaymentSelect, handlePrintPreview],
+  );
 
-  const openPaymentScreen = useCallback((mode: "settle" | "method") => {
-    const shouldSettle = mode === "settle";
-    registerPaymentHandlers(shouldSettle);
+  const openPaymentScreen = useCallback(
+    (mode: "settle" | "method") => {
+      const shouldSettle = mode === "settle";
+      registerPaymentHandlers(shouldSettle);
 
-    navigation.push("Payment", {
+      navigation.push("Payment", {
         title: shouldSettle ? t("payment") : t("changePaymentMethod"),
         orderTotal: totals.total,
         orderSubTotal: totals.subtotal,
@@ -2567,26 +2648,36 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
         selectedAddressDeliveryCharge:
           selectedCustomerAddress?.deliveryCharge ?? null,
         companyId: resolvedCompanyId,
+        orderNo:
+          order?.customOrderId ||
+          displayedOrderDetails?.customOrderId ||
+          displayedOrderDetails?.orderNumber ||
+          order?._id ||
+          order?.id ||
+          null,
+        shouldSettle,
         splitItems: splitPaymentItems,
         allowSplitOption,
         hidePrintPreview: hideDeleteForSplit,
         selectedCustomer,
       });
-  }, [
-    allowSplitOption,
-    hideDeleteForSplit,
-    navigation,
-    registerPaymentHandlers,
-    resolvedDeliveryCharge,
-    resolvedCompanyId,
-    serviceTypeId,
-    selectedCustomer,
-    selectedCustomerAddress?.deliveryCharge,
-    splitPaymentItems,
-    totals.total,
-    totals.subtotal,
-    totals.discount,
-  ]);
+    },
+    [
+      allowSplitOption,
+      hideDeleteForSplit,
+      navigation,
+      registerPaymentHandlers,
+      resolvedDeliveryCharge,
+      resolvedCompanyId,
+      serviceTypeId,
+      selectedCustomer,
+      selectedCustomerAddress?.deliveryCharge,
+      splitPaymentItems,
+      totals.total,
+      totals.subtotal,
+      totals.discount,
+    ],
+  );
 
   const handleOpenPaymentModal = useCallback(() => {
     openPaymentScreen("method");
@@ -2709,7 +2800,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
                   fontSize: 12,
                 }}
               >
-                {t('note')}: {it.orderItemNote}
+                {t("note")}: {it.orderItemNote}
               </Text>
             ) : null}
           </View>
@@ -2873,7 +2964,8 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
             </View>
           </View>
 
-          {serviceTypeId !== 0 && (serviceTimeLabel || (serviceTypeId === 2 && familyName)) ? (
+          {serviceTypeId !== 0 &&
+          (serviceTimeLabel || (serviceTypeId === 2 && familyName)) ? (
             <View
               style={[
                 styles.serviceInfoCard,
@@ -2890,7 +2982,13 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
                     size={15}
                     color={colors.textSecondary}
                   />
-                  <Text style={{ color: colors.textSecondary, fontSize: 12, marginLeft: 6 }}>
+                  <Text
+                    style={{
+                      color: colors.textSecondary,
+                      fontSize: 12,
+                      marginLeft: 6,
+                    }}
+                  >
                     {serviceTypeId === 1 ? t("deliveryTime") : t("pickupTime")}:{" "}
                     <Text style={{ color: colors.text, fontWeight: "700" }}>
                       {serviceTimeLabel}
@@ -2906,7 +3004,13 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
                     size={15}
                     color={colors.textSecondary}
                   />
-                  <Text style={{ color: colors.textSecondary, fontSize: 12, marginLeft: 6 }}>
+                  <Text
+                    style={{
+                      color: colors.textSecondary,
+                      fontSize: 12,
+                      marginLeft: 6,
+                    }}
+                  >
                     {t("familyName")}:{" "}
                     <Text style={{ color: colors.text, fontWeight: "700" }}>
                       {familyName}
@@ -2933,10 +3037,18 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
                   size={15}
                   color={colors.textSecondary}
                 />
-                <Text style={{ color: colors.textSecondary, fontSize: 12, marginLeft: 6 }}>
+                <Text
+                  style={{
+                    color: colors.textSecondary,
+                    fontSize: 12,
+                    marginLeft: 6,
+                  }}
+                >
                   {t("customer")}:{" "}
                   <Text style={{ color: colors.text, fontWeight: "700" }}>
-                    {selectedCustomerName || selectedCustomer.mobileNo || t("selectedCustomer")}
+                    {selectedCustomerName ||
+                      selectedCustomer.mobileNo ||
+                      t("selectedCustomer")}
                   </Text>
                 </Text>
               </View>
@@ -2948,7 +3060,13 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
                     size={15}
                     color={colors.textSecondary}
                   />
-                  <Text style={{ color: colors.textSecondary, fontSize: 12, marginLeft: 6 }}>
+                  <Text
+                    style={{
+                      color: colors.textSecondary,
+                      fontSize: 12,
+                      marginLeft: 6,
+                    }}
+                  >
                     {selectedCustomer.mobileNo}
                   </Text>
                 </View>
@@ -2961,7 +3079,14 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
                     size={15}
                     color={colors.textSecondary}
                   />
-                  <Text style={{ color: colors.textSecondary, fontSize: 12, marginLeft: 6, flex: 1 }}>
+                  <Text
+                    style={{
+                      color: colors.textSecondary,
+                      fontSize: 12,
+                      marginLeft: 6,
+                      flex: 1,
+                    }}
+                  >
                     {selectedCustomerAddressText}
                   </Text>
                 </View>
@@ -3035,7 +3160,7 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
       >
         {items.length === 0 ? (
           <Card style={{ padding: 14 }}>
-              <Text style={{ color: colors.textSecondary }}>
+            <Text style={{ color: colors.textSecondary }}>
               {t("noItemsInThisOrder")}
             </Text>
           </Card>
@@ -3096,9 +3221,9 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
             <Text
               style={{ color: colors.text, fontWeight: "700", marginBottom: 8 }}
             >
-                {t("orderNote")}
-              </Text>
-              <Text style={{ color: colors.textSecondary }}>
+              {t("orderNote")}
+            </Text>
+            <Text style={{ color: colors.textSecondary }}>
               {displayedOrderDetails?.orderNotes || t("noOrderNoteAdded")}
             </Text>
 
@@ -3155,7 +3280,11 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
           <>
             <Card style={{ padding: 12, borderColor: colors.border }}>
               <Text
-                style={{ color: colors.text, fontWeight: "700", marginBottom: 8 }}
+                style={{
+                  color: colors.text,
+                  fontWeight: "700",
+                  marginBottom: 8,
+                }}
               >
                 {t("paymentSummary")}
               </Text>
@@ -3168,7 +3297,9 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
                 </Text>
               </View>
               <View style={styles.paymentRow}>
-                <Text style={{ color: colors.textSecondary }}>{t("totalAmount")}</Text>
+                <Text style={{ color: colors.textSecondary }}>
+                  {t("totalAmount")}
+                </Text>
                 <Text style={{ color: colors.text, fontWeight: "700" }}>
                   {formatCurrency(totals.total)}
                 </Text>
@@ -3244,7 +3375,9 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
           </View>
           {totals.discount > 0 ? (
             <View style={styles.summaryRow}>
-              <Text style={{ color: colors.textSecondary }}>{t("discount")}</Text>
+              <Text style={{ color: colors.textSecondary }}>
+                {t("discount")}
+              </Text>
               <Text style={{ color: colors.error, fontWeight: "700" }}>
                 {formatCurrency(-totals.discount)}
               </Text>
@@ -3260,7 +3393,9 @@ export default function OrderDetailsScreen({ navigation, route }: any) {
               },
             ]}
           >
-            <Text style={{ color: colors.text, fontWeight: "800" }}>{t("total")}</Text>
+            <Text style={{ color: colors.text, fontWeight: "800" }}>
+              {t("total")}
+            </Text>
             <Text
               style={{ color: colors.primary, fontWeight: "800", fontSize: 17 }}
             >
@@ -3457,6 +3592,3 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 });
-
-
-
